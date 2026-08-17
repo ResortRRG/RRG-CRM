@@ -29,6 +29,7 @@ import {
 const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "sales", label: "Sales", icon: TrendingUp },
+  { id: "salesentry", label: "New Sale", icon: Plus },
   { id: "leads", label: "All Leads", icon: ClipboardList },
   { id: "employees", label: "Employees", icon: Users },
   { id: "rrgboard", label: "RRG Board", icon: LayoutGrid },
@@ -75,11 +76,16 @@ const DEFAULT_SETTINGS = {
 };
 
 // Which sidebar sections each account role can see and use.
+// Only roles listed here are RESTRICTED — any role not listed (including
+// unknown/future roles) defaults to full access, so this can never
+// accidentally lock an admin or existing user out of everything.
 const ROLE_PERMISSIONS = {
-  admin: ["dashboard", "sales", "leads", "employees", "rrgboard", "payroll", "reports", "admin"],
-  manager: ["dashboard", "sales", "leads", "employees", "rrgboard", "payroll", "reports"],
-  rep: ["dashboard", "sales", "leads"],
+  rep: ["salesentry"],
 };
+function getAllowedSections(role) {
+  if (ROLE_PERMISSIONS[role]) return ROLE_PERMISSIONS[role];
+  return NAV_ITEMS.map((n) => n.id);
+}
 
 const ATTENDANCE_STATUSES = [
   { id: "late", label: "Late", color: "#B8763E" },
@@ -157,6 +163,33 @@ function nowLocalInput() {
   const d = new Date();
   const pad = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function blankSale() {
+  return {
+    timestamp: nowLocalInput(),
+    name: "",
+    spouseName: "",
+    phone: "",
+    email: "",
+    address: "",
+    city: "",
+    state: "",
+    zip: "",
+    packagePrice: "",
+    dateFlex: "",
+    password: "",
+    totalPrice: "",
+    genieNumber: "",
+    openerId: "",
+    closerId: "",
+    verificationId: "",
+    source: "",
+    leadSubmittedTo: "",
+    status: "",
+    leadCategory: "",
+    notes: "",
+  };
 }
 
 function formatTimestamp(iso) {
@@ -312,6 +345,7 @@ export default function TeamCRM() {
   const [search, setSearch] = useState("");
   const [contactModal, setContactModal] = useState(null); // null | 'new' | contact object
   const [saleModal, setSaleModal] = useState(null);
+  const [entryJustSaved, setEntryJustSaved] = useState(false);
   const [employeeModal, setEmployeeModal] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null); // {type, id, label}
   const [viewer, setViewer] = useState({ name: "", role: "rep" });
@@ -438,6 +472,19 @@ export default function TeamCRM() {
       setAuthChecked(true);
     })();
   }, []);
+
+  // If a role's allowed sections don't include the current tab (e.g. right
+  // after logging in as a restricted account), send them to a tab they can
+  // actually see. Only runs when the signed-in user changes, so it never
+  // fights normal navigation.
+  useEffect(() => {
+    if (!currentUser) return;
+    const allowed = getAllowedSections(currentUser.role);
+    if (!allowed.includes(section)) {
+      setSection(allowed[0] || "dashboard");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser && currentUser.id, currentUser && currentUser.role]);
 
   async function refreshUsers() {
     try {
@@ -959,6 +1006,7 @@ export default function TeamCRM() {
       updateSales(sales.map((s) => (s.id === form.id ? { ...s, ...form } : s)));
     } else {
       updateSales([...sales, { ...form, id: uid(), createdAt: Date.now() }]);
+      setEntryJustSaved(true);
     }
     setSaleModal(null);
   }
@@ -1162,7 +1210,7 @@ export default function TeamCRM() {
           <div style={S.brand}>{settings.companyName}</div>
           <div style={S.brandSub}>sales & payroll</div>
           <div style={S.navList}>
-            {NAV_ITEMS.map((item) => {
+            {NAV_ITEMS.filter((item) => getAllowedSections(currentUser && currentUser.role).includes(item.id)).map((item) => {
               const Icon = item.icon;
               const active = section === item.id;
               return (
@@ -1357,32 +1405,7 @@ export default function TeamCRM() {
                   </span>
                   <div style={{ display: "flex", gap: 8 }}>
                     <button
-                      onClick={() =>
-                        setSaleModal({
-                          timestamp: nowLocalInput(),
-                          name: "",
-                          spouseName: "",
-                          phone: "",
-                          email: "",
-                          address: "",
-                          city: "",
-                          state: "",
-                          zip: "",
-                          packagePrice: "",
-                          dateFlex: "",
-                          password: "",
-                          totalPrice: "",
-                          genieNumber: "",
-                          openerId: "",
-                          closerId: "",
-                          verificationId: "",
-                          source: "",
-                          leadSubmittedTo: "",
-                          status: "",
-                          leadCategory: "",
-                          notes: "",
-                        })
-                      }
+                      onClick={() => setSaleModal(blankSale())}
                       style={S.primaryBtn}
                     >
                       <Plus size={14} /> New sale
@@ -1516,6 +1539,41 @@ export default function TeamCRM() {
                   </div>
                 )}
               </div>
+        )}
+
+        {section === "salesentry" && (
+          <div style={S.dashboardWrap}>
+            <div style={S.entryScreenWrap}>
+              {entryJustSaved ? (
+                <>
+                  <div style={S.entrySuccessIcon}>✓</div>
+                  <div style={S.entrySuccessTitle}>Sale submitted</div>
+                  <div style={{ ...S.hint, textAlign: "center", marginBottom: 20 }}>
+                    It's been added to the system. You won't see it listed here — that's expected for this account.
+                  </div>
+                  <button
+                    style={S.primaryBtn}
+                    onClick={() => {
+                      setEntryJustSaved(false);
+                      setSaleModal(blankSale());
+                    }}
+                  >
+                    <Plus size={14} /> Add another sale
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div style={S.entrySuccessTitle}>Submit a new sale</div>
+                  <div style={{ ...S.hint, textAlign: "center", marginBottom: 20 }}>
+                    Fill out the sale details. Once submitted, it goes straight into the system.
+                  </div>
+                  <button style={S.primaryBtn} onClick={() => setSaleModal(blankSale())}>
+                    <Plus size={14} /> New sale
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
         )}
 
         {section === "leads" && (
@@ -3589,6 +3647,28 @@ const S = {
   },
   topbarTitle: { fontFamily: T.display, fontSize: 18, fontWeight: 600, color: T.ink },
   dashboardWrap: { padding: 20 },
+  entryScreenWrap: {
+    maxWidth: 360,
+    margin: "60px auto",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    textAlign: "center",
+  },
+  entrySuccessIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: "50%",
+    background: "#EAF3EC",
+    color: "#1E8E4A",
+    fontSize: 22,
+    fontWeight: 700,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+  },
+  entrySuccessTitle: { fontFamily: T.display, fontSize: 19, fontWeight: 600, marginBottom: 6 },
   dashboardSectionLabel: { fontSize: 12, fontWeight: 600, color: T.textMuted, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.04em" },
   weekNavRow: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 },
   weekNav: { display: "flex", alignItems: "center", gap: 4 },
