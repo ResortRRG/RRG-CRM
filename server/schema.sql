@@ -27,3 +27,17 @@ CREATE TABLE IF NOT EXISTS user_data (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (user_id, key)
 );
+
+-- Employee document attachments (ID copies, signed work agreements, etc.)
+-- Files are stored directly in the database — fine for a small team's worth
+-- of PDFs/images, no separate file storage service needed.
+CREATE TABLE IF NOT EXISTS employee_files (
+  id TEXT PRIMARY KEY,
+  employee_id TEXT NOT NULL,
+  filename TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  file_data BYTEA NOT NULL,
+  uploaded_by TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_employee_files_employee_id ON employee_files(employee_id);

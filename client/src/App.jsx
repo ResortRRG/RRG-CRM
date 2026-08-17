@@ -770,7 +770,9 @@ export default function TeamCRM() {
   function salesForEmployee(employeeId) {
     if (!employeeId) return [];
     return sales.filter(
-      (s) => s.openerId === employeeId || s.closerId === employeeId || s.verificationId === employeeId
+      (s) =>
+        s.status === "Approved" &&
+        (s.openerId === employeeId || s.closerId === employeeId || s.verificationId === employeeId)
     );
   }
 
@@ -957,6 +959,7 @@ export default function TeamCRM() {
   function weeklySaleEntries(employeeId) {
     const entries = [];
     sales.forEach((s) => {
+      if (s.status !== "Approved") return;
       if (!isSaleInRange(s, currentWeek.start, currentWeek.end)) return;
       if (s.openerId === employeeId) entries.push({ sale: s, type: "front", amount: roleCreditAmount(s, "front") });
       if (s.closerId === employeeId) entries.push({ sale: s, type: "close", amount: roleCreditAmount(s, "close") });
@@ -973,6 +976,7 @@ export default function TeamCRM() {
       return { date, label, entries: [] };
     });
     sales.forEach((s) => {
+      if (s.status !== "Approved") return;
       if (!isSaleInRange(s, weekStart, weekEnd)) return;
       const idx = getWeekdayIndex(new Date(s.timestamp));
       if (idx === null) return;
@@ -2244,7 +2248,7 @@ export default function TeamCRM() {
                   </thead>
                   <tbody>
                     {activeEmployees.map((emp, empIdx) => {
-                      const empSales = salesForEmployee(emp.id).filter((s) => s.status === "Approved");
+                      const empSales = salesForEmployee(emp.id);
                       const empWeekSales = empSales.filter((s) => isSaleInRange(s, payrollWeek.start, payrollWeek.end));
                       const empWeekTotal = empWeekSales.reduce((s, r) => s + saleCredit(r, emp.id), 0);
                       const rate = Number(emp.commissionRate) || 0;
@@ -2350,9 +2354,7 @@ export default function TeamCRM() {
                           activeEmployees.reduce((sum, emp) => {
                             const override = getPayrollOverride(emp.id, payrollWeek.start);
                             if (override !== null) return sum + override;
-                            const empSales = salesForEmployee(emp.id)
-                              .filter((s) => s.status === "Approved")
-                              .filter((s) => isSaleInRange(s, payrollWeek.start, payrollWeek.end));
+                            const empSales = salesForEmployee(emp.id).filter((s) => isSaleInRange(s, payrollWeek.start, payrollWeek.end));
                             const total = empSales.reduce((s, r) => s + saleCredit(r, emp.id), 0);
                             const rate = Number(emp.commissionRate) || 0;
                             const refundLookback = lookbackWeek(payrollWeek.start, payrollWeek.end);
@@ -3263,6 +3265,74 @@ function EmployeeForm({ initial, onCancel, onSave, onDelete, onToggleActive }) {
   const [error, setError] = useState("");
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const isInactive = form.active === false;
+  const [files, setFiles] = useState([]);
+  const [filesLoading, setFilesLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [fileError, setFileError] = useState("");
+
+  async function refreshFiles() {
+    if (!form.id) return;
+    setFilesLoading(true);
+    try {
+      const res = await fetch(`/api/employees/${form.id}/files`, { credentials: "include" });
+      const data = await res.json();
+      setFiles(data.files || []);
+    } catch (e) {
+      // leave the list as-is on a transient error
+    }
+    setFilesLoading(false);
+  }
+
+  useEffect(() => {
+    refreshFiles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.id]);
+
+  async function handleFileSelect(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    if (file.size > 15 * 1024 * 1024) {
+      setFileError("That file is over 15MB — try a smaller scan or a compressed PDF.");
+      return;
+    }
+    setFileError("");
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`/api/employees/${form.id}/files`, {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setFileError(err.error || "Upload failed. Try again.");
+      } else {
+        await refreshFiles();
+      }
+    } catch (e) {
+      setFileError("Couldn't reach the server. Try again.");
+    }
+    setUploading(false);
+  }
+
+  async function handleFileDelete(fileId) {
+    try {
+      await fetch(`/api/employees/${form.id}/files/${fileId}`, { method: "DELETE", credentials: "include" });
+      setFiles((prev) => prev.filter((f) => f.id !== fileId));
+    } catch (e) {
+      setFileError("Couldn't delete that file. Try again.");
+    }
+  }
+
+  function formatFileSize(bytes) {
+    if (!bytes) return "";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
 
   function submit() {
     if (!form.name || !form.name.trim()) {
@@ -3348,6 +3418,49 @@ function EmployeeForm({ initial, onCancel, onSave, onDelete, onToggleActive }) {
           style={{ ...S.input, minHeight: 56, resize: "vertical" }}
         />
       </Field>
+
+      <div style={S.fieldLabel}>Attachments (ID, work agreement, etc.)</div>
+      {!form.id ? (
+        <div style={{ ...S.hint, marginBottom: 12 }}>Save this employee first — then you can attach files here.</div>
+      ) : (
+        <div style={S.attachmentsBox}>
+          {filesLoading ? (
+            <div style={{ ...S.hint, margin: 0 }}>Loading attachments…</div>
+          ) : files.length === 0 ? (
+            <div style={{ ...S.hint, margin: 0 }}>No files attached yet.</div>
+          ) : (
+            <div style={S.attachmentList}>
+              {files.map((f) => (
+                <div key={f.id} style={S.attachmentRow}>
+                  <a
+                    href={`/api/employees/${form.id}/files/${f.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={S.attachmentLink}
+                  >
+                    {f.filename}
+                  </a>
+                  <span style={S.attachmentMeta}>{formatFileSize(f.size)}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleFileDelete(f.id)}
+                    style={S.attachmentDeleteBtn}
+                    aria-label="Remove file"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {fileError && <div style={{ ...S.errorText, marginTop: 8 }}>{fileError}</div>}
+          <label style={S.attachmentUploadBtn}>
+            {uploading ? "Uploading…" : "+ Add file"}
+            <input type="file" onChange={handleFileSelect} disabled={uploading} style={{ display: "none" }} />
+          </label>
+        </div>
+      )}
+
       <div style={S.hint}>
         Sales are attributed to this employee when they're selected as Opener, Closer, or Verification on a sale record.
       </div>
@@ -4366,6 +4479,60 @@ const S = {
     cursor: "pointer",
   },
   hint: { fontSize: 11, color: T.textMuted, lineHeight: 1.5, marginBottom: 4 },
+  attachmentsBox: {
+    background: T.paper,
+    border: `1px solid ${T.border}`,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 10,
+  },
+  attachmentList: { display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 },
+  attachmentRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    background: T.paperRaised,
+    border: `1px solid ${T.border}`,
+    borderRadius: 6,
+    padding: "6px 8px",
+  },
+  attachmentLink: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 12,
+    color: T.pineDark,
+    fontWeight: 500,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    textDecoration: "none",
+  },
+  attachmentMeta: { fontSize: 10.5, color: T.textMuted, flexShrink: 0 },
+  attachmentDeleteBtn: {
+    border: "none",
+    background: "transparent",
+    color: T.borderStrong,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 3,
+    borderRadius: 4,
+    flexShrink: 0,
+    cursor: "pointer",
+  },
+  attachmentUploadBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    border: `1px solid ${T.border}`,
+    background: T.paperRaised,
+    color: T.ink,
+    fontSize: 12,
+    fontWeight: 500,
+    padding: "7px 12px",
+    borderRadius: 7,
+    cursor: "pointer",
+  },
   roleFieldGrid: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 },
   modalFooter: { display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 16 },
   primaryBtn: {
