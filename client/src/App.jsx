@@ -1577,12 +1577,12 @@ export default function TeamCRM() {
                               <td style={S.td}>{s.city}</td>
                               <td style={S.td}>{s.state}</td>
                               <td style={S.td}>{s.zip}</td>
-                              <td style={{ ...S.td, fontFamily: T.mono }}>{s.packagePrice ? money(s.packagePrice) : ""}</td>
-                              <td style={{ ...S.td, fontFamily: T.mono }}>{s.dateFlex ? money(s.dateFlex) : ""}</td>
-                              <td style={{ ...S.td, fontFamily: T.mono }}>
+                              <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14 }}>{s.packagePrice ? money(s.packagePrice) : ""}</td>
+                              <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14 }}>{s.dateFlex ? money(s.dateFlex) : ""}</td>
+                              <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14 }}>
                                 {s.password ? "••••••••" : ""}
                               </td>
-                              <td style={{ ...S.td, fontFamily: T.mono, fontWeight: 500 }}>
+                              <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 500 }}>
                                 {s.totalPrice ? money(s.totalPrice) : ""}
                               </td>
                               <td style={S.td}>{s.genieNumber}</td>
@@ -1849,15 +1849,15 @@ export default function TeamCRM() {
                           </div>
                           <div style={S.leadInfoItem}>
                             <span style={S.leadInfoLabel}>Package price</span>
-                            <span style={{ fontFamily: T.mono }}>{s.packagePrice ? money(s.packagePrice) : "—"}</span>
+                            <span style={{ fontFamily: T.mono, fontSize: 14 }}>{s.packagePrice ? money(s.packagePrice) : "—"}</span>
                           </div>
                           <div style={S.leadInfoItem}>
                             <span style={S.leadInfoLabel}>Date flex price</span>
-                            <span style={{ fontFamily: T.mono }}>{s.dateFlex ? money(s.dateFlex) : "—"}</span>
+                            <span style={{ fontFamily: T.mono, fontSize: 14 }}>{s.dateFlex ? money(s.dateFlex) : "—"}</span>
                           </div>
                           <div style={S.leadInfoItem}>
                             <span style={S.leadInfoLabel}>Total price</span>
-                            <span style={{ fontFamily: T.mono, fontWeight: 600 }}>{s.totalPrice ? money(s.totalPrice) : "—"}</span>
+                            <span style={{ fontFamily: T.mono, fontSize: 14, fontWeight: 600 }}>{s.totalPrice ? money(s.totalPrice) : "—"}</span>
                           </div>
                           <div style={S.leadInfoItem}>
                             <span style={S.leadInfoLabel}>Genie #</span>
@@ -1865,7 +1865,7 @@ export default function TeamCRM() {
                           </div>
                           <div style={S.leadInfoItem}>
                             <span style={S.leadInfoLabel}>Password</span>
-                            <span style={{ fontFamily: T.mono }}>{s.password ? "••••••••" : "—"}</span>
+                            <span style={{ fontFamily: T.mono, fontSize: 14 }}>{s.password ? "••••••••" : "—"}</span>
                           </div>
                         </div>
 
@@ -2190,7 +2190,7 @@ export default function TeamCRM() {
                             </td>
                           );
                         })}
-                        <td style={{ ...S.td, fontFamily: T.mono, fontWeight: 500 }}>{money(row.weekTotal)}</td>
+                        <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 500 }}>{money(row.weekTotal)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -2198,11 +2198,11 @@ export default function TeamCRM() {
                     <tr>
                       <td style={{ ...S.td, fontWeight: 600 }}>Daily totals</td>
                       {rrgDailyTotals.map((t, i) => (
-                        <td key={i} style={{ ...S.td, fontFamily: T.mono, fontWeight: 500 }}>
+                        <td key={i} style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 500 }}>
                           {money(t)}
                         </td>
                       ))}
-                      <td style={{ ...S.td, fontFamily: T.mono, fontWeight: 600 }}>{money(rrgWeekGrandTotal)}</td>
+                      <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 600 }}>{money(rrgWeekGrandTotal)}</td>
                     </tr>
                   </tfoot>
                 </table>
@@ -2306,7 +2306,7 @@ export default function TeamCRM() {
                           <td style={S.td}>
                             {empWeekSales.length} sale{empWeekSales.length === 1 ? "" : "s"} · {money(empWeekTotal)}
                           </td>
-                          <td style={{ ...S.td, fontFamily: T.mono }}>{money(empSales.reduce((s, r) => s + saleCredit(r, emp.id), 0))}</td>
+                          <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14 }}>{money(empSales.reduce((s, r) => s + saleCredit(r, emp.id), 0))}</td>
                           <td style={S.td}>
                             {rate > 0 ? (
                               <span style={S.commissionRateBadge}>{rate}%</span>
@@ -2314,13 +2314,13 @@ export default function TeamCRM() {
                               <span style={{ color: T.borderStrong }}>Not set</span>
                             )}
                           </td>
-                          <td style={{ ...S.td, fontFamily: T.mono, fontWeight: 500 }}>
+                          <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 500 }}>
                             {rate > 0 ? money(commissionOwed) : "—"}
                           </td>
-                          <td style={{ ...S.td, fontFamily: T.mono, fontWeight: 500, color: refundDeduction > 0 ? "#A32D2D" : T.borderStrong }}>
+                          <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 500, color: refundDeduction > 0 ? "#A32D2D" : T.borderStrong }}>
                             {refundDeduction > 0 ? "-" + money(refundDeduction) : "—"}
                           </td>
-                          <td style={{ ...S.td, fontFamily: T.mono, fontWeight: 500 }}>
+                          <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 500 }}>
                             {hasBasePay ? money(basePay) : "—"}
                           </td>
                           <td style={{ ...S.td, whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
@@ -2366,7 +2366,7 @@ export default function TeamCRM() {
                       <td style={S.td} />
                       <td style={S.td} />
                       <td style={S.td} />
-                      <td style={{ ...S.td, fontFamily: T.mono, fontWeight: 600, color: T.pineDark }}>
+                      <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 600, color: T.pineDark }}>
                         {money(
                           activeEmployees.reduce((sum, emp) => {
                             const override = getPayrollOverride(emp.id, payrollWeek.start);
@@ -2532,11 +2532,11 @@ export default function TeamCRM() {
                       <tr key={r.employee.id}>
                         <td style={{ ...S.td, fontWeight: 500, whiteSpace: "nowrap" }}>{r.employee.name}</td>
                         <td style={S.td}>{r.salesCount}</td>
-                        <td style={{ ...S.td, fontFamily: T.mono }}>{money(r.credited)}</td>
+                        <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14 }}>{money(r.credited)}</td>
                         <td style={S.td}>
                           {r.rate > 0 ? <span style={S.commissionRateBadge}>{r.rate}%</span> : <span style={{ color: T.borderStrong }}>—</span>}
                         </td>
-                        <td style={{ ...S.td, fontFamily: T.mono, fontWeight: 500 }}>{money(r.commission)}</td>
+                        <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 500 }}>{money(r.commission)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -2573,7 +2573,7 @@ export default function TeamCRM() {
                   {users.map((u) => (
                     <tr key={u.id} className="crm-row" onClick={() => setUserModal({ ...u, password: "" })}>
                       <td style={{ ...S.td, fontWeight: 500 }}>{u.name}</td>
-                      <td style={{ ...S.td, fontFamily: T.mono }}>@{u.username}</td>
+                      <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14 }}>@{u.username}</td>
                       <td style={S.td}>
                         <RoleBadge role={u.role} size="sm" />
                       </td>
@@ -2610,7 +2610,7 @@ export default function TeamCRM() {
                   value={settings.minWeeklyPay}
                   onChange={(e) => updateSettings({ ...settings, minWeeklyPay: Number(e.target.value) || 0 })}
                   type="number"
-                  style={{ ...S.input, fontFamily: T.mono }}
+                  style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }}
                 />
               </div>
             </div>
@@ -2931,10 +2931,10 @@ export default function TeamCRM() {
                             </div>
                           )}
                         </td>
-                        <td style={{ ...S.td, fontFamily: T.mono, fontWeight: 500 }}>
+                        <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 500 }}>
                           {row.dayTotal ? money(row.dayTotal) : ""}
                         </td>
-                        <td style={{ ...S.td, fontFamily: T.mono }}>
+                        <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14 }}>
                           {row.dayTotal ? money(dayCommission) : ""}
                         </td>
                       </tr>
@@ -2946,8 +2946,8 @@ export default function TeamCRM() {
                     <td style={{ ...S.td, fontWeight: 600 }} colSpan={3}>
                       Total sales
                     </td>
-                    <td style={{ ...S.td, fontFamily: T.mono, fontWeight: 600 }}>{money(employeeDetailTotalSales)}</td>
-                    <td style={{ ...S.td, fontFamily: T.mono, fontWeight: 600 }}>{money(employeeDetailCommission)}</td>
+                    <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 600 }}>{money(employeeDetailTotalSales)}</td>
+                    <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 600 }}>{money(employeeDetailCommission)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -2956,17 +2956,17 @@ export default function TeamCRM() {
             <div style={S.detailSummary}>
               <div style={S.detailSummaryRow}>
                 <span>Commission ({employeeDetailRate}%)</span>
-                <span style={{ fontFamily: T.mono }}>{money(employeeDetailTotalSales * (employeeDetailRate / 100))}</span>
+                <span style={{ fontFamily: T.mono, fontSize: 14 }}>{money(employeeDetailTotalSales * (employeeDetailRate / 100))}</span>
               </div>
               {employeeDetailRefundDeduction > 0 && (
                 <div style={{ ...S.detailSummaryRow, color: "#A32D2D" }}>
                   <span>Refund deduction</span>
-                  <span style={{ fontFamily: T.mono }}>-{money(employeeDetailRefundDeduction)}</span>
+                  <span style={{ fontFamily: T.mono, fontSize: 14 }}>-{money(employeeDetailRefundDeduction)}</span>
                 </div>
               )}
               <div style={S.detailSummaryRow}>
                 <span>Base pay</span>
-                <span style={{ fontFamily: T.mono }}>{employeeDetailHasBasePay ? money(employeeDetailBasePay) : "—"}</span>
+                <span style={{ fontFamily: T.mono, fontSize: 14 }}>{employeeDetailHasBasePay ? money(employeeDetailBasePay) : "—"}</span>
               </div>
               <div style={{ ...S.detailSummaryRow, ...S.detailSummaryTotal }}>
                 <span>
@@ -2977,7 +2977,7 @@ export default function TeamCRM() {
                     </span>
                   )}
                 </span>
-                <span style={{ fontFamily: T.mono }}>{money(employeeDetailTotalPay)}</span>
+                <span style={{ fontFamily: T.mono, fontSize: 14 }}>{money(employeeDetailTotalPay)}</span>
               </div>
             </div>
 
@@ -3241,7 +3241,7 @@ function UserForm({ initial, currentUserId, userCount, onCancel, onSave, onDelet
         <input
           value={form.password}
           onChange={set("password")}
-          style={{ ...S.input, fontFamily: T.mono }}
+          style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }}
           placeholder={isEdit ? "Leave blank to keep current password" : "Password"}
         />
       </Field>
@@ -3404,7 +3404,7 @@ function EmployeeForm({ initial, onCancel, onSave, onDelete, onToggleActive }) {
               min="0"
               max="100"
               step="1"
-              style={{ ...S.input, fontFamily: T.mono }}
+              style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }}
               placeholder="e.g. 35"
             />
           </Field>
@@ -3417,7 +3417,7 @@ function EmployeeForm({ initial, onCancel, onSave, onDelete, onToggleActive }) {
               type="number"
               min="0"
               step="1"
-              style={{ ...S.input, fontFamily: T.mono }}
+              style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }}
               placeholder="Leave blank if none"
             />
           </Field>
@@ -3598,12 +3598,12 @@ function SaleForm({ initial, employees, settings, onCancel, onSave, onDelete }) 
       <div style={{ display: "flex", gap: 10 }}>
         <div style={{ flex: 1 }}>
           <Field label="Package price *">
-            <input value={form.packagePrice} onChange={set("packagePrice")} type="number" style={{ ...S.input, fontFamily: T.mono }} placeholder="0" />
+            <input value={form.packagePrice} onChange={set("packagePrice")} type="number" style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }} placeholder="0" />
           </Field>
         </div>
         <div style={{ flex: 1 }}>
           <Field label="Date flex price *">
-            <input value={form.dateFlex} onChange={set("dateFlex")} type="number" style={{ ...S.input, fontFamily: T.mono }} placeholder="0" />
+            <input value={form.dateFlex} onChange={set("dateFlex")} type="number" style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }} placeholder="0" />
           </Field>
         </div>
       </div>
@@ -3613,7 +3613,7 @@ function SaleForm({ initial, employees, settings, onCancel, onSave, onDelete }) 
           readOnly
           disabled
           type="number"
-          style={{ ...S.input, fontFamily: T.mono, fontWeight: 600, color: T.pineDark, background: T.border, cursor: "not-allowed" }}
+          style={{ ...S.input, fontFamily: T.mono, fontSize: 14, fontWeight: 600, color: T.pineDark, background: T.border, cursor: "not-allowed" }}
         />
       </Field>
       <div style={S.hint}>
@@ -3622,7 +3622,7 @@ function SaleForm({ initial, employees, settings, onCancel, onSave, onDelete }) 
       <div style={{ display: "flex", gap: 10 }}>
         <div style={{ flex: 1 }}>
           <Field label="Password *">
-            <input value={form.password || ""} onChange={set("password")} style={{ ...S.input, fontFamily: T.mono }} placeholder="Verification password" />
+            <input value={form.password || ""} onChange={set("password")} style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }} placeholder="Verification password" />
           </Field>
         </div>
         <div style={{ flex: 1 }}>
@@ -3924,7 +3924,7 @@ const S = {
   rrgLegendItem: { display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: T.textMuted },
   rrgLegendDot: { width: 8, height: 8, borderRadius: "50%", display: "inline-block" },
   rrgChipRow: { display: "flex", flexWrap: "wrap", gap: "3px 6px" },
-  rrgChip: { fontFamily: T.mono, fontSize: 12, fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap" },
+  rrgChip: { fontFamily: T.mono, fontSize: 14, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" },
   attendanceSelect: {
     fontSize: 10.5,
     fontWeight: 600,
@@ -3943,7 +3943,7 @@ const S = {
     padding: 14,
   },
   sourceCount: { fontSize: 11, color: T.textMuted },
-  sourceValue: { fontFamily: T.mono, fontSize: 18, fontWeight: 500, color: T.ink, marginTop: 10 },
+  sourceValue: { fontFamily: T.mono, fontSize: 21, fontWeight: 600, color: T.ink, marginTop: 10 },
   reportsCardLabel: { fontSize: 10.5, fontWeight: 600, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.03em" },
   adminSettingsGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginTop: 12 },
   savedNote: { fontSize: 11.5, color: T.pineDark, fontWeight: 500, marginTop: 8 },
@@ -4139,9 +4139,9 @@ const S = {
   },
   statItem: { display: "flex", flexDirection: "column", gap: 2 },
   statLabel: { fontSize: 10.5, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" },
-  statValue: { fontFamily: T.mono, fontSize: 16, fontWeight: 500, color: T.ink },
+  statValue: { fontFamily: T.mono, fontSize: 19, fontWeight: 600, color: T.ink },
   statDivider: { width: 1, height: 26, background: T.border },
-  dealValue: { fontFamily: T.mono, fontSize: 12.5, color: T.pineDark, marginTop: 6, fontWeight: 500 },
+  dealValue: { fontFamily: T.mono, fontSize: 14.5, color: T.pineDark, marginTop: 6, fontWeight: 600 },
   contactsWrap: { padding: 20 },
   salesWrap: { padding: 20 },
   tableScroll: { overflowX: "auto", border: `1px solid ${T.border}`, borderRadius: 10, background: T.paperRaised },
@@ -4278,7 +4278,7 @@ const S = {
     borderTop: `1px solid ${T.border}`,
   },
   leadEmployeeItem: { display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: T.ink },
-  refundImpactNote: { fontFamily: T.mono, fontSize: 11, fontWeight: 600, color: "#A32D2D" },
+  refundImpactNote: { fontFamily: T.mono, fontSize: 12.5, fontWeight: 700, color: "#A32D2D" },
   leadNotes: {
     marginTop: 10,
     paddingTop: 10,
@@ -4316,7 +4316,8 @@ const S = {
     paddingTop: 8,
     borderTop: `1px solid ${T.border}`,
     fontFamily: T.mono,
-    fontSize: 11,
+    fontSize: 13,
+    fontWeight: 600,
     color: T.pineDark,
   },
   weeklySaleList: {
@@ -4329,8 +4330,8 @@ const S = {
   },
   weeklySaleRow: {
     fontFamily: T.mono,
-    fontSize: 11,
-    fontWeight: 500,
+    fontSize: 13,
+    fontWeight: 600,
     whiteSpace: "nowrap",
     overflow: "hidden",
     textOverflow: "ellipsis",
@@ -4434,11 +4435,11 @@ const S = {
     textTransform: "uppercase",
   },
   totalPayCell: { display: "flex", alignItems: "center", gap: 4 },
-  totalPayCurrency: { fontFamily: T.mono, fontSize: 12.5, fontWeight: 600, color: T.pineDark },
+  totalPayCurrency: { fontFamily: T.mono, fontSize: 15, fontWeight: 700, color: T.pineDark },
   totalPayInput: {
     fontFamily: T.mono,
-    fontSize: 12.5,
-    fontWeight: 600,
+    fontSize: 15,
+    fontWeight: 700,
     border: `1px solid transparent`,
     background: "transparent",
     borderRadius: 5,
