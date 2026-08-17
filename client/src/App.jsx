@@ -24,6 +24,8 @@ import {
   Download,
   Settings,
   Tag,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -341,6 +343,7 @@ export default function TeamCRM() {
   const [gateNameInput, setGateNameInput] = useState("");
   const [gateUsernameInput, setGateUsernameInput] = useState("");
   const [gatePasswordInput, setGatePasswordInput] = useState("");
+  const [showGatePassword, setShowGatePassword] = useState(false);
   const [gateError, setGateError] = useState("");
   const [search, setSearch] = useState("");
   const [contactModal, setContactModal] = useState(null); // null | 'new' | contact object
@@ -1127,14 +1130,24 @@ export default function TeamCRM() {
               placeholder="Username"
             />
             <div style={S.fieldLabel}>Password</div>
-            <input
-              type="password"
-              value={gatePasswordInput}
-              onChange={(e) => setGatePasswordInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && completeSetup()}
-              style={{ ...S.input, marginBottom: 12 }}
-              placeholder="Choose a password"
-            />
+            <div style={{ position: "relative", marginBottom: 12 }}>
+              <input
+                type={showGatePassword ? "text" : "password"}
+                value={gatePasswordInput}
+                onChange={(e) => setGatePasswordInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && completeSetup()}
+                style={{ ...S.input, paddingRight: 38 }}
+                placeholder="Choose a password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowGatePassword((v) => !v)}
+                style={S.passwordEyeBtn}
+                aria-label={showGatePassword ? "Hide password" : "Show password"}
+              >
+                {showGatePassword ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
             {gateError && <div style={S.errorText}>{gateError}</div>}
             <button style={{ ...S.primaryBtn, width: "100%", justifyContent: "center", marginTop: 4 }} onClick={completeSetup}>
               Create admin account
@@ -1171,14 +1184,24 @@ export default function TeamCRM() {
               placeholder="Username"
             />
             <div style={S.fieldLabel}>Password</div>
-            <input
-              type="password"
-              value={gatePasswordInput}
-              onChange={(e) => setGatePasswordInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && attemptUnlock()}
-              style={{ ...S.input, marginBottom: 12 }}
-              placeholder="Password"
-            />
+            <div style={{ position: "relative", marginBottom: 12 }}>
+              <input
+                type={showGatePassword ? "text" : "password"}
+                value={gatePasswordInput}
+                onChange={(e) => setGatePasswordInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && attemptUnlock()}
+                style={{ ...S.input, paddingRight: 38 }}
+                placeholder="Password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowGatePassword((v) => !v)}
+                style={S.passwordEyeBtn}
+                aria-label={showGatePassword ? "Hide password" : "Show password"}
+              >
+                {showGatePassword ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
             {gateError && <div style={S.errorText}>{gateError}</div>}
             <button style={{ ...S.primaryBtn, width: "100%", justifyContent: "center", marginTop: 4 }} onClick={attemptUnlock}>
               Sign in
@@ -2723,6 +2746,7 @@ export default function TeamCRM() {
           <SaleForm
             initial={saleModal}
             employees={employees}
+            settings={settings}
             onCancel={() => setSaleModal(null)}
             onSave={saveSale}
             onDelete={
@@ -3313,7 +3337,7 @@ function EmployeeForm({ initial, onCancel, onSave, onDelete, onToggleActive }) {
   );
 }
 
-function SaleForm({ initial, employees, onCancel, onSave, onDelete }) {
+function SaleForm({ initial, employees, settings, onCancel, onSave, onDelete }) {
   const [form, setForm] = useState(initial);
   const [error, setError] = useState("");
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -4287,6 +4311,20 @@ const S = {
   },
   selectChevron: { position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" },
   errorText: { fontSize: 11.5, color: T.red, marginTop: -8, marginBottom: 10 },
+  passwordEyeBtn: {
+    position: "absolute",
+    right: 8,
+    top: "50%",
+    transform: "translateY(-50%)",
+    border: "none",
+    background: "transparent",
+    color: T.textMuted,
+    padding: 4,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+  },
   hint: { fontSize: 11, color: T.textMuted, lineHeight: 1.5, marginBottom: 4 },
   roleFieldGrid: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 },
   modalFooter: { display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 16 },
