@@ -848,19 +848,22 @@ export default function TeamCRM() {
   const reportsRefundedSales = reportsRange
     ? sales.filter((s) => s.refunded && dateInRange(s.refundedAt, reportsRange.start, reportsRange.end))
     : sales.filter((s) => s.refunded);
+  // Same rule as Dashboard/RRG Board/Payroll: a sale doesn't count toward any
+  // of these totals until it's marked Approved.
+  const reportsApprovedSales = reportsSales.filter((s) => s.status === "Approved");
 
-  const reportsTotalSalesValue = reportsSales.reduce((s, r) => s + (Number(r.totalPrice) || 0), 0);
-  const reportsTotalPackagePrice = reportsSales.reduce((s, r) => s + (Number(r.packagePrice) || 0), 0);
-  const reportsTotalDateFlex = reportsSales.reduce((s, r) => s + (Number(r.dateFlex) || 0), 0);
+  const reportsTotalSalesValue = reportsApprovedSales.reduce((s, r) => s + (Number(r.totalPrice) || 0), 0);
+  const reportsTotalPackagePrice = reportsApprovedSales.reduce((s, r) => s + (Number(r.packagePrice) || 0), 0);
+  const reportsTotalDateFlex = reportsApprovedSales.reduce((s, r) => s + (Number(r.dateFlex) || 0), 0);
   const reportsTotalRefunded = reportsRefundedSales.reduce((s, r) => s + (Number(r.refundAmount) || 0), 0);
   const reportsSourceBreakdown = settings.leadSources.map((src) => {
-    const rows = reportsSales.filter((s) => s.leadSubmittedTo === src);
+    const rows = reportsApprovedSales.filter((s) => s.leadSubmittedTo === src);
     return { source: src, count: rows.length, total: rows.reduce((sum, r) => sum + (Number(r.totalPrice) || 0), 0) };
   });
   const reportsDeclined = reportsSales.filter((s) => s.status === "Declined");
   const reportsEmployeeRows = activeEmployees
     .map((emp) => {
-      const empSales = reportsSales.filter(
+      const empSales = reportsApprovedSales.filter(
         (s) => s.openerId === emp.id || s.closerId === emp.id || s.verificationId === emp.id
       );
       const credited = empSales.reduce((s, r) => s + saleCredit(r, emp.id), 0);
@@ -888,7 +891,7 @@ export default function TeamCRM() {
     rows.push(["Generated", new Date().toLocaleString("en-US")]);
     rows.push([]);
     rows.push(["Summary"]);
-    rows.push(["Total sales", reportsSales.length]);
+    rows.push(["Total sales", reportsApprovedSales.length]);
     rows.push(["Total sales value", reportsTotalSalesValue.toFixed(2)]);
     rows.push(["Total package price", reportsTotalPackagePrice.toFixed(2)]);
     rows.push(["Total date flex price", reportsTotalDateFlex.toFixed(2)]);
@@ -2417,7 +2420,7 @@ export default function TeamCRM() {
               <div style={S.sourceCard}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <span style={S.reportsCardLabel}>Total sales</span>
-                  <span style={S.sourceCount}>{reportsSales.length} sale{reportsSales.length === 1 ? "" : "s"}</span>
+                  <span style={S.sourceCount}>{reportsApprovedSales.length} sale{reportsApprovedSales.length === 1 ? "" : "s"}</span>
                 </div>
                 <div style={S.sourceValue}>{money(reportsTotalSalesValue)}</div>
               </div>
