@@ -469,6 +469,29 @@ export default function TeamCRM() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser && currentUser.id]);
 
+  // Multiple people use this CRM at once, but the data only loads once on
+  // page load — without this, you'd never see a teammate's changes unless
+  // you knew to manually refresh. So: re-check for updates whenever this
+  // tab regains focus, and every couple minutes while it's just sitting open.
+  useEffect(() => {
+    if (!currentUser) return;
+    function handleFocus() {
+      loadAppData();
+    }
+    function handleVisibility() {
+      if (document.visibilityState === "visible") loadAppData();
+    }
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
+    const interval = setInterval(loadAppData, 120000); // every 2 minutes
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser && currentUser.id]);
+
   // ---- real auth (separate from the app-data load above) ----
   useEffect(() => {
     (async () => {
