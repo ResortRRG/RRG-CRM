@@ -97,6 +97,7 @@ const ATTENDANCE_STATUSES = [
 const SALE_TYPES = [
   { id: "front", label: "Front", color: "#2B2B28" },
   { id: "close", label: "Close", color: "#1E8E4A" },
+  { id: "openclose", label: "Opened & Closed", color: "#2A5488" },
   { id: "verification", label: "Verification", color: "#B23B3B" },
 ];
 
@@ -279,6 +280,30 @@ function roleCreditAmount(sale, type) {
   return 0;
 }
 
+// Builds the chip/list entries for a given employee on a given sale. When the
+// same person is both Opener and Closer, that's shown as a single combined
+// "openclose" entry (their full package-price credit, one color, one line)
+// instead of two separate front/close entries with the customer's name twice.
+function buildRoleEntries(sale, employeeId) {
+  const entries = [];
+  const isOpener = sale.openerId === employeeId;
+  const isCloser = sale.closerId === employeeId;
+  if (isOpener && isCloser) {
+    entries.push({
+      sale,
+      type: "openclose",
+      amount: roleCreditAmount(sale, "front") + roleCreditAmount(sale, "close"),
+    });
+  } else {
+    if (isOpener) entries.push({ sale, type: "front", amount: roleCreditAmount(sale, "front") });
+    if (isCloser) entries.push({ sale, type: "close", amount: roleCreditAmount(sale, "close") });
+  }
+  if (sale.verificationId === employeeId) {
+    entries.push({ sale, type: "verification", amount: roleCreditAmount(sale, "verification") });
+  }
+  return entries;
+}
+
 function employeeIdForRole(sale, roleId) {
   if (roleId === "front") return sale.openerId;
   if (roleId === "close") return sale.closerId;
@@ -299,7 +324,12 @@ function refundImpactForRole(sale, roleId) {
 // Full refunds affect every role; partial refunds only affect roles with a deduction amount entered.
 function isEntryRefunded(sale, roleId) {
   if (!sale.refunded) return false;
-  if (sale.refundType === "partial") return refundImpactForRole(sale, roleId) > 0;
+  if (sale.refundType === "partial") {
+    if (roleId === "openclose") {
+      return refundImpactForRole(sale, "front") > 0 || refundImpactForRole(sale, "close") > 0;
+    }
+    return refundImpactForRole(sale, roleId) > 0;
+  }
   return true;
 }
 
@@ -805,10 +835,7 @@ export default function TeamCRM() {
     rrgWeekSales.forEach((s) => {
       const idx = getWeekdayIndex(new Date(s.timestamp));
       if (idx === null) return;
-      if (s.openerId === emp.id) days[idx].push({ sale: s, type: "front", amount: roleCreditAmount(s, "front") });
-      if (s.closerId === emp.id) days[idx].push({ sale: s, type: "close", amount: roleCreditAmount(s, "close") });
-      if (s.verificationId === emp.id)
-        days[idx].push({ sale: s, type: "verification", amount: roleCreditAmount(s, "verification") });
+      days[idx].push(...buildRoleEntries(s, emp.id));
     });
     const weekTotal = days.flat().reduce((sum, e) => sum + e.amount, 0);
     return { employee: emp, days, weekTotal };
@@ -977,10 +1004,7 @@ export default function TeamCRM() {
     sales.forEach((s) => {
       if (s.status !== "Approved") return;
       if (!isSaleInRange(s, currentWeek.start, currentWeek.end)) return;
-      if (s.openerId === employeeId) entries.push({ sale: s, type: "front", amount: roleCreditAmount(s, "front") });
-      if (s.closerId === employeeId) entries.push({ sale: s, type: "close", amount: roleCreditAmount(s, "close") });
-      if (s.verificationId === employeeId)
-        entries.push({ sale: s, type: "verification", amount: roleCreditAmount(s, "verification") });
+      entries.push(...buildRoleEntries(s, employeeId));
     });
     return entries.sort((a, b) => new Date(b.sale.timestamp || 0) - new Date(a.sale.timestamp || 0));
   }
@@ -996,12 +1020,7 @@ export default function TeamCRM() {
       if (!isSaleInRange(s, weekStart, weekEnd)) return;
       const idx = getWeekdayIndex(new Date(s.timestamp));
       if (idx === null) return;
-      if (s.openerId === employeeId)
-        rows[idx].entries.push({ sale: s, type: "front", amount: roleCreditAmount(s, "front") });
-      if (s.closerId === employeeId)
-        rows[idx].entries.push({ sale: s, type: "close", amount: roleCreditAmount(s, "close") });
-      if (s.verificationId === employeeId)
-        rows[idx].entries.push({ sale: s, type: "verification", amount: roleCreditAmount(s, "verification") });
+      rows[idx].entries.push(...buildRoleEntries(s, employeeId));
     });
     return rows.map((r) => ({ ...r, dayTotal: r.entries.reduce((sum, e) => sum + e.amount, 0) }));
   }
