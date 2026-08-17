@@ -392,69 +392,82 @@ export default function TeamCRM() {
   }, [confirmRefund]);
 
   // ---- load ----
+  async function loadAppData() {
+    try {
+      const c = await window.storage.get("crm:contacts", true);
+      setContacts(c && c.value ? JSON.parse(c.value) : []);
+    } catch (e) {
+      setContacts([]);
+    }
+    try {
+      const s = await window.storage.get("crm:sales", true);
+      setSales(s && s.value ? JSON.parse(s.value) : []);
+    } catch (e) {
+      setSales([]);
+    }
+    try {
+      const emp = await window.storage.get("crm:employees", true);
+      const loadedEmployees = emp && emp.value ? JSON.parse(emp.value) : [];
+      if (loadedEmployees.length === 0) {
+        const seeded = DEFAULT_EMPLOYEE_NAMES.map((name) => ({
+          id: uid(),
+          name,
+          role: "rep",
+          phone: "",
+          email: "",
+          notes: "",
+          active: true,
+          createdAt: Date.now(),
+        }));
+        setEmployees(seeded);
+        window.storage.set("crm:employees", JSON.stringify(seeded), true).catch(() => {});
+      } else {
+        setEmployees(loadedEmployees);
+      }
+    } catch (e) {
+      setEmployees([]);
+    }
+    try {
+      const po = await window.storage.get("crm:payrollOverrides", true);
+      setPayrollOverrides(po && po.value ? JSON.parse(po.value) : {});
+    } catch (e) {
+      setPayrollOverrides({});
+    }
+    try {
+      const att = await window.storage.get("crm:attendance", true);
+      setAttendance(att && att.value ? JSON.parse(att.value) : {});
+    } catch (e) {
+      setAttendance({});
+    }
+    try {
+      const st = await window.storage.get("crm:settings", true);
+      setSettings(st && st.value ? { ...DEFAULT_SETTINGS, ...JSON.parse(st.value) } : DEFAULT_SETTINGS);
+    } catch (e) {
+      setSettings(DEFAULT_SETTINGS);
+    }
+    try {
+      const v = await window.storage.get("crm:viewer", false);
+      if (v && v.value) setViewer(JSON.parse(v.value));
+    } catch (e) {
+      // no saved viewer yet
+    }
+    setLoaded(true);
+  }
+
   useEffect(() => {
-    (async () => {
-      try {
-        const c = await window.storage.get("crm:contacts", true);
-        setContacts(c && c.value ? JSON.parse(c.value) : []);
-      } catch (e) {
-        setContacts([]);
-      }
-      try {
-        const s = await window.storage.get("crm:sales", true);
-        setSales(s && s.value ? JSON.parse(s.value) : []);
-      } catch (e) {
-        setSales([]);
-      }
-      try {
-        const emp = await window.storage.get("crm:employees", true);
-        const loadedEmployees = emp && emp.value ? JSON.parse(emp.value) : [];
-        if (loadedEmployees.length === 0) {
-          const seeded = DEFAULT_EMPLOYEE_NAMES.map((name) => ({
-            id: uid(),
-            name,
-            role: "rep",
-            phone: "",
-            email: "",
-            notes: "",
-            active: true,
-            createdAt: Date.now(),
-          }));
-          setEmployees(seeded);
-          window.storage.set("crm:employees", JSON.stringify(seeded), true).catch(() => {});
-        } else {
-          setEmployees(loadedEmployees);
-        }
-      } catch (e) {
-        setEmployees([]);
-      }
-      try {
-        const po = await window.storage.get("crm:payrollOverrides", true);
-        setPayrollOverrides(po && po.value ? JSON.parse(po.value) : {});
-      } catch (e) {
-        setPayrollOverrides({});
-      }
-      try {
-        const att = await window.storage.get("crm:attendance", true);
-        setAttendance(att && att.value ? JSON.parse(att.value) : {});
-      } catch (e) {
-        setAttendance({});
-      }
-      try {
-        const st = await window.storage.get("crm:settings", true);
-        setSettings(st && st.value ? { ...DEFAULT_SETTINGS, ...JSON.parse(st.value) } : DEFAULT_SETTINGS);
-      } catch (e) {
-        setSettings(DEFAULT_SETTINGS);
-      }
-      try {
-        const v = await window.storage.get("crm:viewer", false);
-        if (v && v.value) setViewer(JSON.parse(v.value));
-      } catch (e) {
-        // no saved viewer yet
-      }
-      setLoaded(true);
-    })();
+    loadAppData();
   }, []);
+
+  // Every window.storage call above requires an authenticated session. On a
+  // brand-new login (no session cookie yet when the page first mounted),
+  // that first load attempt fails silently and leaves everything empty —
+  // so re-run it as soon as we know who's actually signed in.
+  useEffect(() => {
+    if (currentUser) {
+      loadAppData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser && currentUser.id]);
 
   // ---- real auth (separate from the app-data load above) ----
   useEffect(() => {
@@ -697,6 +710,10 @@ export default function TeamCRM() {
     dashboardRangeLabel = formatYearLabel(y.start);
   }
   const dashboardSales = dashboardRange ? sales.filter((s) => isSaleInRange(s, dashboardRange.start, dashboardRange.end)) : sales;
+  // Sales don't count toward source totals or dashboard visibility until they're
+  // marked Approved — a pending or declined sale shows as $0 here regardless of
+  // which source it's tagged with, until someone approves it.
+  const dashboardApprovedSales = dashboardSales.filter((s) => s.status === "Approved");
   function dashboardNavPrev() {
     if (dashboardFilterMode === "week") setWeekOffset((w) => w - 1);
     else if (dashboardFilterMode === "month") setDashboardMonthOffset((m) => m - 1);
@@ -718,7 +735,7 @@ export default function TeamCRM() {
     (dashboardFilterMode === "year" && dashboardYearOffset === 0);
 
   const salesBySource = settings.leadSources.map((src) => {
-    const rows = dashboardSales.filter((s) => s.leadSubmittedTo === src);
+    const rows = dashboardApprovedSales.filter((s) => s.leadSubmittedTo === src);
     return {
       source: src,
       count: rows.length,
@@ -744,7 +761,7 @@ export default function TeamCRM() {
     d.setDate(d.getDate() + i);
     return d;
   });
-  const rrgWeekSales = sales.filter((s) => isSaleInRange(s, rrg.start, rrg.end));
+  const rrgWeekSales = sales.filter((s) => isSaleInRange(s, rrg.start, rrg.end) && s.status === "Approved");
   const rrgBoard = activeEmployees.map((emp) => {
     const days = Array.from({ length: 6 }, () => []);
     rrgWeekSales.forEach((s) => {
@@ -1385,18 +1402,18 @@ export default function TeamCRM() {
             </div>
 
             <div style={{ ...S.dashboardSectionLabel, marginTop: 20 }}>
-              Sales {dashboardFilterMode === "all" ? "(all time)" : `(${dashboardRangeLabel})`} ({dashboardSales.length})
+              Approved sales {dashboardFilterMode === "all" ? "(all time)" : `(${dashboardRangeLabel})`} ({dashboardApprovedSales.length})
             </div>
-            {dashboardSales.length === 0 ? (
+            {dashboardApprovedSales.length === 0 ? (
               <div style={S.emptyState}>
                 <TrendingUp size={22} color={T.borderStrong} />
                 <div style={{ marginTop: 8, fontSize: 13, color: T.textMuted }}>
-                  {dashboardFilterMode === "all" ? "No sales logged yet" : `No sales logged for ${dashboardRangeLabel} yet`}
+                  {dashboardFilterMode === "all" ? "No approved sales yet" : `No approved sales for ${dashboardRangeLabel} yet`}
                 </div>
               </div>
             ) : (
               <div style={S.recentList}>
-                {[...dashboardSales]
+                {[...dashboardApprovedSales]
                   .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0))
                   .map((s) => (
                     <div
@@ -2204,7 +2221,7 @@ export default function TeamCRM() {
                   </thead>
                   <tbody>
                     {activeEmployees.map((emp, empIdx) => {
-                      const empSales = salesForEmployee(emp.id);
+                      const empSales = salesForEmployee(emp.id).filter((s) => s.status === "Approved");
                       const empWeekSales = empSales.filter((s) => isSaleInRange(s, payrollWeek.start, payrollWeek.end));
                       const empWeekTotal = empWeekSales.reduce((s, r) => s + saleCredit(r, emp.id), 0);
                       const rate = Number(emp.commissionRate) || 0;
@@ -2310,9 +2327,9 @@ export default function TeamCRM() {
                           activeEmployees.reduce((sum, emp) => {
                             const override = getPayrollOverride(emp.id, payrollWeek.start);
                             if (override !== null) return sum + override;
-                            const empSales = salesForEmployee(emp.id).filter((s) =>
-                              isSaleInRange(s, payrollWeek.start, payrollWeek.end)
-                            );
+                            const empSales = salesForEmployee(emp.id)
+                              .filter((s) => s.status === "Approved")
+                              .filter((s) => isSaleInRange(s, payrollWeek.start, payrollWeek.end));
                             const total = empSales.reduce((s, r) => s + saleCredit(r, emp.id), 0);
                             const rate = Number(emp.commissionRate) || 0;
                             const refundLookback = lookbackWeek(payrollWeek.start, payrollWeek.end);
