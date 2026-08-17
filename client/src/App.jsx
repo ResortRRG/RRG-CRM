@@ -698,6 +698,20 @@ export default function TeamCRM() {
       updateAttendance({ ...attendance, [key]: status });
     }
   }
+  const ABSENCE_GUARANTEE_DEDUCTION = 40;
+  function absentDaysInWeek(employeeId, weekStart) {
+    let count = 0;
+    for (let i = 0; i < 6; i++) {
+      const date = new Date(weekStart);
+      date.setDate(weekStart.getDate() + i);
+      if (getAttendance(employeeId, date) === "absent") count++;
+    }
+    return count;
+  }
+  function effectiveMinGuarantee(employeeId, weekStart) {
+    const absences = absentDaysInWeek(employeeId, weekStart);
+    return Math.max(0, settings.minWeeklyPay - absences * ABSENCE_GUARANTEE_DEDUCTION);
+  }
 
   // ---- derived ----
   const q = search.trim().toLowerCase();
@@ -1033,8 +1047,12 @@ export default function TeamCRM() {
     employeeDetail && employeeDetail.basePay !== "" && employeeDetail.basePay !== undefined && employeeDetail.basePay !== null;
   const employeeDetailBasePay = employeeDetailHasBasePay ? Number(employeeDetail.basePay) || 0 : 0;
   const employeeDetailRawTotalPay = employeeDetailCommission + employeeDetailBasePay;
-  const employeeDetailTotalPay = Math.max(employeeDetailRawTotalPay, settings.minWeeklyPay);
-  const employeeDetailGuarantee = employeeDetailRawTotalPay < settings.minWeeklyPay;
+  const employeeDetailMinGuarantee = employeeDetail
+    ? effectiveMinGuarantee(employeeDetail.id, employeeDetailWeek.start)
+    : settings.minWeeklyPay;
+  const employeeDetailTotalPay = Math.max(employeeDetailRawTotalPay, employeeDetailMinGuarantee);
+  const employeeDetailGuarantee = employeeDetailRawTotalPay < employeeDetailMinGuarantee;
+  const employeeDetailAbsences = employeeDetail ? absentDaysInWeek(employeeDetail.id, employeeDetailWeek.start) : 0;
 
   // ---- actions ----
   function saveContact(form) {
@@ -2214,7 +2232,7 @@ export default function TeamCRM() {
               </div>
             </div>
             <div style={S.hint}>
-              Everyone is guaranteed at least {money(settings.minWeeklyPay)} for the week — if commission plus base pay comes in under that, they're paid {money(settings.minWeeklyPay)} instead. Refunds marked in All Leads deduct the involved employees' credited commission from the payroll week right after the refund was recorded. Total pay is editable — click into the amount to override it for that person's that week; a reset button brings back the calculated number.
+              Everyone is guaranteed at least {money(settings.minWeeklyPay)} for the week — if commission plus base pay comes in under that, they're paid the guaranteed amount instead. Each day marked Absent on the RRG Board knocks {money(ABSENCE_GUARANTEE_DEDUCTION)} off that person's guarantee for the week. Refunds marked in All Leads deduct the involved employees' credited commission from the payroll week right after the refund was recorded. Total pay is editable — click into the amount to override it for that person's that week; a reset button brings back the calculated number.
             </div>
 
             {activeEmployees.length === 0 ? (
@@ -2253,8 +2271,10 @@ export default function TeamCRM() {
                       const hasBasePay = emp.basePay !== "" && emp.basePay !== undefined && emp.basePay !== null;
                       const basePay = hasBasePay ? Number(emp.basePay) || 0 : 0;
                       const rawTotalPay = commissionOwed + basePay;
-                      const computedTotalPay = Math.max(rawTotalPay, settings.minWeeklyPay);
-                      const guaranteeApplied = rawTotalPay < settings.minWeeklyPay;
+                      const empMinGuarantee = effectiveMinGuarantee(emp.id, payrollWeek.start);
+                      const computedTotalPay = Math.max(rawTotalPay, empMinGuarantee);
+                      const guaranteeApplied = rawTotalPay < empMinGuarantee;
+                      const empAbsences = absentDaysInWeek(emp.id, payrollWeek.start);
                       const override = getPayrollOverride(emp.id, payrollWeek.start);
                       const totalPay = override !== null ? override : computedTotalPay;
                       const isOverridden = override !== null;
@@ -2324,7 +2344,11 @@ export default function TeamCRM() {
                                   <X size={11} />
                                 </button>
                               ) : (
-                                guaranteeApplied && <span style={S.minGuaranteeBadge}>min guarantee</span>
+                                guaranteeApplied && (
+                                  <span style={S.minGuaranteeBadge}>
+                                    min guarantee{empAbsences > 0 ? ` (−${empAbsences}d)` : ""}
+                                  </span>
+                                )
                               )}
                             </div>
                             {isOverridden && <div style={S.customPayNote}>Custom · calculated {money(computedTotalPay)}</div>}
@@ -2355,7 +2379,7 @@ export default function TeamCRM() {
                             const commission = total * (rate / 100) - refundedCredit * (rate / 100);
                             const hasBasePay = emp.basePay !== "" && emp.basePay !== undefined && emp.basePay !== null;
                             const basePay = hasBasePay ? Number(emp.basePay) || 0 : 0;
-                            return sum + Math.max(commission + basePay, settings.minWeeklyPay);
+                            return sum + Math.max(commission + basePay, effectiveMinGuarantee(emp.id, payrollWeek.start));
                           }, 0)
                         )}
                       </td>
@@ -2945,7 +2969,14 @@ export default function TeamCRM() {
                 <span style={{ fontFamily: T.mono }}>{employeeDetailHasBasePay ? money(employeeDetailBasePay) : "—"}</span>
               </div>
               <div style={{ ...S.detailSummaryRow, ...S.detailSummaryTotal }}>
-                <span>Total pay {employeeDetailGuarantee && <span style={S.minGuaranteeBadge}>min guarantee</span>}</span>
+                <span>
+                  Total pay{" "}
+                  {employeeDetailGuarantee && (
+                    <span style={S.minGuaranteeBadge}>
+                      min guarantee{employeeDetailAbsences > 0 ? ` (−${employeeDetailAbsences}d)` : ""}
+                    </span>
+                  )}
+                </span>
                 <span style={{ fontFamily: T.mono }}>{money(employeeDetailTotalPay)}</span>
               </div>
             </div>
