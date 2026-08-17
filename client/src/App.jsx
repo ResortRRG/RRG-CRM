@@ -1293,31 +1293,18 @@ export default function TeamCRM() {
           </div>
         </div>
 
-        <div style={{ position: "relative" }}>
-          <button style={S.viewerBtnSidebar} onClick={() => setViewerOpen((o) => !o)}>
-            <div style={S.avatarSm}>{currentUser ? initials(currentUser.name) : <User size={12} />}</div>
-            <div style={{ minWidth: 0, flex: 1, textAlign: "left" }}>
-              <div style={{ fontSize: 12.5, color: T.ink, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {currentUser ? currentUser.name : "Signed in"}
-              </div>
+        <div style={S.viewerBtnSidebar}>
+          <div style={S.avatarSm}>{currentUser ? initials(currentUser.name) : <User size={12} />}</div>
+          <div style={{ minWidth: 0, flex: 1, textAlign: "left" }}>
+            <div style={{ fontSize: 12.5, color: T.ink, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {currentUser ? currentUser.name : "Signed in"}
             </div>
-            {currentUser && <RoleBadge role={currentUser.role} size="sm" />}
-          </button>
-          {viewerOpen && (
-            <div style={S.viewerPopoverSidebar}>
-              <div style={S.fieldLabel}>Signed in as</div>
-              <div style={{ fontSize: 13, fontWeight: 500, color: T.ink, marginBottom: 2 }}>
-                {currentUser ? currentUser.name : "—"}
-              </div>
-              <div style={{ fontSize: 11.5, color: T.textMuted, marginBottom: 12 }}>
-                {currentUser ? `@${currentUser.username}` : ""}
-              </div>
-              <button style={{ ...S.dangerGhostBtn, width: "100%", justifyContent: "center", border: `1px solid #E8B4B4` }} onClick={logOut}>
-                Log out
-              </button>
-            </div>
-          )}
+          </div>
+          {currentUser && <RoleBadge role={currentUser.role} size="sm" />}
         </div>
+        <button style={S.logOutLink} onClick={logOut}>
+          Log out
+        </button>
       </div>
 
       {/* Main */}
@@ -3802,6 +3789,19 @@ const S = {
     borderRadius: 10,
     padding: "7px 8px",
     width: "100%",
+  },
+  logOutLink: {
+    display: "block",
+    width: "100%",
+    marginTop: 6,
+    border: "none",
+    background: "transparent",
+    color: T.textMuted,
+    fontSize: 11.5,
+    fontWeight: 500,
+    padding: "4px 8px",
+    textAlign: "center",
+    cursor: "pointer",
   },
   viewerPopoverSidebar: {
     position: "absolute",
