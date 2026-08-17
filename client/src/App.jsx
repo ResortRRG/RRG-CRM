@@ -363,6 +363,7 @@ export default function TeamCRM() {
   const [employees, setEmployees] = useState([]);
   const [payrollOverrides, setPayrollOverrides] = useState({});
   const [attendance, setAttendance] = useState({});
+  const [spiffs, setSpiffs] = useState({});
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [loaded, setLoaded] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
@@ -467,6 +468,12 @@ export default function TeamCRM() {
       setAttendance(att && att.value ? JSON.parse(att.value) : {});
     } catch (e) {
       setAttendance({});
+    }
+    try {
+      const sp = await window.storage.get("crm:spiffs", true);
+      setSpiffs(sp && sp.value ? JSON.parse(sp.value) : {});
+    } catch (e) {
+      setSpiffs({});
     }
     try {
       const st = await window.storage.get("crm:settings", true);
@@ -630,7 +637,7 @@ export default function TeamCRM() {
     setCurrentUser(null);
   }
 
-  const persist = useCallback((nextContacts, nextSales, nextEmployees, nextOverrides, nextAttendance, nextSettings) => {
+  const persist = useCallback((nextContacts, nextSales, nextEmployees, nextOverrides, nextAttendance, nextSettings, nextSpiffs) => {
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
       try {
@@ -640,6 +647,7 @@ export default function TeamCRM() {
         if (nextOverrides) await window.storage.set("crm:payrollOverrides", JSON.stringify(nextOverrides), true);
         if (nextAttendance) await window.storage.set("crm:attendance", JSON.stringify(nextAttendance), true);
         if (nextSettings) await window.storage.set("crm:settings", JSON.stringify(nextSettings), true);
+        if (nextSpiffs) await window.storage.set("crm:spiffs", JSON.stringify(nextSpiffs), true);
       } catch (e) {
         console.error("save failed", e);
       }
@@ -648,27 +656,31 @@ export default function TeamCRM() {
 
   function updateContacts(next) {
     setContacts(next);
-    persist(next, null, null, null, null, null);
+    persist(next, null, null, null, null, null, null);
   }
   function updateSales(next) {
     setSales(next);
-    persist(null, next, null, null, null, null);
+    persist(null, next, null, null, null, null, null);
   }
   function updateEmployees(next) {
     setEmployees(next);
-    persist(null, null, next, null, null, null);
+    persist(null, null, next, null, null, null, null);
   }
   function updatePayrollOverrides(next) {
     setPayrollOverrides(next);
-    persist(null, null, null, next, null, null);
+    persist(null, null, null, next, null, null, null);
   }
   function updateAttendance(next) {
     setAttendance(next);
-    persist(null, null, null, null, next, null);
+    persist(null, null, null, null, next, null, null);
+  }
+  function updateSpiffs(next) {
+    setSpiffs(next);
+    persist(null, null, null, null, null, null, next);
   }
   function updateSettings(next) {
     setSettings(next);
-    persist(null, null, null, null, null, next);
+    persist(null, null, null, null, null, next, null);
     setAdminSaved(true);
     setTimeout(() => setAdminSaved(false), 1500);
   }
@@ -741,6 +753,33 @@ export default function TeamCRM() {
   function effectiveMinGuarantee(employeeId, weekStart) {
     const absences = absentDaysInWeek(employeeId, weekStart);
     return Math.max(0, settings.minWeeklyPay - absences * ABSENCE_GUARANTEE_DEDUCTION);
+  }
+
+  function spiffKey(employeeId, date) {
+    return employeeId + "__" + date.toISOString().slice(0, 10);
+  }
+  function getSpiff(employeeId, date) {
+    const key = spiffKey(employeeId, date);
+    return spiffs[key] !== undefined ? spiffs[key] : "";
+  }
+  function setSpiffValue(employeeId, date, amount) {
+    const key = spiffKey(employeeId, date);
+    if (amount === "" || amount === null || Number(amount) === 0) {
+      const next = { ...spiffs };
+      delete next[key];
+      updateSpiffs(next);
+    } else {
+      updateSpiffs({ ...spiffs, [key]: Number(amount) || 0 });
+    }
+  }
+  function spiffTotalInWeek(employeeId, weekStart) {
+    let total = 0;
+    for (let i = 0; i < 6; i++) {
+      const date = new Date(weekStart);
+      date.setDate(weekStart.getDate() + i);
+      total += Number(getSpiff(employeeId, date)) || 0;
+    }
+    return total;
   }
 
   // ---- derived ----
@@ -1065,7 +1104,8 @@ export default function TeamCRM() {
   const employeeDetailHasBasePay =
     employeeDetail && employeeDetail.basePay !== "" && employeeDetail.basePay !== undefined && employeeDetail.basePay !== null;
   const employeeDetailBasePay = employeeDetailHasBasePay ? Number(employeeDetail.basePay) || 0 : 0;
-  const employeeDetailRawTotalPay = employeeDetailCommission + employeeDetailBasePay;
+  const employeeDetailSpiff = employeeDetail ? spiffTotalInWeek(employeeDetail.id, employeeDetailWeek.start) : 0;
+  const employeeDetailRawTotalPay = employeeDetailCommission + employeeDetailBasePay + employeeDetailSpiff;
   const employeeDetailMinGuarantee = employeeDetail
     ? effectiveMinGuarantee(employeeDetail.id, employeeDetailWeek.start)
     : settings.minWeeklyPay;
@@ -2109,7 +2149,7 @@ export default function TeamCRM() {
               ))}
             </div>
             <div style={S.hint}>
-              Each day cell has a small dropdown under the sales — use it to mark someone Late, Left early, or Absent for that day.
+              Each day cell has a small dropdown under the sales — use it to mark someone Late, Left early, or Absent for that day. Below that, enter a dollar amount to record a daily Spiff — it carries over into that person's Payroll for the week.
             </div>
 
             {activeEmployees.length === 0 ? (
@@ -2206,6 +2246,20 @@ export default function TeamCRM() {
                                   ))}
                                 </select>
                               </div>
+                              <div style={{ marginTop: 3 }}>
+                                <input
+                                  type="number"
+                                  value={getSpiff(row.employee.id, rrgDayDates[i])}
+                                  onChange={(e) => setSpiffValue(row.employee.id, rrgDayDates[i], e.target.value)}
+                                  placeholder="+ spiff"
+                                  style={{
+                                    ...S.spiffInput,
+                                    ...(getSpiff(row.employee.id, rrgDayDates[i]) !== ""
+                                      ? { color: "#8A5A1E", borderColor: "#E3C89A", background: "#FBF3E6" }
+                                      : {}),
+                                  }}
+                                />
+                              </div>
                             </td>
                           );
                         })}
@@ -2273,6 +2327,7 @@ export default function TeamCRM() {
                       <th style={S.th}>Commission owed</th>
                       <th style={S.th}>Refund deduction</th>
                       <th style={S.th}>Base pay</th>
+                      <th style={S.th}>Spiff</th>
                       <th style={S.th}>Total pay</th>
                     </tr>
                   </thead>
@@ -2289,7 +2344,8 @@ export default function TeamCRM() {
                       const commissionOwed = grossCommission - refundDeduction;
                       const hasBasePay = emp.basePay !== "" && emp.basePay !== undefined && emp.basePay !== null;
                       const basePay = hasBasePay ? Number(emp.basePay) || 0 : 0;
-                      const rawTotalPay = commissionOwed + basePay;
+                      const spiffTotal = spiffTotalInWeek(emp.id, payrollWeek.start);
+                      const rawTotalPay = commissionOwed + basePay + spiffTotal;
                       const empMinGuarantee = effectiveMinGuarantee(emp.id, payrollWeek.start);
                       const computedTotalPay = Math.max(rawTotalPay, empMinGuarantee);
                       const guaranteeApplied = rawTotalPay < empMinGuarantee;
@@ -2342,6 +2398,9 @@ export default function TeamCRM() {
                           <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 500 }}>
                             {hasBasePay ? money(basePay) : "—"}
                           </td>
+                          <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 500, color: spiffTotal > 0 ? "#8A5A1E" : T.borderStrong }}>
+                            {spiffTotal > 0 ? money(spiffTotal) : "—"}
+                          </td>
                           <td style={{ ...S.td, whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
                             <div style={S.totalPayCell}>
                               <span style={S.totalPayCurrency}>$</span>
@@ -2385,6 +2444,7 @@ export default function TeamCRM() {
                       <td style={S.td} />
                       <td style={S.td} />
                       <td style={S.td} />
+                      <td style={S.td} />
                       <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 600, color: T.pineDark }}>
                         {money(
                           activeEmployees.reduce((sum, emp) => {
@@ -2398,7 +2458,8 @@ export default function TeamCRM() {
                             const commission = total * (rate / 100) - refundedCredit * (rate / 100);
                             const hasBasePay = emp.basePay !== "" && emp.basePay !== undefined && emp.basePay !== null;
                             const basePay = hasBasePay ? Number(emp.basePay) || 0 : 0;
-                            return sum + Math.max(commission + basePay, effectiveMinGuarantee(emp.id, payrollWeek.start));
+                            const spiffTotal = spiffTotalInWeek(emp.id, payrollWeek.start);
+                            return sum + Math.max(commission + basePay + spiffTotal, effectiveMinGuarantee(emp.id, payrollWeek.start));
                           }, 0)
                         )}
                       </td>
@@ -2987,6 +3048,12 @@ export default function TeamCRM() {
                 <span>Base pay</span>
                 <span style={{ fontFamily: T.mono, fontSize: 14 }}>{employeeDetailHasBasePay ? money(employeeDetailBasePay) : "—"}</span>
               </div>
+              {employeeDetailSpiff > 0 && (
+                <div style={{ ...S.detailSummaryRow, color: "#8A5A1E" }}>
+                  <span>Spiff</span>
+                  <span style={{ fontFamily: T.mono, fontSize: 14 }}>{money(employeeDetailSpiff)}</span>
+                </div>
+              )}
               <div style={{ ...S.detailSummaryRow, ...S.detailSummaryTotal }}>
                 <span>
                   Total pay{" "}
@@ -3953,6 +4020,18 @@ const S = {
     outline: "none",
     cursor: "pointer",
     maxWidth: 90,
+  },
+  spiffInput: {
+    fontSize: 10.5,
+    fontWeight: 600,
+    fontFamily: T.mono,
+    border: "1px solid transparent",
+    borderRadius: 5,
+    padding: "2px 4px",
+    outline: "none",
+    maxWidth: 74,
+    color: T.textMuted,
+    background: "transparent",
   },
   sourceGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 4 },
   sourceCard: {
