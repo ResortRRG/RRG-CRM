@@ -31,7 +31,6 @@ import {
 const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "sales", label: "Sales", icon: TrendingUp },
-  { id: "salesentry", label: "New Sale", icon: Plus },
   { id: "leads", label: "All Leads", icon: ClipboardList },
   { id: "employees", label: "Employees", icon: Users },
   { id: "rrgboard", label: "RRG Board", icon: LayoutGrid },
@@ -82,7 +81,7 @@ const DEFAULT_SETTINGS = {
 // unknown/future roles) defaults to full access, so this can never
 // accidentally lock an admin or existing user out of everything.
 const ROLE_PERMISSIONS = {
-  rep: ["salesentry"],
+  rep: ["sales"],
 };
 function getAllowedSections(role) {
   if (ROLE_PERMISSIONS[role]) return ROLE_PERMISSIONS[role];
@@ -1327,7 +1326,7 @@ export default function TeamCRM() {
           <div>
             <div style={S.topbarTitle}>{NAV_ITEMS.find((n) => n.id === section)?.label}</div>
           </div>
-          {section === "sales" && (
+          {section === "sales" && !(currentUser && currentUser.role === "rep") && (
             <div style={S.searchWrap}>
               <Search size={14} color={T.textMuted} style={{ flexShrink: 0 }} />
               <input
@@ -1345,7 +1344,7 @@ export default function TeamCRM() {
           )}
         </div>
 
-        {(section === "dashboard" || section === "sales") && (
+        {(section === "dashboard" || section === "sales") && !(currentUser && currentUser.role === "rep") && (
           <div style={S.stats}>
             <div style={S.statItem}>
               <div style={S.statLabel}>total sales</div>
@@ -1464,7 +1463,41 @@ export default function TeamCRM() {
           </div>
         )}
 
-        {section === "sales" && (
+        {section === "sales" && currentUser && currentUser.role === "rep" ? (
+          <div style={S.dashboardWrap}>
+            <div style={S.entryScreenWrap}>
+              {entryJustSaved ? (
+                <>
+                  <div style={S.entrySuccessIcon}>✓</div>
+                  <div style={S.entrySuccessTitle}>Sale submitted</div>
+                  <div style={{ ...S.hint, textAlign: "center", marginBottom: 20 }}>
+                    It's been added to the system. You won't see it listed here — that's expected for this account.
+                  </div>
+                  <button
+                    style={S.primaryBtn}
+                    onClick={() => {
+                      setEntryJustSaved(false);
+                      setSaleModal(blankSale());
+                    }}
+                  >
+                    <Plus size={14} /> Add another sale
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div style={S.entrySuccessTitle}>Submit a new sale</div>
+                  <div style={{ ...S.hint, textAlign: "center", marginBottom: 20 }}>
+                    Fill out the sale details. Once submitted, it goes straight into the system.
+                  </div>
+                  <button style={S.primaryBtn} onClick={() => setSaleModal(blankSale())}>
+                    <Plus size={14} /> New sale
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        ) : (
+          section === "sales" && (
           <div style={S.salesWrap}>
                 <div style={S.contactsToolbar}>
                   <span style={S.contactsCount}>
@@ -1606,41 +1639,7 @@ export default function TeamCRM() {
                   </div>
                 )}
               </div>
-        )}
-
-        {section === "salesentry" && (
-          <div style={S.dashboardWrap}>
-            <div style={S.entryScreenWrap}>
-              {entryJustSaved ? (
-                <>
-                  <div style={S.entrySuccessIcon}>✓</div>
-                  <div style={S.entrySuccessTitle}>Sale submitted</div>
-                  <div style={{ ...S.hint, textAlign: "center", marginBottom: 20 }}>
-                    It's been added to the system. You won't see it listed here — that's expected for this account.
-                  </div>
-                  <button
-                    style={S.primaryBtn}
-                    onClick={() => {
-                      setEntryJustSaved(false);
-                      setSaleModal(blankSale());
-                    }}
-                  >
-                    <Plus size={14} /> Add another sale
-                  </button>
-                </>
-              ) : (
-                <>
-                  <div style={S.entrySuccessTitle}>Submit a new sale</div>
-                  <div style={{ ...S.hint, textAlign: "center", marginBottom: 20 }}>
-                    Fill out the sale details. Once submitted, it goes straight into the system.
-                  </div>
-                  <button style={S.primaryBtn} onClick={() => setSaleModal(blankSale())}>
-                    <Plus size={14} /> New sale
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
+          )
         )}
 
         {section === "leads" && (
@@ -1749,7 +1748,11 @@ export default function TeamCRM() {
                     return (
                       <div
                         key={s.id}
-                        style={{ ...S.leadCard, ...(s.refunded ? S.leadCardRefunded : {}) }}
+                        style={{
+                          ...S.leadCard,
+                          ...(s.status === "Approved" ? S.leadCardApproved : {}),
+                          ...(s.refunded ? S.leadCardRefunded : {}),
+                        }}
                       >
                         <div style={S.leadCardHeader}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -4186,6 +4189,10 @@ const S = {
   leadCardRefunded: {
     borderColor: "#E8B4B4",
     background: "#FCF3F3",
+  },
+  leadCardApproved: {
+    borderColor: "#B8D9C4",
+    background: "#F2F8F4",
   },
   leadCardHeader: {
     display: "flex",
