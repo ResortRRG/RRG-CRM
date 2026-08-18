@@ -1710,23 +1710,32 @@ export default function TeamCRM() {
               <div style={S.recentList}>
                 {[...dashboardApprovedSales]
                   .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0))
-                  .map((s) => (
-                    <div
-                      key={s.id}
-                      style={S.recentRow}
-                      onClick={() => {
-                        setSection("sales");
-                        setView("salesform");
-                        setSaleModal({ ...s });
-                      }}
-                    >
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={S.recentTitle}>{s.name}</div>
-                        <div style={S.recentSub}>{s.city ? `${s.city}${s.state ? `, ${s.state}` : ""}` : formatTimestamp(s.timestamp)}</div>
+                  .map((s) => {
+                    const isManager = currentUser && currentUser.role === "manager";
+                    return (
+                      <div
+                        key={s.id}
+                        style={{ ...S.recentRow, ...(isManager ? { cursor: "default" } : {}) }}
+                        onClick={
+                          isManager
+                            ? undefined
+                            : () => {
+                                setSection("sales");
+                                setView("salesform");
+                                setSaleModal({ ...s });
+                              }
+                        }
+                      >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={S.recentTitle}>{s.name}</div>
+                          {!isManager && (
+                            <div style={S.recentSub}>{s.city ? `${s.city}${s.state ? `, ${s.state}` : ""}` : formatTimestamp(s.timestamp)}</div>
+                          )}
+                        </div>
+                        <div style={S.dealValue}>{s.totalPrice ? money(s.totalPrice) : ""}</div>
                       </div>
-                      <div style={S.dealValue}>{s.totalPrice ? money(s.totalPrice) : ""}</div>
-                    </div>
-                  ))}
+                    );
+                  })}
               </div>
             )}
           </div>
