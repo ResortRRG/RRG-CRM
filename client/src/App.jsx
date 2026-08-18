@@ -2305,7 +2305,7 @@ export default function TeamCRM() {
               </div>
             </div>
             <div style={S.hint}>
-              Everyone is guaranteed at least {money(settings.minWeeklyPay)} for the week — if commission plus base pay comes in under that, they're paid the guaranteed amount instead. Each day marked Absent on the RRG Board knocks {money(ABSENCE_GUARANTEE_DEDUCTION)} off that person's guarantee for the week. Refunds marked in All Leads deduct the involved employees' credited commission from the payroll week right after the refund was recorded. Total pay is editable — click into the amount to override it for that person's that week; a reset button brings back the calculated number.
+              Everyone is guaranteed at least {money(settings.minWeeklyPay)} for the week — if commission plus base pay comes in under that, they're paid the guaranteed amount instead. Sales Total reflects only the week shown here, not an all-time figure. Each day marked Absent on the RRG Board knocks {money(ABSENCE_GUARANTEE_DEDUCTION)} off that person's guarantee for the week. Refunds marked in All Leads deduct the involved employees' credited commission from the payroll week right after the refund was recorded. Total pay is editable — click into the amount to override it for that person's that week; a reset button brings back the calculated number.
             </div>
 
             {activeEmployees.length === 0 ? (
@@ -2381,7 +2381,7 @@ export default function TeamCRM() {
                           <td style={S.td}>
                             {empWeekSales.length} sale{empWeekSales.length === 1 ? "" : "s"} · {money(empWeekTotal)}
                           </td>
-                          <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14 }}>{money(empSales.reduce((s, r) => s + saleCredit(r, emp.id), 0))}</td>
+                          <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14 }}>{money(empWeekTotal)}</td>
                           <td style={S.td}>
                             {rate > 0 ? (
                               <span style={S.commissionRateBadge}>{rate}%</span>
