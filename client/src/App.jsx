@@ -26,6 +26,7 @@ import {
   Tag,
   Eye,
   EyeOff,
+  Minus,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -481,6 +482,11 @@ export default function TeamCRM() {
   const [search, setSearch] = useState("");
   const [contactModal, setContactModal] = useState(null); // null | 'new' | contact object
   const [saleModal, setSaleModal] = useState(null);
+  const [saleModalMinimized, setSaleModalMinimized] = useState(false);
+  useEffect(() => {
+    if (saleModal) setSaleModalMinimized(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saleModal]);
   const [entryJustSaved, setEntryJustSaved] = useState(false);
   const [employeeModal, setEmployeeModal] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null); // {type, id, label}
@@ -1263,6 +1269,7 @@ export default function TeamCRM() {
       setEntryJustSaved(true);
     }
     setSaleModal(null);
+    setSaleModalMinimized(false);
   }
   function deleteSale(id) {
     updateSales(sales.filter((s) => s.id !== id));
@@ -3073,13 +3080,23 @@ export default function TeamCRM() {
       )}
 
       {/* Sale modal */}
-      {saleModal && (
-        <Modal onClose={() => setSaleModal(null)}>
+      {saleModal && !saleModalMinimized && (
+        <Modal
+          onClose={() => {
+            setSaleModal(null);
+            setSaleModalMinimized(false);
+          }}
+          disableBackdropClose
+        >
           <SaleForm
             initial={saleModal}
             employees={employees}
             settings={settings}
-            onCancel={() => setSaleModal(null)}
+            onCancel={() => {
+              setSaleModal(null);
+              setSaleModalMinimized(false);
+            }}
+            onMinimize={() => setSaleModalMinimized(true)}
             onSave={saveSale}
             onDelete={
               saleModal.id
@@ -3088,6 +3105,12 @@ export default function TeamCRM() {
             }
           />
         </Modal>
+      )}
+      {saleModal && saleModalMinimized && (
+        <button style={S.minimizedPill} onClick={() => setSaleModalMinimized(false)}>
+          <TrendingUp size={14} />
+          Resume {saleModal.id ? "editing" : "new"} sale{saleModal.name ? ` — ${saleModal.name}` : ""}
+        </button>
       )}
 
       {/* Employee modal */}
@@ -3389,9 +3412,9 @@ export default function TeamCRM() {
   );
 }
 
-function Modal({ children, onClose, narrow, wide }) {
+function Modal({ children, onClose, narrow, wide, disableBackdropClose }) {
   return (
-    <div style={S.overlay} onClick={onClose}>
+    <div style={S.overlay} onClick={disableBackdropClose ? undefined : onClose}>
       <div
         style={{ ...S.modal, ...(narrow ? { maxWidth: 360 } : {}), ...(wide ? { maxWidth: 760 } : {}) }}
         onClick={(e) => e.stopPropagation()}
@@ -3793,7 +3816,7 @@ function EmployeeForm({ initial, onCancel, onSave, onDelete, onToggleActive }) {
   );
 }
 
-function SaleForm({ initial, employees, settings, onCancel, onSave, onDelete }) {
+function SaleForm({ initial, employees, settings, onCancel, onMinimize, onSave, onDelete }) {
   const [form, setForm] = useState(initial);
   const [error, setError] = useState("");
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -3830,7 +3853,14 @@ function SaleForm({ initial, employees, settings, onCancel, onSave, onDelete }) 
 
   return (
     <div>
-      <div style={S.modalTitle}>{form.id ? "Edit sale" : "New sale"}</div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+        <div style={S.modalTitle}>{form.id ? "Edit sale" : "New sale"}</div>
+        {onMinimize && (
+          <button type="button" onClick={onMinimize} style={S.minimizeBtn} title="Minimize — come back to this later">
+            <Minus size={14} /> Minimize
+          </button>
+        )}
+      </div>
       <div style={{ ...S.hint, marginBottom: 10 }}>All fields marked * are required to save.</div>
       <Field label="Timestamp">
         <input type="datetime-local" value={form.timestamp || ""} onChange={set("timestamp")} style={S.input} />
@@ -4778,6 +4808,38 @@ const S = {
     boxShadow: "0 12px 40px rgba(0,0,0,0.18)",
   },
   modalTitle: { fontFamily: T.display, fontSize: 17, fontWeight: 600, color: T.ink, marginBottom: 14 },
+  minimizeBtn: {
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+    border: `1px solid ${T.border}`,
+    background: T.paper,
+    color: T.textMuted,
+    fontSize: 11.5,
+    fontWeight: 500,
+    padding: "5px 10px",
+    borderRadius: 7,
+    cursor: "pointer",
+    flexShrink: 0,
+  },
+  minimizedPill: {
+    position: "fixed",
+    bottom: 20,
+    right: 20,
+    zIndex: 1100,
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    background: T.pineDark,
+    color: "#fff",
+    border: "none",
+    fontSize: 13,
+    fontWeight: 600,
+    padding: "12px 18px",
+    borderRadius: 30,
+    boxShadow: "0 6px 20px rgba(27,30,26,0.25)",
+    cursor: "pointer",
+  },
   fieldLabel: { fontSize: 11.5, color: T.textMuted, marginBottom: 5, fontWeight: 500 },
   input: {
     width: "100%",
