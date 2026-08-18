@@ -261,6 +261,17 @@ function formatYearLabel(start) {
   return String(start.getFullYear());
 }
 
+function getDayRange(offset) {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset, 0, 0, 0, 0);
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset, 23, 59, 59, 999);
+  return { start, end };
+}
+
+function formatDayLabel(start) {
+  return start.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
+
 function isSaleInRange(sale, start, end) {
   if (!sale.timestamp) return false;
   const d = new Date(sale.timestamp);
@@ -495,7 +506,8 @@ export default function TeamCRM() {
   const [viewerOpen, setViewerOpen] = useState(false);
   const [myItemsOnly, setMyItemsOnly] = useState(false);
   const [weekOffset, setWeekOffset] = useState(0);
-  const [dashboardFilterMode, setDashboardFilterMode] = useState("week"); // 'week' | 'month' | 'year' | 'all'
+  const [dashboardFilterMode, setDashboardFilterMode] = useState("week"); // 'day' | 'week' | 'month' | 'year' | 'all'
+  const [dashboardDayOffset, setDashboardDayOffset] = useState(0);
   const [dashboardMonthOffset, setDashboardMonthOffset] = useState(0);
   const [dashboardYearOffset, setDashboardYearOffset] = useState(0);
   const [rrgWeekOffset, setRrgWeekOffset] = useState(0);
@@ -944,7 +956,11 @@ export default function TeamCRM() {
 
   let dashboardRange = null;
   let dashboardRangeLabel = "";
-  if (dashboardFilterMode === "week") {
+  if (dashboardFilterMode === "day") {
+    const d = getDayRange(dashboardDayOffset);
+    dashboardRange = d;
+    dashboardRangeLabel = formatDayLabel(d.start);
+  } else if (dashboardFilterMode === "week") {
     const w = getWeekRange(weekOffset);
     dashboardRange = w;
     dashboardRangeLabel = formatWeekLabel(w.start, w.end);
@@ -963,21 +979,25 @@ export default function TeamCRM() {
   // which source it's tagged with, until someone approves it.
   const dashboardApprovedSales = dashboardSales.filter((s) => s.status === "Approved");
   function dashboardNavPrev() {
-    if (dashboardFilterMode === "week") setWeekOffset((w) => w - 1);
+    if (dashboardFilterMode === "day") setDashboardDayOffset((d) => d - 1);
+    else if (dashboardFilterMode === "week") setWeekOffset((w) => w - 1);
     else if (dashboardFilterMode === "month") setDashboardMonthOffset((m) => m - 1);
     else if (dashboardFilterMode === "year") setDashboardYearOffset((y) => y - 1);
   }
   function dashboardNavNext() {
-    if (dashboardFilterMode === "week") setWeekOffset((w) => w + 1);
+    if (dashboardFilterMode === "day") setDashboardDayOffset((d) => d + 1);
+    else if (dashboardFilterMode === "week") setWeekOffset((w) => w + 1);
     else if (dashboardFilterMode === "month") setDashboardMonthOffset((m) => m + 1);
     else if (dashboardFilterMode === "year") setDashboardYearOffset((y) => y + 1);
   }
   function dashboardNavReset() {
-    if (dashboardFilterMode === "week") setWeekOffset(0);
+    if (dashboardFilterMode === "day") setDashboardDayOffset(0);
+    else if (dashboardFilterMode === "week") setWeekOffset(0);
     else if (dashboardFilterMode === "month") setDashboardMonthOffset(0);
     else if (dashboardFilterMode === "year") setDashboardYearOffset(0);
   }
   const dashboardNavIsCurrent =
+    (dashboardFilterMode === "day" && dashboardDayOffset === 0) ||
     (dashboardFilterMode === "week" && weekOffset === 0) ||
     (dashboardFilterMode === "month" && dashboardMonthOffset === 0) ||
     (dashboardFilterMode === "year" && dashboardYearOffset === 0);
@@ -1605,6 +1625,7 @@ export default function TeamCRM() {
                     onChange={(e) => setDashboardFilterMode(e.target.value)}
                     style={{ ...S.select, width: 130, paddingRight: 28 }}
                   >
+                    <option value="day">Today</option>
                     <option value="week">This week</option>
                     <option value="month">This month</option>
                     <option value="year">This year</option>
