@@ -54,8 +54,8 @@ const ROLE_COLORS = {
 
 const DEFAULT_SOURCES = ["Dialer", "Paper"];
 const DEFAULT_LEAD_SOURCES = ["Monster", "PGR"];
-const DEFAULT_LEAD_CATEGORIES = ["Monster", "PGR", "Chargeback", "Declined"];
-const SALE_STATUSES = ["Approved", "Declined"];
+const DEFAULT_LEAD_CATEGORIES = ["Monster", "PGR", "Pending", "Chargeback", "Declined"];
+const SALE_STATUSES = ["Pending", "Approved", "Declined"];
 const DEFAULT_MIN_WEEKLY_PAY = 400;
 const DEFAULT_COMPANY_NAME = "RRG CRM";
 
@@ -208,7 +208,7 @@ function blankSale() {
     verificationId: "",
     source: "",
     leadSubmittedTo: "",
-    status: "",
+    status: "Pending",
     leadCategory: "",
     notes: "",
   };
@@ -1865,6 +1865,8 @@ export default function TeamCRM() {
                   if (leadsCategoryFilter) {
                     if (leadsCategoryFilter === "Declined") {
                       if (s.status !== "Declined") return false;
+                    } else if (leadsCategoryFilter === "Pending") {
+                      if (s.status !== "Pending") return false;
                     } else if (leadsCategoryFilter === "Chargeback") {
                       if (!s.refunded) return false;
                     } else if (s.leadSubmittedTo !== leadsCategoryFilter) {
@@ -1993,7 +1995,11 @@ export default function TeamCRM() {
                               <span
                                 style={{
                                   ...S.leadBadge,
-                                  ...(st === "Declined" ? { background: "#FCEBEB", color: "#A32D2D" } : { background: "#EAF3DE", color: "#3B6D11" }),
+                                  ...(st === "Declined"
+                                    ? { background: "#FCEBEB", color: "#A32D2D" }
+                                    : st === "Pending"
+                                    ? { background: "#FBF3E6", color: "#8A5A1E" }
+                                    : { background: "#EAF3DE", color: "#3B6D11" }),
                                 }}
                               >
                                 {st}
@@ -4022,7 +4028,9 @@ function SaleForm({ initial, employees, settings, onCancel, onMinimize, onSave, 
       <Field label="Status *">
         <div style={{ position: "relative" }}>
           <select value={form.status || ""} onChange={set("status")} style={S.select}>
-            <option value="">Pending</option>
+            <option value="" disabled>
+              Select status…
+            </option>
             {SALE_STATUSES.map((st) => (
               <option key={st} value={st}>
                 {st}
