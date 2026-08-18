@@ -3937,7 +3937,7 @@ function SaleForm({ initial, employees, settings, onCancel, onMinimize, onSave, 
       <div style={{ display: "flex", gap: 10 }}>
         <div style={{ flex: 1 }}>
           <Field label="Password *">
-            <input value={form.password || ""} onChange={set("password")} style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }} placeholder="Verification password" />
+            <input value={form.password || ""} onChange={set("password")} style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }} placeholder="Customer Password" />
           </Field>
         </div>
         <div style={{ flex: 1 }}>
