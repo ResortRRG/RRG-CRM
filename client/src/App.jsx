@@ -1065,26 +1065,6 @@ export default function TeamCRM() {
     return { source: src, count: rows.length, total: rows.reduce((sum, r) => sum + (Number(r.totalPrice) || 0), 0) };
   });
   const reportsDeclined = reportsSales.filter((s) => s.status === "Declined");
-  const reportsChartSegments = [
-    ...reportsSourceBreakdown.map((row) => ({
-      label: row.source,
-      value: row.total,
-      count: row.count,
-      color: chartColor(row.source),
-    })),
-    {
-      label: "Declined",
-      value: reportsDeclined.reduce((sum, r) => sum + (Number(r.totalPrice) || 0), 0),
-      count: reportsDeclined.length,
-      color: chartColor("Declined"),
-    },
-    {
-      label: "Chargeback",
-      value: reportsTotalRefunded,
-      count: reportsRefundedSales.length,
-      color: chartColor("Chargeback"),
-    },
-  ];
   const reportsMonsterTotal = (reportsSourceBreakdown.find((r) => r.source === "Monster") || {}).total || 0;
   const reportsPgrTotal = (reportsSourceBreakdown.find((r) => r.source === "PGR") || {}).total || 0;
   const reportsMonsterCommission = reportsMonsterTotal * ((Number(settings.monsterCommissionRate) || 0) / 100);
@@ -1618,6 +1598,7 @@ export default function TeamCRM() {
                       style={{
                         ...S.leadBadge,
                         ...(row.source === "Monster" ? S.leadBadgeMonster : S.leadBadgePGR),
+                        fontSize: 16,
                       }}
                     >
                       {row.source}
@@ -1631,7 +1612,7 @@ export default function TeamCRM() {
               ))}
               <div style={S.sourceCard}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ ...S.leadBadge, background: "#FCEBEB", color: "#A32D2D" }}>Declined</span>
+                  <span style={{ ...S.leadBadge, background: "#FCEBEB", color: "#A32D2D", fontSize: 16 }}>Declined</span>
                   <span style={S.sourceCount}>
                     {declinedSales.length} sale{declinedSales.length === 1 ? "" : "s"}
                   </span>
@@ -2746,15 +2727,6 @@ export default function TeamCRM() {
                   {money(reportsDeclined.reduce((s, r) => s + (Number(r.totalPrice) || 0), 0))}
                 </div>
               </div>
-            </div>
-
-            <div style={{ ...S.dashboardSectionLabel, marginTop: 20 }}>By category</div>
-            <div style={S.chartCard}>
-              <DonutChart
-                segments={reportsChartSegments}
-                centerLabel="Total"
-                centerValue={money(reportsChartSegments.reduce((s, seg) => s + seg.value, 0))}
-              />
             </div>
 
             <div style={{ ...S.dashboardSectionLabel, marginTop: 20 }}>Source commission</div>
@@ -4632,7 +4604,7 @@ const S = {
     fontWeight: 600,
     flexShrink: 0,
   },
-  contactName: { fontSize: 13.5, fontWeight: 500, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  contactName: { fontSize: 16, fontWeight: 700, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   contactCompany: { fontSize: 11.5, color: T.textMuted, display: "flex", alignItems: "center", marginTop: 2 },
   contactMeta: { marginTop: 10, display: "flex", flexDirection: "column", gap: 4 },
   contactMetaRow: { display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: T.textMuted },
