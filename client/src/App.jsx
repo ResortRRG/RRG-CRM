@@ -72,9 +72,9 @@ function categoryColor(name) {
 // badge colors used on All Leads/Reports.
 const DASHBOARD_CHART_COLORS = {
   Monster: "#1E9E62", // shamrock green
-  PGR: "#1C8FB0", // sea blue
+  PGR: "#007FFF", // azure blue
   Declined: "#E07B1A", // orange
-  Chargeback: "#D6362F", // red
+  Chargeback: "#E5231B", // red
 };
 function chartColor(name) {
   return DASHBOARD_CHART_COLORS[name] || "#767468";
@@ -1063,6 +1063,26 @@ export default function TeamCRM() {
     return { source: src, count: rows.length, total: rows.reduce((sum, r) => sum + (Number(r.totalPrice) || 0), 0) };
   });
   const reportsDeclined = reportsSales.filter((s) => s.status === "Declined");
+  const reportsChartSegments = [
+    ...reportsSourceBreakdown.map((row) => ({
+      label: row.source,
+      value: row.total,
+      count: row.count,
+      color: chartColor(row.source),
+    })),
+    {
+      label: "Declined",
+      value: reportsDeclined.reduce((sum, r) => sum + (Number(r.totalPrice) || 0), 0),
+      count: reportsDeclined.length,
+      color: chartColor("Declined"),
+    },
+    {
+      label: "Chargeback",
+      value: reportsTotalRefunded,
+      count: reportsRefundedSales.length,
+      color: chartColor("Chargeback"),
+    },
+  ];
   const reportsEmployeeRows = activeEmployees
     .map((emp) => {
       const empSales = reportsApprovedSales.filter(
@@ -2699,7 +2719,7 @@ export default function TeamCRM() {
               {reportsSourceBreakdown.map((row) => (
                 <div key={row.source} style={S.sourceCard}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <span style={{ ...S.leadBadge, ...(row.source === "Monster" ? S.leadBadgeMonster : S.leadBadgePGR) }}>
+                    <span style={{ ...S.leadBadge, background: chartColor(row.source) + "22", color: chartColor(row.source) }}>
                       {row.source}
                     </span>
                     <span style={S.sourceCount}>
@@ -2711,7 +2731,7 @@ export default function TeamCRM() {
               ))}
               <div style={S.sourceCard}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ ...S.leadBadge, background: "#FCEBEB", color: "#A32D2D" }}>Declined</span>
+                  <span style={{ ...S.leadBadge, background: chartColor("Declined") + "22", color: chartColor("Declined") }}>Declined</span>
                   <span style={S.sourceCount}>
                     {reportsDeclined.length} sale{reportsDeclined.length === 1 ? "" : "s"}
                   </span>
@@ -2720,6 +2740,15 @@ export default function TeamCRM() {
                   {money(reportsDeclined.reduce((s, r) => s + (Number(r.totalPrice) || 0), 0))}
                 </div>
               </div>
+            </div>
+
+            <div style={{ ...S.dashboardSectionLabel, marginTop: 20 }}>By category</div>
+            <div style={S.chartCard}>
+              <DonutChart
+                segments={reportsChartSegments}
+                centerLabel="Total"
+                centerValue={money(reportsChartSegments.reduce((s, seg) => s + seg.value, 0))}
+              />
             </div>
 
             <div style={{ ...S.dashboardSectionLabel, marginTop: 20 }}>Employees</div>
