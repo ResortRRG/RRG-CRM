@@ -1715,7 +1715,13 @@ export default function TeamCRM() {
               const filteredLeads = [...sales]
                 .filter((s) => {
                   if (leadsRange && !isSaleInRange(s, leadsRange.start, leadsRange.end)) return false;
-                  if (leadsCategoryFilter && s.leadCategory !== leadsCategoryFilter) return false;
+                  if (leadsCategoryFilter) {
+                    if (leadsCategoryFilter === "Declined") {
+                      if (s.status !== "Declined") return false;
+                    } else if (s.leadSubmittedTo !== leadsCategoryFilter) {
+                      return false;
+                    }
+                  }
                   const q2 = leadsSearch.trim().toLowerCase();
                   if (!q2) return true;
                   return (
@@ -1842,17 +1848,6 @@ export default function TeamCRM() {
                             {s.leadSubmittedTo && (
                               <span style={{ ...S.leadBadge, ...(s.leadSubmittedTo === "Monster" ? S.leadBadgeMonster : S.leadBadgePGR) }}>
                                 {s.leadSubmittedTo}
-                              </span>
-                            )}
-                            {s.leadCategory && settings.leadCategories.includes(s.leadCategory) && (
-                              <span
-                                style={{
-                                  ...S.leadBadge,
-                                  background: categoryColor(s.leadCategory).bg,
-                                  color: categoryColor(s.leadCategory).color,
-                                }}
-                              >
-                                {s.leadCategory}
                               </span>
                             )}
                             {s.source && <span style={S.sourceBadge}>{s.source}</span>}
