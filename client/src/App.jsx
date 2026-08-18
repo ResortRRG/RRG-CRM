@@ -82,10 +82,15 @@ const DEFAULT_SETTINGS = {
 // accidentally lock an admin or existing user out of everything.
 const ROLE_PERMISSIONS = {
   rep: ["sales"],
+  manager: ["dashboard", "sales"],
 };
 function getAllowedSections(role) {
   if (ROLE_PERMISSIONS[role]) return ROLE_PERMISSIONS[role];
   return NAV_ITEMS.map((n) => n.id);
+}
+// Roles that see the restricted "just submit a sale" screen instead of the full Sales table.
+function isSalesEntryRole(role) {
+  return role === "rep" || role === "manager";
 }
 
 const ATTENDANCE_STATUSES = [
@@ -1498,7 +1503,7 @@ export default function TeamCRM() {
           <div>
             <div style={S.topbarTitle}>{NAV_ITEMS.find((n) => n.id === section)?.label}</div>
           </div>
-          {section === "sales" && !(currentUser && currentUser.role === "rep") && (
+          {section === "sales" && !(currentUser && isSalesEntryRole(currentUser.role)) && (
             <div style={S.searchWrap}>
               <Search size={14} color={T.textMuted} style={{ flexShrink: 0 }} />
               <input
@@ -1516,7 +1521,7 @@ export default function TeamCRM() {
           )}
         </div>
 
-        {(section === "dashboard" || section === "sales") && !(currentUser && currentUser.role === "rep") && (
+        {(section === "dashboard" || (section === "sales" && !(currentUser && isSalesEntryRole(currentUser.role)))) && (
           <div style={S.stats}>
             <div style={S.statItem}>
               <div style={S.statLabel}>total sales</div>
@@ -1646,7 +1651,7 @@ export default function TeamCRM() {
           </div>
         )}
 
-        {section === "sales" && currentUser && currentUser.role === "rep" ? (
+        {section === "sales" && currentUser && isSalesEntryRole(currentUser.role) ? (
           <div style={S.dashboardWrap}>
             <div style={S.entryScreenWrap}>
               {entryJustSaved ? (
