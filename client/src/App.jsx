@@ -1718,6 +1718,8 @@ export default function TeamCRM() {
                   if (leadsCategoryFilter) {
                     if (leadsCategoryFilter === "Declined") {
                       if (s.status !== "Declined") return false;
+                    } else if (leadsCategoryFilter === "Chargeback") {
+                      if (!s.refunded) return false;
                     } else if (s.leadSubmittedTo !== leadsCategoryFilter) {
                       return false;
                     }
@@ -1831,9 +1833,14 @@ export default function TeamCRM() {
                           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                             <span style={S.leadName}>{s.name}</span>
                             {s.refunded && (
-                              <span style={S.refundedBadge}>
-                                {s.refundType === "partial" ? `Partial refund ${money(s.refundAmount)}` : "Refunded"}
-                              </span>
+                              <>
+                                <span style={S.refundedBadge}>
+                                  {s.refundType === "partial" ? `Partial refund ${money(s.refundAmount)}` : "Refunded"}
+                                </span>
+                                <span style={{ ...S.leadBadge, background: categoryColor("Chargeback").bg, color: categoryColor("Chargeback").color }}>
+                                  Chargeback
+                                </span>
+                              </>
                             )}
                             {st && (
                               <span
