@@ -333,6 +333,90 @@ function isEntryRefunded(sale, roleId) {
   return true;
 }
 
+function DonutChart({ segments, centerLabel, centerValue }) {
+  const total = segments.reduce((s, seg) => s + (seg.value > 0 ? seg.value : 0), 0);
+  const size = 200;
+  const strokeWidth = 26;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  let cumulative = 0;
+  const visibleSegments = segments.filter((seg) => seg.value > 0);
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 28, flexWrap: "wrap" }}>
+      <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: "rotate(-90deg)" }}>
+          <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#EDEAE0" strokeWidth={strokeWidth} />
+          {total === 0
+            ? null
+            : visibleSegments.map((seg, i) => {
+                const fraction = seg.value / total;
+                const dash = fraction * circumference;
+                const gap = circumference - dash;
+                const offset = -cumulative * circumference;
+                cumulative += fraction;
+                return (
+                  <circle
+                    key={i}
+                    cx={size / 2}
+                    cy={size / 2}
+                    r={radius}
+                    fill="none"
+                    stroke={seg.color}
+                    strokeWidth={strokeWidth}
+                    strokeDasharray={`${dash} ${gap}`}
+                    strokeDashoffset={offset}
+                    strokeLinecap="butt"
+                  />
+                );
+              })}
+        </svg>
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 20, fontWeight: 700, color: "#1B1E1A" }}>
+            {centerValue}
+          </div>
+          <div style={{ fontSize: 10.5, color: "#767468", marginTop: 2, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+            {centerLabel}
+          </div>
+        </div>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 9, minWidth: 160 }}>
+        {segments.map((seg, i) => {
+          const pct = total > 0 ? Math.round((seg.value / total) * 100) : 0;
+          return (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span
+                style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: "50%",
+                  background: seg.color,
+                  flexShrink: 0,
+                  opacity: seg.value > 0 ? 1 : 0.3,
+                }}
+              />
+              <span style={{ fontSize: 12.5, color: "#1B1E1A", fontWeight: 500, minWidth: 78 }}>{seg.label}</span>
+              <span style={{ fontSize: 11.5, color: "#767468" }}>
+                {seg.count} · {pct}%
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function RoleBadge({ role, size }) {
   if (!role) return null;
   const c = ROLE_COLORS[role] || ROLE_COLORS.rep;
@@ -848,6 +932,27 @@ export default function TeamCRM() {
     };
   });
   const declinedSales = dashboardSales.filter((s) => s.status === "Declined");
+  const chargebackSales = dashboardSales.filter((s) => s.refunded);
+  const dashboardChartSegments = [
+    ...salesBySource.map((row) => ({
+      label: row.source,
+      value: row.total,
+      count: row.count,
+      ...categoryColor(row.source),
+    })),
+    {
+      label: "Declined",
+      value: declinedSales.reduce((sum, r) => sum + (Number(r.totalPrice) || 0), 0),
+      count: declinedSales.length,
+      ...categoryColor("Declined"),
+    },
+    {
+      label: "Chargeback",
+      value: chargebackSales.reduce((sum, r) => sum + (Number(r.refundAmount) || 0), 0),
+      count: chargebackSales.length,
+      ...categoryColor("Chargeback"),
+    },
+  ];
 
   function salesForEmployee(employeeId) {
     if (!employeeId) return [];
@@ -1492,6 +1597,17 @@ export default function TeamCRM() {
                   {money(declinedSales.reduce((sum, r) => sum + (Number(r.totalPrice) || 0), 0))}
                 </div>
               </div>
+            </div>
+
+            <div style={{ ...S.dashboardSectionLabel, marginTop: 24 }}>
+              By category {dashboardFilterMode === "all" ? "(all time)" : `(${dashboardRangeLabel})`}
+            </div>
+            <div style={S.chartCard}>
+              <DonutChart
+                segments={dashboardChartSegments}
+                centerLabel="Total"
+                centerValue={money(dashboardChartSegments.reduce((s, seg) => s + seg.value, 0))}
+              />
             </div>
 
             <div style={{ ...S.dashboardSectionLabel, marginTop: 20 }}>
@@ -2637,8 +2753,21 @@ export default function TeamCRM() {
           <div style={S.dashboardWrap}>
             <div style={S.dashboardSectionLabel}>Users & access</div>
             <div style={S.hint}>
-              Each person signs in with their own username and password. Roles are currently just a label — everyone sees
-              every tab regardless of role, until you ask me to turn on real per-role restrictions.
+              Each person signs in with their own username and password. Admin and Manager accounts see every tab. Rep
+              accounts only see New Sale, so they can submit deals without seeing anyone else's data.
+            </div>
+
+            <div style={{ ...S.chartCard, marginTop: 12, marginBottom: 20 }}>
+              <DonutChart
+                segments={ROLES.map((r) => ({
+                  label: r.label,
+                  value: users.filter((u) => u.role === r.id).length,
+                  count: users.filter((u) => u.role === r.id).length,
+                  color: ROLE_COLORS[r.id] ? ROLE_COLORS[r.id].text : T.textMuted,
+                }))}
+                centerLabel="Users"
+                centerValue={String(users.length)}
+              />
             </div>
 
             <div className="crm-scroll" style={{ ...S.tableScroll, marginTop: 12 }}>
@@ -4044,6 +4173,12 @@ const S = {
   },
   sourceCount: { fontSize: 11, color: T.textMuted },
   sourceValue: { fontFamily: T.mono, fontSize: 21, fontWeight: 600, color: T.ink, marginTop: 10 },
+  chartCard: {
+    background: T.paperRaised,
+    border: `1px solid ${T.border}`,
+    borderRadius: 12,
+    padding: 20,
+  },
   reportsCardLabel: { fontSize: 10.5, fontWeight: 600, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.03em" },
   adminSettingsGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginTop: 12 },
   savedNote: { fontSize: 11.5, color: T.pineDark, fontWeight: 500, marginTop: 8 },
