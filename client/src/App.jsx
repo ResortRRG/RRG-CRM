@@ -466,6 +466,7 @@ export default function TeamCRM() {
   const [sales, setSales] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [payrollOverrides, setPayrollOverrides] = useState({});
+  const [refundDeductionOverrides, setRefundDeductionOverrides] = useState({});
   const [attendance, setAttendance] = useState({});
   const [spiffs, setSpiffs] = useState({});
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
@@ -571,6 +572,12 @@ export default function TeamCRM() {
       setPayrollOverrides(po && po.value ? JSON.parse(po.value) : {});
     } catch (e) {
       setPayrollOverrides({});
+    }
+    try {
+      const rdo = await window.storage.get("crm:refundDeductionOverrides", true);
+      setRefundDeductionOverrides(rdo && rdo.value ? JSON.parse(rdo.value) : {});
+    } catch (e) {
+      setRefundDeductionOverrides({});
     }
     try {
       const att = await window.storage.get("crm:attendance", true);
@@ -746,7 +753,7 @@ export default function TeamCRM() {
     setCurrentUser(null);
   }
 
-  const persist = useCallback((nextContacts, nextSales, nextEmployees, nextOverrides, nextAttendance, nextSettings, nextSpiffs) => {
+  const persist = useCallback((nextContacts, nextSales, nextEmployees, nextOverrides, nextAttendance, nextSettings, nextSpiffs, nextRefundDeductionOverrides) => {
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
       try {
@@ -757,6 +764,8 @@ export default function TeamCRM() {
         if (nextAttendance) await window.storage.set("crm:attendance", JSON.stringify(nextAttendance), true);
         if (nextSettings) await window.storage.set("crm:settings", JSON.stringify(nextSettings), true);
         if (nextSpiffs) await window.storage.set("crm:spiffs", JSON.stringify(nextSpiffs), true);
+        if (nextRefundDeductionOverrides)
+          await window.storage.set("crm:refundDeductionOverrides", JSON.stringify(nextRefundDeductionOverrides), true);
       } catch (e) {
         console.error("save failed", e);
       }
@@ -765,33 +774,37 @@ export default function TeamCRM() {
 
   function updateContacts(next) {
     setContacts(next);
-    persist(next, null, null, null, null, null, null);
+    persist(next, null, null, null, null, null, null, null);
   }
   function updateSales(next) {
     setSales(next);
-    persist(null, next, null, null, null, null, null);
+    persist(null, next, null, null, null, null, null, null);
   }
   function updateEmployees(next) {
     setEmployees(next);
-    persist(null, null, next, null, null, null, null);
+    persist(null, null, next, null, null, null, null, null);
   }
   function updatePayrollOverrides(next) {
     setPayrollOverrides(next);
-    persist(null, null, null, next, null, null, null);
+    persist(null, null, null, next, null, null, null, null);
   }
   function updateAttendance(next) {
     setAttendance(next);
-    persist(null, null, null, null, next, null, null);
+    persist(null, null, null, null, next, null, null, null);
   }
   function updateSpiffs(next) {
     setSpiffs(next);
-    persist(null, null, null, null, null, null, next);
+    persist(null, null, null, null, null, null, next, null);
   }
   function updateSettings(next) {
     setSettings(next);
-    persist(null, null, null, null, null, next, null);
+    persist(null, null, null, null, null, next, null, null);
     setAdminSaved(true);
     setTimeout(() => setAdminSaved(false), 1500);
+  }
+  function updateRefundDeductionOverrides(next) {
+    setRefundDeductionOverrides(next);
+    persist(null, null, null, null, null, null, null, next);
   }
 
   function addListItem(listKey, value, clearInput) {
@@ -830,6 +843,27 @@ export default function TeamCRM() {
     const next = { ...payrollOverrides };
     delete next[key];
     updatePayrollOverrides(next);
+  }
+
+  function getRefundDeductionOverride(employeeId, weekStart) {
+    const key = payrollOverrideKey(employeeId, weekStart);
+    return refundDeductionOverrides[key] !== undefined ? refundDeductionOverrides[key] : null;
+  }
+  function setRefundDeductionOverrideValue(employeeId, weekStart, value) {
+    const key = payrollOverrideKey(employeeId, weekStart);
+    if (value === "" || value === null) {
+      const next = { ...refundDeductionOverrides };
+      delete next[key];
+      updateRefundDeductionOverrides(next);
+    } else {
+      updateRefundDeductionOverrides({ ...refundDeductionOverrides, [key]: Number(value) || 0 });
+    }
+  }
+  function clearRefundDeductionOverride(employeeId, weekStart) {
+    const key = payrollOverrideKey(employeeId, weekStart);
+    const next = { ...refundDeductionOverrides };
+    delete next[key];
+    updateRefundDeductionOverrides(next);
   }
 
   function attendanceKey(employeeId, date) {
@@ -2460,7 +2494,7 @@ export default function TeamCRM() {
               </div>
             </div>
             <div style={S.hint}>
-              Everyone is guaranteed at least {money(settings.minWeeklyPay)} for the week — if commission plus base pay comes in under that, they're paid the guaranteed amount instead. Sales Total reflects only the week shown here, not an all-time figure. Each day marked Absent on the RRG Board knocks {money(ABSENCE_GUARANTEE_DEDUCTION)} off that person's guarantee for the week. Refunds marked in All Leads deduct the involved employees' credited commission from the payroll week right after the refund was recorded. Total pay is editable — click into the amount to override it for that person's that week; a reset button brings back the calculated number.
+              Everyone is guaranteed at least {money(settings.minWeeklyPay)} for the week — if commission plus base pay comes in under that, they're paid the guaranteed amount instead. Sales Total reflects only the week shown here, not an all-time figure. Each day marked Absent on the RRG Board knocks {money(ABSENCE_GUARANTEE_DEDUCTION)} off that person's guarantee for the week. Refunds marked in All Leads deduct the involved employees' credited commission from the payroll week right after the refund was recorded — that Refund Deduction amount is editable too, so if someone's paying a refund back over a few pay periods instead of all at once, you can lower this week's amount and it'll show a reset button to bring back the full calculated figure. Total pay is editable the same way — click into the amount to override it for that person's that week; a reset button brings back the calculated number.
             </div>
 
             {activeEmployees.length === 0 ? (
@@ -2495,7 +2529,10 @@ export default function TeamCRM() {
                       const grossCommission = empWeekTotal * (rate / 100);
                       const refundLookback = lookbackWeek(payrollWeek.start, payrollWeek.end);
                       const refundedCredit = refundedCreditForEmployee(emp.id, refundLookback.start, refundLookback.end);
-                      const refundDeduction = refundedCredit * (rate / 100);
+                      const calculatedRefundDeduction = refundedCredit * (rate / 100);
+                      const refundDeductionOverrideVal = getRefundDeductionOverride(emp.id, payrollWeek.start);
+                      const refundDeductionIsOverridden = refundDeductionOverrideVal !== null;
+                      const refundDeduction = refundDeductionIsOverridden ? refundDeductionOverrideVal : calculatedRefundDeduction;
                       const commissionOwed = grossCommission - refundDeduction;
                       const hasBasePay = emp.basePay !== "" && emp.basePay !== undefined && emp.basePay !== null;
                       const basePay = hasBasePay ? Number(emp.basePay) || 0 : 0;
@@ -2547,8 +2584,29 @@ export default function TeamCRM() {
                           <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 500 }}>
                             {rate > 0 ? money(commissionOwed) : "—"}
                           </td>
-                          <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 500, color: refundDeduction > 0 ? "#A32D2D" : T.borderStrong }}>
-                            {refundDeduction > 0 ? "-" + money(refundDeduction) : "—"}
+                          <td style={{ ...S.td, whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
+                            <div style={S.totalPayCell}>
+                              <span style={{ ...S.totalPayCurrency, color: refundDeduction > 0 ? "#A32D2D" : T.borderStrong }}>-$</span>
+                              <input
+                                type="number"
+                                value={refundDeduction || ""}
+                                placeholder="0"
+                                onChange={(e) => setRefundDeductionOverrideValue(emp.id, payrollWeek.start, e.target.value)}
+                                style={{
+                                  ...S.totalPayInput,
+                                  color: refundDeductionIsOverridden ? "#8A5A1E" : refundDeduction > 0 ? "#A32D2D" : T.borderStrong,
+                                }}
+                              />
+                              {refundDeductionIsOverridden && (
+                                <button
+                                  style={S.totalPayResetBtn}
+                                  onClick={() => clearRefundDeductionOverride(emp.id, payrollWeek.start)}
+                                  title="Reset to calculated amount"
+                                >
+                                  <X size={11} />
+                                </button>
+                              )}
+                            </div>
                           </td>
                           <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 500 }}>
                             {hasBasePay ? money(basePay) : "—"}
@@ -2610,7 +2668,9 @@ export default function TeamCRM() {
                             const rate = Number(emp.commissionRate) || 0;
                             const refundLookback = lookbackWeek(payrollWeek.start, payrollWeek.end);
                             const refundedCredit = refundedCreditForEmployee(emp.id, refundLookback.start, refundLookback.end);
-                            const commission = total * (rate / 100) - refundedCredit * (rate / 100);
+                            const refundOverrideVal = getRefundDeductionOverride(emp.id, payrollWeek.start);
+                            const refundDed = refundOverrideVal !== null ? refundOverrideVal : refundedCredit * (rate / 100);
+                            const commission = total * (rate / 100) - refundDed;
                             const hasBasePay = emp.basePay !== "" && emp.basePay !== undefined && emp.basePay !== null;
                             const basePay = hasBasePay ? Number(emp.basePay) || 0 : 0;
                             const spiffTotal = spiffTotalInWeek(emp.id, payrollWeek.start);
