@@ -68,6 +68,18 @@ function categoryColor(name) {
   return CATEGORY_COLOR_MAP[name] || { bg: "#E6E2D6", color: "#767468" };
 }
 
+// Distinct palette for the Dashboard category chart, separate from the
+// badge colors used on All Leads/Reports.
+const DASHBOARD_CHART_COLORS = {
+  Monster: "#1E9E62", // shamrock green
+  PGR: "#1C8FB0", // sea blue
+  Declined: "#E07B1A", // orange
+  Chargeback: "#D6362F", // red
+};
+function chartColor(name) {
+  return DASHBOARD_CHART_COLORS[name] || "#767468";
+}
+
 const DEFAULT_SETTINGS = {
   companyName: DEFAULT_COMPANY_NAME,
   minWeeklyPay: DEFAULT_MIN_WEEKLY_PAY,
@@ -943,19 +955,19 @@ export default function TeamCRM() {
       label: row.source,
       value: row.total,
       count: row.count,
-      ...categoryColor(row.source),
+      color: chartColor(row.source),
     })),
     {
       label: "Declined",
       value: declinedSales.reduce((sum, r) => sum + (Number(r.totalPrice) || 0), 0),
       count: declinedSales.length,
-      ...categoryColor("Declined"),
+      color: chartColor("Declined"),
     },
     {
       label: "Chargeback",
       value: chargebackSales.reduce((sum, r) => sum + (Number(r.refundAmount) || 0), 0),
       count: chargebackSales.length,
-      ...categoryColor("Chargeback"),
+      color: chartColor("Chargeback"),
     },
   ];
 
@@ -2758,8 +2770,9 @@ export default function TeamCRM() {
           <div style={S.dashboardWrap}>
             <div style={S.dashboardSectionLabel}>Users & access</div>
             <div style={S.hint}>
-              Each person signs in with their own username and password. Admin and Manager accounts see every tab. Rep
-              accounts only see New Sale, so they can submit deals without seeing anyone else's data.
+              Each person signs in with their own username and password. Admin accounts see every tab. Manager and Rep
+              accounts only see Dashboard and Sales — for Rep, Sales is a simple New Sale submission screen with no
+              visibility into other deals; for Manager, it's the same restricted screen alongside a full Dashboard.
             </div>
 
             <div style={{ ...S.chartCard, marginTop: 12, marginBottom: 20 }}>
