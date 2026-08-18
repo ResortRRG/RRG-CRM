@@ -86,6 +86,8 @@ const DEFAULT_SETTINGS = {
   sources: DEFAULT_SOURCES,
   leadSources: DEFAULT_LEAD_SOURCES,
   leadCategories: DEFAULT_LEAD_CATEGORIES,
+  monsterCommissionRate: 68,
+  pgrCommissionRate: 75,
 };
 
 // Which sidebar sections each account role can see and use.
@@ -1083,6 +1085,10 @@ export default function TeamCRM() {
       color: chartColor("Chargeback"),
     },
   ];
+  const reportsMonsterTotal = (reportsSourceBreakdown.find((r) => r.source === "Monster") || {}).total || 0;
+  const reportsPgrTotal = (reportsSourceBreakdown.find((r) => r.source === "PGR") || {}).total || 0;
+  const reportsMonsterCommission = reportsMonsterTotal * ((Number(settings.monsterCommissionRate) || 0) / 100);
+  const reportsPgrCommission = reportsPgrTotal * ((Number(settings.pgrCommissionRate) || 0) / 100);
   const reportsEmployeeRows = activeEmployees
     .map((emp) => {
       const empSales = reportsApprovedSales.filter(
@@ -2751,6 +2757,24 @@ export default function TeamCRM() {
               />
             </div>
 
+            <div style={{ ...S.dashboardSectionLabel, marginTop: 20 }}>Source commission</div>
+            <div style={S.sourceGrid}>
+              <div style={S.sourceCard}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ ...S.leadBadge, background: chartColor("Monster") + "22", color: chartColor("Monster") }}>Monster</span>
+                  <span style={S.sourceCount}>{settings.monsterCommissionRate}% of {money(reportsMonsterTotal)}</span>
+                </div>
+                <div style={S.sourceValue}>{money(reportsMonsterCommission)}</div>
+              </div>
+              <div style={S.sourceCard}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ ...S.leadBadge, background: chartColor("PGR") + "22", color: chartColor("PGR") }}>PGR</span>
+                  <span style={S.sourceCount}>{settings.pgrCommissionRate}% of {money(reportsPgrTotal)}</span>
+                </div>
+                <div style={S.sourceValue}>{money(reportsPgrCommission)}</div>
+              </div>
+            </div>
+
             <div style={{ ...S.dashboardSectionLabel, marginTop: 20 }}>Employees</div>
             {reportsEmployeeRows.length === 0 ? (
               <div style={S.emptyState}>
@@ -2867,6 +2891,25 @@ export default function TeamCRM() {
                 <input
                   value={settings.minWeeklyPay}
                   onChange={(e) => updateSettings({ ...settings, minWeeklyPay: Number(e.target.value) || 0 })}
+                  type="number"
+                  style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }}
+                />
+              </div>
+
+              <div>
+                <div style={S.fieldLabel}>Monster commission %</div>
+                <input
+                  value={settings.monsterCommissionRate}
+                  onChange={(e) => updateSettings({ ...settings, monsterCommissionRate: Number(e.target.value) || 0 })}
+                  type="number"
+                  style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }}
+                />
+              </div>
+              <div>
+                <div style={S.fieldLabel}>PGR commission %</div>
+                <input
+                  value={settings.pgrCommissionRate}
+                  onChange={(e) => updateSettings({ ...settings, pgrCommissionRate: Number(e.target.value) || 0 })}
                   type="number"
                   style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }}
                 />
