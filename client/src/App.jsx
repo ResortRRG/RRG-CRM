@@ -2244,6 +2244,16 @@ export default function TeamCRM() {
                               <Phone size={11} color={T.textMuted} /> {emp.phone}
                             </div>
                           )}
+                          {emp.startDate && (
+                            <div style={S.contactMetaRow}>
+                              <CalendarDays size={11} color={T.textMuted} /> Started{" "}
+                              {new Date(emp.startDate + "T00:00:00").toLocaleDateString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                              })}
+                            </div>
+                          )}
                         </div>
                         <div style={S.employeeStats}>
                           {empSales.length} sale{empSales.length === 1 ? "" : "s"} all-time · {money(empAllTimeTotal)}
@@ -3833,6 +3843,9 @@ function EmployeeForm({ initial, onCancel, onSave, onDelete, onToggleActive }) {
           </Field>
         </div>
       </div>
+      <Field label="Start date">
+        <input type="date" value={form.startDate || ""} onChange={set("startDate")} style={S.input} />
+      </Field>
       <Field label="Notes">
         <textarea
           value={form.notes || ""}
