@@ -119,6 +119,7 @@ const SALE_TYPES = [
   { id: "close", label: "Close", color: "#1E8E4A" },
   { id: "openclose", label: "Opened & Closed", color: "#2A5488" },
   { id: "verification", label: "Verification", color: "#B23B3B" },
+  { id: "allroles", label: "Opened, Closed & Verified", color: "#7B3FA0" },
 ];
 
 const REFUND_TARGET_OPTIONS = [
@@ -341,6 +342,17 @@ function buildRoleEntries(sale, employeeId) {
   const entries = [];
   const isOpener = sale.openerId === employeeId;
   const isCloser = sale.closerId === employeeId;
+  const isVerification = sale.verificationId === employeeId;
+
+  if (isOpener && isCloser && isVerification) {
+    entries.push({
+      sale,
+      type: "allroles",
+      amount: roleCreditAmount(sale, "front") + roleCreditAmount(sale, "close") + roleCreditAmount(sale, "verification"),
+    });
+    return entries;
+  }
+
   if (isOpener && isCloser) {
     entries.push({
       sale,
@@ -351,7 +363,7 @@ function buildRoleEntries(sale, employeeId) {
     if (isOpener) entries.push({ sale, type: "front", amount: roleCreditAmount(sale, "front") });
     if (isCloser) entries.push({ sale, type: "close", amount: roleCreditAmount(sale, "close") });
   }
-  if (sale.verificationId === employeeId) {
+  if (isVerification) {
     entries.push({ sale, type: "verification", amount: roleCreditAmount(sale, "verification") });
   }
   return entries;
@@ -380,6 +392,13 @@ function isEntryRefunded(sale, roleId) {
   if (sale.refundType === "partial") {
     if (roleId === "openclose") {
       return refundImpactForRole(sale, "front") > 0 || refundImpactForRole(sale, "close") > 0;
+    }
+    if (roleId === "allroles") {
+      return (
+        refundImpactForRole(sale, "front") > 0 ||
+        refundImpactForRole(sale, "close") > 0 ||
+        refundImpactForRole(sale, "verification") > 0
+      );
     }
     return refundImpactForRole(sale, roleId) > 0;
   }
