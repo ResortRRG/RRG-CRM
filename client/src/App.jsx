@@ -272,6 +272,28 @@ function formatDayLabel(start) {
   return start.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
+function todayDateStr() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+// Like getDayRange, but takes an actual "YYYY-MM-DD" calendar date instead of
+// an offset from today — lets someone jump straight to any specific day.
+function getDayRangeFromDate(dateStr) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const start = new Date(y, m - 1, d, 0, 0, 0, 0);
+  const end = new Date(y, m - 1, d, 23, 59, 59, 999);
+  return { start, end };
+}
+
+function shiftDateStr(dateStr, days) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const next = new Date(y, m - 1, d + days);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}`;
+}
+
 function isSaleInRange(sale, start, end) {
   if (!sale.timestamp) return false;
   const d = new Date(sale.timestamp);
@@ -507,12 +529,13 @@ export default function TeamCRM() {
   const [myItemsOnly, setMyItemsOnly] = useState(false);
   const [weekOffset, setWeekOffset] = useState(0);
   const [dashboardFilterMode, setDashboardFilterMode] = useState("week"); // 'day' | 'week' | 'month' | 'year' | 'all'
-  const [dashboardDayOffset, setDashboardDayOffset] = useState(0);
+  const [dashboardSelectedDate, setDashboardSelectedDate] = useState(todayDateStr());
   const [dashboardMonthOffset, setDashboardMonthOffset] = useState(0);
   const [dashboardYearOffset, setDashboardYearOffset] = useState(0);
   const [rrgWeekOffset, setRrgWeekOffset] = useState(0);
   const [payrollWeekOffset, setPayrollWeekOffset] = useState(0);
-  const [reportsFilterMode, setReportsFilterMode] = useState("month"); // 'week' | 'month' | 'year' | 'all'
+  const [reportsFilterMode, setReportsFilterMode] = useState("month"); // 'day' | 'week' | 'month' | 'year' | 'all'
+  const [reportsSelectedDate, setReportsSelectedDate] = useState(todayDateStr());
   const [reportsWeekOffset, setReportsWeekOffset] = useState(0);
   const [reportsMonthOffset, setReportsMonthOffset] = useState(0);
   const [reportsYearOffset, setReportsYearOffset] = useState(0);
@@ -520,7 +543,8 @@ export default function TeamCRM() {
   const [employeesView, setEmployeesView] = useState("active"); // 'active' | 'exemployees'
   const [employeeDetailWeekOffset, setEmployeeDetailWeekOffset] = useState(0);
   const [leadsSearch, setLeadsSearch] = useState("");
-  const [leadsFilterMode, setLeadsFilterMode] = useState("all"); // 'week' | 'month' | 'year' | 'all'
+  const [leadsFilterMode, setLeadsFilterMode] = useState("all"); // 'day' | 'week' | 'month' | 'year' | 'all'
+  const [leadsSelectedDate, setLeadsSelectedDate] = useState(todayDateStr());
   const [leadsCategoryFilter, setLeadsCategoryFilter] = useState(""); // '' | 'Monster' | 'PGR' | 'Chargeback' | 'Declined'
   const [adminNewSource, setAdminNewSource] = useState("");
   const [adminNewLeadSource, setAdminNewLeadSource] = useState("");
@@ -957,7 +981,7 @@ export default function TeamCRM() {
   let dashboardRange = null;
   let dashboardRangeLabel = "";
   if (dashboardFilterMode === "day") {
-    const d = getDayRange(dashboardDayOffset);
+    const d = getDayRangeFromDate(dashboardSelectedDate);
     dashboardRange = d;
     dashboardRangeLabel = formatDayLabel(d.start);
   } else if (dashboardFilterMode === "week") {
@@ -979,25 +1003,25 @@ export default function TeamCRM() {
   // which source it's tagged with, until someone approves it.
   const dashboardApprovedSales = dashboardSales.filter((s) => s.status === "Approved");
   function dashboardNavPrev() {
-    if (dashboardFilterMode === "day") setDashboardDayOffset((d) => d - 1);
+    if (dashboardFilterMode === "day") setDashboardSelectedDate((d) => shiftDateStr(d, -1));
     else if (dashboardFilterMode === "week") setWeekOffset((w) => w - 1);
     else if (dashboardFilterMode === "month") setDashboardMonthOffset((m) => m - 1);
     else if (dashboardFilterMode === "year") setDashboardYearOffset((y) => y - 1);
   }
   function dashboardNavNext() {
-    if (dashboardFilterMode === "day") setDashboardDayOffset((d) => d + 1);
+    if (dashboardFilterMode === "day") setDashboardSelectedDate((d) => shiftDateStr(d, 1));
     else if (dashboardFilterMode === "week") setWeekOffset((w) => w + 1);
     else if (dashboardFilterMode === "month") setDashboardMonthOffset((m) => m + 1);
     else if (dashboardFilterMode === "year") setDashboardYearOffset((y) => y + 1);
   }
   function dashboardNavReset() {
-    if (dashboardFilterMode === "day") setDashboardDayOffset(0);
+    if (dashboardFilterMode === "day") setDashboardSelectedDate(todayDateStr());
     else if (dashboardFilterMode === "week") setWeekOffset(0);
     else if (dashboardFilterMode === "month") setDashboardMonthOffset(0);
     else if (dashboardFilterMode === "year") setDashboardYearOffset(0);
   }
   const dashboardNavIsCurrent =
-    (dashboardFilterMode === "day" && dashboardDayOffset === 0) ||
+    (dashboardFilterMode === "day" && dashboardSelectedDate === todayDateStr()) ||
     (dashboardFilterMode === "week" && weekOffset === 0) ||
     (dashboardFilterMode === "month" && dashboardMonthOffset === 0) ||
     (dashboardFilterMode === "year" && dashboardYearOffset === 0);
@@ -1075,7 +1099,11 @@ export default function TeamCRM() {
 
   let reportsRange = null;
   let reportsRangeLabel = "";
-  if (reportsFilterMode === "week") {
+  if (reportsFilterMode === "day") {
+    const d = getDayRangeFromDate(reportsSelectedDate);
+    reportsRange = d;
+    reportsRangeLabel = formatDayLabel(d.start);
+  } else if (reportsFilterMode === "week") {
     const w = getWeekRange(reportsWeekOffset);
     reportsRange = w;
     reportsRangeLabel = formatWeekLabel(w.start, w.end);
@@ -1089,21 +1117,25 @@ export default function TeamCRM() {
     reportsRangeLabel = formatYearLabel(y.start);
   }
   function reportsNavPrev() {
-    if (reportsFilterMode === "week") setReportsWeekOffset((w) => w - 1);
+    if (reportsFilterMode === "day") setReportsSelectedDate((d) => shiftDateStr(d, -1));
+    else if (reportsFilterMode === "week") setReportsWeekOffset((w) => w - 1);
     else if (reportsFilterMode === "month") setReportsMonthOffset((m) => m - 1);
     else if (reportsFilterMode === "year") setReportsYearOffset((y) => y - 1);
   }
   function reportsNavNext() {
-    if (reportsFilterMode === "week") setReportsWeekOffset((w) => w + 1);
+    if (reportsFilterMode === "day") setReportsSelectedDate((d) => shiftDateStr(d, 1));
+    else if (reportsFilterMode === "week") setReportsWeekOffset((w) => w + 1);
     else if (reportsFilterMode === "month") setReportsMonthOffset((m) => m + 1);
     else if (reportsFilterMode === "year") setReportsYearOffset((y) => y + 1);
   }
   function reportsNavReset() {
-    if (reportsFilterMode === "week") setReportsWeekOffset(0);
+    if (reportsFilterMode === "day") setReportsSelectedDate(todayDateStr());
+    else if (reportsFilterMode === "week") setReportsWeekOffset(0);
     else if (reportsFilterMode === "month") setReportsMonthOffset(0);
     else if (reportsFilterMode === "year") setReportsYearOffset(0);
   }
   const reportsNavIsCurrent =
+    (reportsFilterMode === "day" && reportsSelectedDate === todayDateStr()) ||
     (reportsFilterMode === "week" && reportsWeekOffset === 0) ||
     (reportsFilterMode === "month" && reportsMonthOffset === 0) ||
     (reportsFilterMode === "year" && reportsYearOffset === 0);
@@ -1193,7 +1225,11 @@ export default function TeamCRM() {
 
   let leadsRange = null;
   let leadsRangeLabel = "";
-  if (leadsFilterMode === "week") {
+  if (leadsFilterMode === "day") {
+    const d = getDayRangeFromDate(leadsSelectedDate);
+    leadsRange = d;
+    leadsRangeLabel = formatDayLabel(d.start);
+  } else if (leadsFilterMode === "week") {
     const w = getWeekRange(leadsWeekOffset);
     leadsRange = w;
     leadsRangeLabel = formatWeekLabel(w.start, w.end);
@@ -1207,21 +1243,25 @@ export default function TeamCRM() {
     leadsRangeLabel = formatYearLabel(y.start);
   }
   function leadsNavPrev() {
-    if (leadsFilterMode === "week") setLeadsWeekOffset((w) => w - 1);
+    if (leadsFilterMode === "day") setLeadsSelectedDate((d) => shiftDateStr(d, -1));
+    else if (leadsFilterMode === "week") setLeadsWeekOffset((w) => w - 1);
     else if (leadsFilterMode === "month") setLeadsMonthOffset((m) => m - 1);
     else if (leadsFilterMode === "year") setLeadsYearOffset((y) => y - 1);
   }
   function leadsNavNext() {
-    if (leadsFilterMode === "week") setLeadsWeekOffset((w) => w + 1);
+    if (leadsFilterMode === "day") setLeadsSelectedDate((d) => shiftDateStr(d, 1));
+    else if (leadsFilterMode === "week") setLeadsWeekOffset((w) => w + 1);
     else if (leadsFilterMode === "month") setLeadsMonthOffset((m) => m + 1);
     else if (leadsFilterMode === "year") setLeadsYearOffset((y) => y + 1);
   }
   function leadsNavReset() {
-    if (leadsFilterMode === "week") setLeadsWeekOffset(0);
+    if (leadsFilterMode === "day") setLeadsSelectedDate(todayDateStr());
+    else if (leadsFilterMode === "week") setLeadsWeekOffset(0);
     else if (leadsFilterMode === "month") setLeadsMonthOffset(0);
     else if (leadsFilterMode === "year") setLeadsYearOffset(0);
   }
   const leadsNavIsCurrent =
+    (leadsFilterMode === "day" && leadsSelectedDate === todayDateStr()) ||
     (leadsFilterMode === "week" && leadsWeekOffset === 0) ||
     (leadsFilterMode === "month" && leadsMonthOffset === 0) ||
     (leadsFilterMode === "year" && leadsYearOffset === 0);
@@ -1400,6 +1440,16 @@ export default function TeamCRM() {
     [next[posA], next[posB]] = [next[posB], next[posA]];
     updateEmployees(next);
   }
+
+  // "Today" on the Dashboard is Admin-only — if a Manager account somehow
+  // ends up with it selected (e.g. a role change mid-session), fall back to
+  // This week instead of silently showing them a filter they shouldn't have.
+  useEffect(() => {
+    if (dashboardFilterMode === "day" && !(currentUser && currentUser.role === "admin")) {
+      setDashboardFilterMode("week");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dashboardFilterMode, currentUser && currentUser.role]);
 
   if (!loaded || !authChecked) {
     return (
@@ -1625,7 +1675,7 @@ export default function TeamCRM() {
                     onChange={(e) => setDashboardFilterMode(e.target.value)}
                     style={{ ...S.select, width: 130, paddingRight: 28 }}
                   >
-                    <option value="day">Today</option>
+                    {currentUser && currentUser.role === "admin" && <option value="day">Today</option>}
                     <option value="week">This week</option>
                     <option value="month">This month</option>
                     <option value="year">This year</option>
@@ -1638,13 +1688,25 @@ export default function TeamCRM() {
                     <button onClick={dashboardNavPrev} style={S.weekNavBtn} aria-label="Previous">
                       ‹
                     </button>
-                    <button
-                      onClick={dashboardNavReset}
-                      style={{ ...S.weekNavLabel, ...(dashboardNavIsCurrent ? S.weekNavLabelActive : {}) }}
-                    >
-                      {dashboardRangeLabel}
-                      {dashboardNavIsCurrent && <span style={S.weekNavThisWeek}>Current</span>}
-                    </button>
+                    {dashboardFilterMode === "day" ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <input
+                          type="date"
+                          value={dashboardSelectedDate}
+                          onChange={(e) => e.target.value && setDashboardSelectedDate(e.target.value)}
+                          style={{ ...S.weekNavLabel, ...(dashboardNavIsCurrent ? S.weekNavLabelActive : {}), cursor: "pointer" }}
+                        />
+                        {dashboardNavIsCurrent && <span style={S.weekNavThisWeek}>Current</span>}
+                      </div>
+                    ) : (
+                      <button
+                        onClick={dashboardNavReset}
+                        style={{ ...S.weekNavLabel, ...(dashboardNavIsCurrent ? S.weekNavLabelActive : {}) }}
+                      >
+                        {dashboardRangeLabel}
+                        {dashboardNavIsCurrent && <span style={S.weekNavThisWeek}>Current</span>}
+                      </button>
+                    )}
                     <button onClick={dashboardNavNext} style={S.weekNavBtn} aria-label="Next">
                       ›
                     </button>
@@ -1979,6 +2041,7 @@ export default function TeamCRM() {
                         style={{ ...S.select, width: 140, paddingRight: 28 }}
                       >
                         <option value="all">All time</option>
+                        <option value="day">Daily</option>
                         <option value="week">Weekly</option>
                         <option value="month">Monthly</option>
                         <option value="year">Yearly</option>
@@ -2005,13 +2068,25 @@ export default function TeamCRM() {
                         <button onClick={leadsNavPrev} style={S.weekNavBtn} aria-label="Previous">
                           ‹
                         </button>
-                        <button
-                          onClick={leadsNavReset}
-                          style={{ ...S.weekNavLabel, ...(leadsNavIsCurrent ? S.weekNavLabelActive : {}) }}
-                        >
-                          {leadsRangeLabel}
-                          {leadsNavIsCurrent && <span style={S.weekNavThisWeek}>Current</span>}
-                        </button>
+                        {leadsFilterMode === "day" ? (
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <input
+                              type="date"
+                              value={leadsSelectedDate}
+                              onChange={(e) => e.target.value && setLeadsSelectedDate(e.target.value)}
+                              style={{ ...S.weekNavLabel, ...(leadsNavIsCurrent ? S.weekNavLabelActive : {}), cursor: "pointer" }}
+                            />
+                            {leadsNavIsCurrent && <span style={S.weekNavThisWeek}>Current</span>}
+                          </div>
+                        ) : (
+                          <button
+                            onClick={leadsNavReset}
+                            style={{ ...S.weekNavLabel, ...(leadsNavIsCurrent ? S.weekNavLabelActive : {}) }}
+                          >
+                            {leadsRangeLabel}
+                            {leadsNavIsCurrent && <span style={S.weekNavThisWeek}>Current</span>}
+                          </button>
+                        )}
                         <button onClick={leadsNavNext} style={S.weekNavBtn} aria-label="Next">
                           ›
                         </button>
@@ -2737,6 +2812,7 @@ export default function TeamCRM() {
                     onChange={(e) => setReportsFilterMode(e.target.value)}
                     style={{ ...S.select, width: 130, paddingRight: 28 }}
                   >
+                    <option value="day">Today</option>
                     <option value="week">This week</option>
                     <option value="month">This month</option>
                     <option value="year">This year</option>
@@ -2749,13 +2825,25 @@ export default function TeamCRM() {
                     <button onClick={reportsNavPrev} style={S.weekNavBtn} aria-label="Previous">
                       ‹
                     </button>
-                    <button
-                      onClick={reportsNavReset}
-                      style={{ ...S.weekNavLabel, ...(reportsNavIsCurrent ? S.weekNavLabelActive : {}) }}
-                    >
-                      {reportsRangeLabel}
-                      {reportsNavIsCurrent && <span style={S.weekNavThisWeek}>Current</span>}
-                    </button>
+                    {reportsFilterMode === "day" ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <input
+                          type="date"
+                          value={reportsSelectedDate}
+                          onChange={(e) => e.target.value && setReportsSelectedDate(e.target.value)}
+                          style={{ ...S.weekNavLabel, ...(reportsNavIsCurrent ? S.weekNavLabelActive : {}), cursor: "pointer" }}
+                        />
+                        {reportsNavIsCurrent && <span style={S.weekNavThisWeek}>Current</span>}
+                      </div>
+                    ) : (
+                      <button
+                        onClick={reportsNavReset}
+                        style={{ ...S.weekNavLabel, ...(reportsNavIsCurrent ? S.weekNavLabelActive : {}) }}
+                      >
+                        {reportsRangeLabel}
+                        {reportsNavIsCurrent && <span style={S.weekNavThisWeek}>Current</span>}
+                      </button>
+                    )}
                     <button onClick={reportsNavNext} style={S.weekNavBtn} aria-label="Next">
                       ›
                     </button>
