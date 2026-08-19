@@ -952,7 +952,7 @@ export default function TeamCRM() {
   const contactById = Object.fromEntries(contacts.map((c) => [c.id, c]));
   const employeeById = Object.fromEntries(employees.map((e) => [e.id, e]));
 
-  const totalSalesValue = sales.reduce((s, r) => s + (Number(r.totalPrice) || 0), 0);
+  const totalSalesValue = sales.reduce((s, r) => s + (r.status === "Approved" ? Number(r.totalPrice) || 0 : 0), 0);
 
   let dashboardRange = null;
   let dashboardRangeLabel = "";
