@@ -559,6 +559,11 @@ export default function TeamCRM() {
   const [reportsMonthOffset, setReportsMonthOffset] = useState(0);
   const [reportsYearOffset, setReportsYearOffset] = useState(0);
   const [employeeDetailId, setEmployeeDetailId] = useState(null);
+  const [employeeDetailMinimized, setEmployeeDetailMinimized] = useState(false);
+  useEffect(() => {
+    if (employeeDetailId) setEmployeeDetailMinimized(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employeeDetailId]);
   const [employeesView, setEmployeesView] = useState("active"); // 'active' | 'exemployees'
   const [employeeDetailWeekOffset, setEmployeeDetailWeekOffset] = useState(0);
   const [leadsSearch, setLeadsSearch] = useState("");
@@ -3325,6 +3330,15 @@ export default function TeamCRM() {
           Resume {saleModal.id ? "editing" : "new"} sale{saleModal.name ? ` — ${saleModal.name}` : ""}
         </button>
       )}
+      {employeeDetail && employeeDetailMinimized && (
+        <button
+          style={{ ...S.minimizedPill, bottom: saleModal && saleModalMinimized ? 74 : 20 }}
+          onClick={() => setEmployeeDetailMinimized(false)}
+        >
+          <Users size={14} />
+          Resume weekly template — {employeeDetail.name}
+        </button>
+      )}
 
       {/* Employee modal */}
       {employeeModal && (
@@ -3351,8 +3365,14 @@ export default function TeamCRM() {
       )}
 
       {/* Employee weekly template modal */}
-      {employeeDetail && (
-        <Modal onClose={() => setEmployeeDetailId(null)} wide>
+      {employeeDetail && !employeeDetailMinimized && (
+        <Modal
+          onClose={() => {
+            setEmployeeDetailId(null);
+            setEmployeeDetailMinimized(false);
+          }}
+          fullScreen
+        >
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
               <div style={S.avatar}>{initials(employeeDetail.name)}</div>
@@ -3360,6 +3380,14 @@ export default function TeamCRM() {
                 <div style={S.modalTitle}>{employeeDetail.name}</div>
               </div>
               <RoleBadge role={employeeDetail.role} size="sm" />
+              <button
+                type="button"
+                onClick={() => setEmployeeDetailMinimized(true)}
+                style={S.minimizeBtn}
+                title="Minimize — come back to this later"
+              >
+                <Minus size={14} /> Minimize
+              </button>
             </div>
 
             <div style={S.weekNavRow}>
@@ -3625,11 +3653,19 @@ export default function TeamCRM() {
   );
 }
 
-function Modal({ children, onClose, narrow, wide, disableBackdropClose }) {
+function Modal({ children, onClose, narrow, wide, disableBackdropClose, fullScreen }) {
   return (
-    <div style={S.overlay} onClick={disableBackdropClose ? undefined : onClose}>
+    <div
+      style={{ ...S.overlay, ...(fullScreen ? S.overlayFullScreen : {}) }}
+      onClick={disableBackdropClose ? undefined : onClose}
+    >
       <div
-        style={{ ...S.modal, ...(narrow ? { maxWidth: 360 } : {}), ...(wide ? { maxWidth: 760 } : {}) }}
+        style={{
+          ...S.modal,
+          ...(narrow ? { maxWidth: 360 } : {}),
+          ...(wide ? { maxWidth: 760 } : {}),
+          ...(fullScreen ? S.modalFullScreen : {}),
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         {children}
@@ -5015,6 +5051,10 @@ const S = {
     zIndex: 1000,
     padding: 20,
   },
+  overlayFullScreen: {
+    background: T.paper,
+    padding: 0,
+  },
   modal: {
     background: T.paperRaised,
     borderRadius: 12,
@@ -5024,6 +5064,15 @@ const S = {
     maxHeight: "85vh",
     overflowY: "auto",
     boxShadow: "0 12px 40px rgba(0,0,0,0.18)",
+  },
+  modalFullScreen: {
+    maxWidth: "100%",
+    width: "100%",
+    height: "100vh",
+    maxHeight: "100vh",
+    borderRadius: 0,
+    boxShadow: "none",
+    padding: "24px 28px",
   },
   modalTitle: { fontFamily: T.display, fontSize: 17, fontWeight: 600, color: T.ink, marginBottom: 14 },
   minimizeBtn: {
