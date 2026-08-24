@@ -581,7 +581,7 @@ export default function TeamCRM() {
   const [leadsYearOffset, setLeadsYearOffset] = useState(0);
   const [confirmRefund, setConfirmRefund] = useState(null); // full sale object being refunded, or null
   const [refundType, setRefundType] = useState("full");
-  const [refundWeekChoice, setRefundWeekChoice] = useState("next");
+  const [refundWeekChoices, setRefundWeekChoices] = useState({ front: "next", close: "next", verification: "next" });
   const [refundAmounts, setRefundAmounts] = useState({ front: "", close: "", verification: "" });
   const saveTimer = useRef(null);
 
@@ -589,7 +589,7 @@ export default function TeamCRM() {
     if (confirmRefund) {
       setRefundType("full");
       setRefundAmounts({ front: "", close: "", verification: "" });
-      setRefundWeekChoice("next");
+      setRefundWeekChoices({ front: "next", close: "next", verification: "next" });
     }
   }, [confirmRefund]);
 
@@ -1182,6 +1182,12 @@ export default function TeamCRM() {
     const rows = reportsApprovedSales.filter((s) => s.leadSubmittedTo === src);
     return { source: src, count: rows.length, total: rows.reduce((sum, r) => sum + (Number(r.totalPrice) || 0), 0) };
   });
+  // Dialer vs Paper — a different axis than Monster/PGR (which lead vendor a
+  // sale went to). This is about how the sale itself was worked.
+  const reportsChannelBreakdown = settings.sources.map((src) => {
+    const rows = reportsApprovedSales.filter((s) => s.source === src);
+    return { source: src, count: rows.length, total: rows.reduce((sum, r) => sum + (Number(r.totalPrice) || 0), 0) };
+  });
   const reportsDeclined = reportsSales.filter((s) => s.status === "Declined");
   const reportsMonsterTotal = (reportsSourceBreakdown.find((r) => r.source === "Monster") || {}).total || 0;
   const reportsPgrTotal = (reportsSourceBreakdown.find((r) => r.source === "PGR") || {}).total || 0;
@@ -1318,39 +1324,34 @@ export default function TeamCRM() {
     return rows.map((r) => ({ ...r, dayTotal: r.entries.reduce((sum, e) => sum + e.amount, 0) }));
   }
 
-  // Which payroll week a refund's deduction should land in, based on the
-  // choice made when the refund was processed. Defaults to "next" (the week
-  // after the refund was recorded) to match the original, long-standing behavior.
-  function refundTargetWeekStart(sale) {
+  // Which payroll week a specific role's (Opener/Closer/Verification) refund
+  // deduction should land in — each role on the same refund can have its own
+  // choice, since different employees involved may want different timing.
+  function refundTargetWeekStart(sale, roleId) {
     if (!sale.refundedAt) return null;
     const d = new Date(sale.refundedAt);
     const day = d.getDay();
     const diffToMonday = (day + 6) % 7;
     const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - diffToMonday);
     monday.setHours(0, 0, 0, 0);
-    const choice = sale.refundWeekChoice || "next";
+    const choice = (sale.refundWeekChoices && sale.refundWeekChoices[roleId]) || "next";
     if (choice === "next") monday.setDate(monday.getDate() + 7);
     else if (choice === "previous") monday.setDate(monday.getDate() - 7);
     return monday;
   }
 
   function refundedCreditForEmployee(employeeId, weekStart, weekEnd) {
-    return sales
-      .filter((s) => {
-        if (!s.refunded) return false;
-        const target = refundTargetWeekStart(s);
-        return target && target.getTime() === weekStart.getTime();
-      })
-      .reduce((sum, s) => {
-        if (s.refundType === "partial") {
-          let add = 0;
-          ["front", "close", "verification"].forEach((roleId) => {
-            if (employeeIdForRole(s, roleId) === employeeId) add += refundImpactForRole(s, roleId);
-          });
-          return sum + add;
-        }
-        return sum + saleCredit(s, employeeId);
-      }, 0);
+    return sales.reduce((sum, s) => {
+      if (!s.refunded) return sum;
+      let add = 0;
+      ["front", "close", "verification"].forEach((roleId) => {
+        if (employeeIdForRole(s, roleId) !== employeeId) return;
+        const target = refundTargetWeekStart(s, roleId);
+        if (!target || target.getTime() !== weekStart.getTime()) return;
+        add += refundImpactForRole(s, roleId);
+      });
+      return sum + add;
+    }, 0);
   }
 
   function lookbackWeek(weekStart, weekEnd) {
@@ -1434,7 +1435,11 @@ export default function TeamCRM() {
           refundType: opts.type,
           refundAmounts: amounts,
           refundAmount: opts.type === "partial" ? amounts.front + amounts.close + amounts.verification : Number(s.totalPrice) || 0,
-          refundWeekChoice: opts.weekChoice || "next",
+          refundWeekChoices: {
+            front: (opts.weekChoices && opts.weekChoices.front) || "next",
+            close: (opts.weekChoices && opts.weekChoices.close) || "next",
+            verification: (opts.weekChoices && opts.weekChoices.verification) || "next",
+          },
         };
       })
     );
@@ -2981,6 +2986,21 @@ export default function TeamCRM() {
               </div>
             </div>
 
+            <div style={{ ...S.dashboardSectionLabel, marginTop: 20 }}>By channel (Dialer / Paper)</div>
+            <div style={S.sourceGrid}>
+              {reportsChannelBreakdown.map((row) => (
+                <div key={row.source} style={S.sourceCard}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={S.channelBadge}>{row.source}</span>
+                    <span style={S.sourceCount}>
+                      {row.count} sale{row.count === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                  <div style={S.sourceValue}>{money(row.total)}</div>
+                </div>
+              ))}
+            </div>
+
             <div style={{ ...S.dashboardSectionLabel, marginTop: 20 }}>Source commission</div>
             <div style={S.sourceGrid}>
               <div style={S.sourceCard}>
@@ -3598,15 +3618,16 @@ export default function TeamCRM() {
 
       {/* Confirm refund */}
       {confirmRefund && (
-        <Modal onClose={() => setConfirmRefund(null)} narrow>
+        <Modal onClose={() => setConfirmRefund(null)}>
           <div style={{ padding: 4 }}>
             <div style={{ fontFamily: T.display, fontSize: 17, fontWeight: 500, color: T.ink, marginBottom: 6 }}>
               Refund "{confirmRefund.name}"
             </div>
             <div style={{ fontSize: 12.5, color: T.textMuted, marginBottom: 14, lineHeight: 1.5 }}>
               A full refund deducts the whole credited commission from everyone on the lead. A partial refund lets you
-              enter a specific amount to deduct from each person separately. Choose below which payroll week that
-              deduction lands in — "Previous week" affects an already-passed week's check, so use it carefully.
+              enter a specific amount to deduct from each person separately. Each person can have their deduction land
+              in a different payroll week — handy when one person wants it out right away and another wants it spread
+              out or delayed.
             </div>
 
             <Field label="Refund type">
@@ -3626,14 +3647,15 @@ export default function TeamCRM() {
               </div>
             </Field>
 
-            {refundType === "partial" && (
-              <div style={S.refundAmountsGrid}>
-                {REFUND_TARGET_OPTIONS.map((opt) => {
-                  const empId = employeeIdForRole(confirmRefund, opt.id);
-                  const emp = empId ? employeeById[empId] : null;
-                  return (
-                    <div key={opt.id}>
-                      <Field label={emp ? `${opt.label} — ${emp.name}` : `${opt.label} — unassigned`}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
+              {REFUND_TARGET_OPTIONS.map((opt) => {
+                const empId = employeeIdForRole(confirmRefund, opt.id);
+                const emp = empId ? employeeById[empId] : null;
+                return (
+                  <div key={opt.id} style={S.refundRoleBlock}>
+                    <div style={S.refundRoleBlockLabel}>{emp ? `${opt.label} — ${emp.name}` : `${opt.label} — unassigned`}</div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {refundType === "partial" && (
                         <input
                           value={refundAmounts[opt.id]}
                           onChange={(e) => setRefundAmounts((a) => ({ ...a, [opt.id]: e.target.value }))}
@@ -3642,33 +3664,33 @@ export default function TeamCRM() {
                           style={{
                             ...S.input,
                             fontFamily: T.mono,
+                            width: 100,
+                            flexShrink: 0,
                             ...(emp ? {} : { background: T.border, cursor: "not-allowed", color: T.textMuted }),
                           }}
                           placeholder="0"
                         />
-                      </Field>
+                      )}
+                      <div style={{ position: "relative", flex: 1 }}>
+                        <select
+                          value={refundWeekChoices[opt.id]}
+                          onChange={(e) => setRefundWeekChoices((c) => ({ ...c, [opt.id]: e.target.value }))}
+                          disabled={!emp}
+                          style={{ ...S.select, ...(emp ? {} : { background: T.border, cursor: "not-allowed", color: T.textMuted }) }}
+                        >
+                          <option value="previous">Previous week's check</option>
+                          <option value="current">This week's check</option>
+                          <option value="next">Next week's check</option>
+                        </select>
+                        <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+                      </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                  </div>
+                );
+              })}
+            </div>
 
-            <Field label="Deduct from">
-              <div style={{ position: "relative" }}>
-                <select
-                  value={refundWeekChoice}
-                  onChange={(e) => setRefundWeekChoice(e.target.value)}
-                  style={S.select}
-                >
-                  <option value="previous">Previous week's check</option>
-                  <option value="current">This week's check</option>
-                  <option value="next">Next week's check</option>
-                </select>
-                <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
-              </div>
-            </Field>
-
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
               <button style={S.ghostBtn} onClick={() => setConfirmRefund(null)}>
                 Cancel
               </button>
@@ -3685,7 +3707,7 @@ export default function TeamCRM() {
                   !(Number(refundAmounts.front) || Number(refundAmounts.close) || Number(refundAmounts.verification))
                 }
                 onClick={() =>
-                  markRefunded(confirmRefund.id, { type: refundType, amounts: refundAmounts, weekChoice: refundWeekChoice })
+                  markRefunded(confirmRefund.id, { type: refundType, amounts: refundAmounts, weekChoices: refundWeekChoices })
                 }
               >
                 Mark refunded
@@ -4563,6 +4585,16 @@ const S = {
     padding: 14,
   },
   sourceCount: { fontSize: 11, color: T.textMuted },
+  channelBadge: {
+    fontSize: 10.5,
+    fontWeight: 600,
+    padding: "2px 8px",
+    borderRadius: 20,
+    letterSpacing: "0.02em",
+    whiteSpace: "nowrap",
+    background: "#EDEAE0",
+    color: "#5A5748",
+  },
   sourceValue: { fontFamily: T.mono, fontSize: 21, fontWeight: 600, color: T.ink, marginTop: 10 },
   chartCard: {
     background: T.paperRaised,
@@ -4741,6 +4773,13 @@ const S = {
   },
   refundTypeActive: { background: "#FCEBEB", color: "#A32D2D", borderColor: "#E8B4B4" },
   refundAmountsGrid: { display: "flex", flexDirection: "column", gap: 2 },
+  refundRoleBlock: {
+    background: T.paper,
+    border: `1px solid ${T.border}`,
+    borderRadius: 8,
+    padding: 10,
+  },
+  refundRoleBlockLabel: { fontSize: 11.5, color: T.textMuted, marginBottom: 6, fontWeight: 500 },
   viewerNote: { fontSize: 10.5, color: T.textMuted, lineHeight: 1.4, marginTop: 8 },
   myItemsToggle: {
     border: `1px solid ${T.border}`,
