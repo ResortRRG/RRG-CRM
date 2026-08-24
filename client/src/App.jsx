@@ -111,7 +111,7 @@ function isSalesEntryRole(role) {
 const ATTENDANCE_STATUSES = [
   { id: "late", label: "Late", color: "#B8763E" },
   { id: "left_early", label: "Left early", color: "#8A5A1E" },
-  { id: "absent", label: "Absent", color: "#767468" },
+  { id: "absent", label: "Absent", color: "#A32D2D" },
 ];
 
 const SALE_TYPES = [
@@ -1354,6 +1354,25 @@ export default function TeamCRM() {
     }, 0);
   }
 
+  // Same matching as refundedCreditForEmployee, but broken out per sale (with
+  // the customer name) instead of summed into one total — so the Employees
+  // tab can list exactly which leads are behind a pending refund.
+  function pendingRefundEntriesForEmployee(employeeId, weekStart) {
+    const bySale = {};
+    sales.forEach((s) => {
+      if (!s.refunded) return;
+      ["front", "close", "verification"].forEach((roleId) => {
+        if (employeeIdForRole(s, roleId) !== employeeId) return;
+        const target = refundTargetWeekStart(s, roleId);
+        if (!target || target.getTime() !== weekStart.getTime()) return;
+        bySale[s.id] = (bySale[s.id] || 0) + refundImpactForRole(s, roleId);
+      });
+    });
+    return Object.keys(bySale)
+      .map((saleId) => ({ sale: sales.find((s) => s.id === saleId), credit: bySale[saleId] }))
+      .filter((e) => e.sale);
+  }
+
   function lookbackWeek(weekStart, weekEnd) {
     const start = new Date(weekStart);
     start.setDate(start.getDate() - 7);
@@ -2350,8 +2369,8 @@ export default function TeamCRM() {
                     const empSales = salesForEmployee(emp.id);
                     const empAllTimeTotal = empSales.reduce((s, r) => s + saleCredit(r, emp.id), 0);
                     const weekEntries = weeklySaleEntries(emp.id);
-                    const empPendingRefundCredit = refundedCreditForEmployee(emp.id, currentWeek.start, currentWeek.end);
-                    const empPendingRefundAmount = empPendingRefundCredit * ((Number(emp.commissionRate) || 0) / 100);
+                    const empPendingRefunds = pendingRefundEntriesForEmployee(emp.id, currentWeek.start);
+                    const empRate = Number(emp.commissionRate) || 0;
                     return (
                       <div key={emp.id} style={S.contactCard} onClick={() => setEmployeeModal({ ...emp })}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -2386,9 +2405,14 @@ export default function TeamCRM() {
                         <div style={S.employeeStats}>
                           {empSales.length} sale{empSales.length === 1 ? "" : "s"} all-time · {money(empAllTimeTotal)}
                         </div>
-                        {empPendingRefundAmount > 0 && (
-                          <div style={S.pendingRefundNote}>
-                            <RotateCcw size={11} /> Pending refund this week: -{money(empPendingRefundAmount)}
+                        {empPendingRefunds.length > 0 && (
+                          <div style={S.pendingRefundList}>
+                            {empPendingRefunds.map(({ sale, credit }) => (
+                              <div key={sale.id} style={S.pendingRefundNote}>
+                                <RotateCcw size={11} />
+                                {sale.name}: -{money(credit * (empRate / 100))}
+                              </div>
+                            ))}
                           </div>
                         )}
                         {weekEntries.length > 0 && (
@@ -2526,19 +2550,19 @@ export default function TeamCRM() {
                 <table style={{ ...S.table, minWidth: 900 }}>
                   <thead>
                     <tr>
-                      <th style={S.th}>Agent</th>
+                      <th style={{ ...S.th, fontSize: 16 }}>Agent</th>
                       {WEEKDAY_LABELS.map((d) => (
-                        <th key={d} style={S.th}>
+                        <th key={d} style={{ ...S.th, fontSize: 16 }}>
                           {d}
                         </th>
                       ))}
-                      <th style={S.th}>Total</th>
+                      <th style={{ ...S.th, fontSize: 16 }}>Total</th>
                     </tr>
                   </thead>
                   <tbody>
                     {rrgBoard.map((row, rowIdx) => (
                       <tr key={row.employee.id} className="crm-row">
-                        <td style={{ ...S.td, fontWeight: 500, whiteSpace: "nowrap" }}>
+                        <td style={{ ...S.td, fontSize: 16, fontWeight: 700, whiteSpace: "nowrap" }}>
                           <div style={S.reorderCell}>
                             <div style={S.reorderBtns}>
                               <button
@@ -2602,7 +2626,7 @@ export default function TeamCRM() {
                                 >
                                   <option value="">—</option>
                                   {ATTENDANCE_STATUSES.map((a) => (
-                                    <option key={a.id} value={a.id}>
+                                    <option key={a.id} value={a.id} style={{ color: a.color, fontWeight: 700 }}>
                                       {a.label}
                                     </option>
                                   ))}
@@ -2625,19 +2649,19 @@ export default function TeamCRM() {
                             </td>
                           );
                         })}
-                        <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 500 }}>{money(row.weekTotal)}</td>
+                        <td style={{ ...S.td, fontFamily: T.mono, fontSize: 16, fontWeight: 700 }}>{money(row.weekTotal)}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr>
-                      <td style={{ ...S.td, fontWeight: 600 }}>Daily totals</td>
+                      <td style={{ ...S.td, fontSize: 16, fontWeight: 700 }}>Daily totals</td>
                       {rrgDailyTotals.map((t, i) => (
-                        <td key={i} style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 500 }}>
+                        <td key={i} style={{ ...S.td, fontFamily: T.mono, fontSize: 16, fontWeight: 700 }}>
                           {money(t)}
                         </td>
                       ))}
-                      <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 600 }}>{money(rrgWeekGrandTotal)}</td>
+                      <td style={{ ...S.td, fontFamily: T.mono, fontSize: 16, fontWeight: 700 }}>{money(rrgWeekGrandTotal)}</td>
                     </tr>
                   </tfoot>
                 </table>
@@ -4557,7 +4581,7 @@ const S = {
   rrgChip: { fontFamily: T.mono, fontSize: 14, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" },
   attendanceSelect: {
     fontSize: 10.5,
-    fontWeight: 600,
+    fontWeight: 700,
     border: "1px solid transparent",
     borderRadius: 5,
     padding: "2px 4px",
@@ -4985,14 +5009,22 @@ const S = {
     fontWeight: 600,
     color: T.pineDark,
   },
+  pendingRefundList: {
+    marginTop: 6,
+    display: "flex",
+    flexDirection: "column",
+    gap: 3,
+  },
   pendingRefundNote: {
     display: "flex",
     alignItems: "center",
     gap: 5,
-    marginTop: 6,
     fontSize: 11.5,
     fontWeight: 600,
     color: "#A32D2D",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
   },
   weeklySaleList: {
     marginTop: 8,
