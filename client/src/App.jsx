@@ -1394,6 +1394,9 @@ export default function TeamCRM() {
     ? refundedCreditForEmployee(employeeDetail.id, employeeDetailWeek.start, employeeDetailWeek.end)
     : 0;
   const employeeDetailRefundDeduction = employeeDetailRefundedCredit * (employeeDetailRate / 100);
+  const employeeDetailRefundEntries = employeeDetail
+    ? pendingRefundEntriesForEmployee(employeeDetail.id, employeeDetailWeek.start)
+    : [];
   const employeeDetailCommission = employeeDetailTotalSales * (employeeDetailRate / 100) - employeeDetailRefundDeduction;
   const employeeDetailHasBasePay =
     employeeDetail && employeeDetail.basePay !== "" && employeeDetail.basePay !== undefined && employeeDetail.basePay !== null;
@@ -3567,11 +3570,17 @@ export default function TeamCRM() {
                 <span>Commission ({employeeDetailRate}%)</span>
                 <span style={{ fontFamily: T.mono, fontSize: 14 }}>{money(employeeDetailTotalSales * (employeeDetailRate / 100))}</span>
               </div>
-              {employeeDetailRefundDeduction > 0 && (
-                <div style={{ ...S.detailSummaryRow, color: "#A32D2D" }}>
-                  <span>Refund deduction</span>
-                  <span style={{ fontFamily: T.mono, fontSize: 14 }}>-{money(employeeDetailRefundDeduction)}</span>
-                </div>
+              {employeeDetailRefundEntries.length > 0 && (
+                <>
+                  {employeeDetailRefundEntries.map(({ sale, credit }) => (
+                    <div key={sale.id} style={{ ...S.detailSummaryRow, color: "#A32D2D" }}>
+                      <span>Refund — {sale.name}</span>
+                      <span style={{ fontFamily: T.mono, fontSize: 14 }}>
+                        -{money(credit * (employeeDetailRate / 100))}
+                      </span>
+                    </div>
+                  ))}
+                </>
               )}
               <div style={S.detailSummaryRow}>
                 <span>Base pay</span>
