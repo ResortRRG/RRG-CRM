@@ -537,6 +537,24 @@ export default function TeamCRM() {
   const [contactModal, setContactModal] = useState(null); // null | 'new' | contact object
   const [saleModal, setSaleModal] = useState(null);
   const [saleModalMinimized, setSaleModalMinimized] = useState(false);
+  // Wide tables (Sales, RRG Board, Payroll, Reports, Employees, All Leads) all
+  // use the .crm-scroll container. Their horizontal scrollbar sits at the very
+  // bottom of the table, which for tall tables means scrolling the page down
+  // before it's even reachable. This lets a normal mouse-wheel scroll sideways
+  // whenever the cursor is anywhere over one of these tables, so people never
+  // need to hunt for the scrollbar itself.
+  useEffect(() => {
+    function handleWheel(e) {
+      const scrollEl = e.target.closest && e.target.closest(".crm-scroll");
+      if (!scrollEl) return;
+      if (scrollEl.scrollWidth <= scrollEl.clientWidth) return;
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      scrollEl.scrollLeft += e.deltaY;
+      e.preventDefault();
+    }
+    document.addEventListener("wheel", handleWheel, { passive: false });
+    return () => document.removeEventListener("wheel", handleWheel);
+  }, []);
   useEffect(() => {
     if (saleModal) setSaleModalMinimized(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
