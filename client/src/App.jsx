@@ -130,6 +130,22 @@ const REFUND_TARGET_OPTIONS = [
 
 const WEEKDAY_LABELS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
+// Nominatim's address suggestions return full state names ("Florida"); the
+// form uses two-letter abbreviations, so this converts between the two.
+const US_STATE_ABBREVIATIONS = {
+  Alabama: "AL", Alaska: "AK", Arizona: "AZ", Arkansas: "AR", California: "CA",
+  Colorado: "CO", Connecticut: "CT", Delaware: "DE", Florida: "FL", Georgia: "GA",
+  Hawaii: "HI", Idaho: "ID", Illinois: "IL", Indiana: "IN", Iowa: "IA",
+  Kansas: "KS", Kentucky: "KY", Louisiana: "LA", Maine: "ME", Maryland: "MD",
+  Massachusetts: "MA", Michigan: "MI", Minnesota: "MN", Mississippi: "MS", Missouri: "MO",
+  Montana: "MT", Nebraska: "NE", Nevada: "NV", "New Hampshire": "NH", "New Jersey": "NJ",
+  "New Mexico": "NM", "New York": "NY", "North Carolina": "NC", "North Dakota": "ND", Ohio: "OH",
+  Oklahoma: "OK", Oregon: "OR", Pennsylvania: "PA", "Rhode Island": "RI", "South Carolina": "SC",
+  "South Dakota": "SD", Tennessee: "TN", Texas: "TX", Utah: "UT", Vermont: "VT",
+  Virginia: "VA", Washington: "WA", "West Virginia": "WV", Wisconsin: "WI", Wyoming: "WY",
+  "District of Columbia": "DC",
+};
+
 const SALE_REQUIRED_FIELDS = [
   { key: "name", label: "Name" },
   { key: "phone", label: "Phone number" },
@@ -4195,6 +4211,13 @@ function SaleForm({ initial, employees, settings, onCancel, onMinimize, onSave, 
   const [form, setForm] = useState(initial);
   const [error, setError] = useState("");
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
+  const [showAddressSuggestions, setShowAddressSuggestions] = useState(false);
+  const [addressLookupBusy, setAddressLookupBusy] = useState(false);
+  const [zipLookupBusy, setZipLookupBusy] = useState(false);
+  const addressDebounceRef = useRef(null);
+  const zipDebounceRef = useRef(null);
+  const lastLookedUpZip = useRef("");
 
   useEffect(() => {
     const pkg = Number(form.packagePrice) || 0;
@@ -4205,6 +4228,75 @@ function SaleForm({ initial, employees, settings, onCancel, onMinimize, onSave, 
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.packagePrice, form.dateFlex]);
+
+  // ZIP code -> city/state autofill, via the free Zippopotam.us API (no key needed).
+  useEffect(() => {
+    const zip = (form.zip || "").trim();
+    clearTimeout(zipDebounceRef.current);
+    if (!/^\d{5}$/.test(zip) || zip === lastLookedUpZip.current) return;
+    zipDebounceRef.current = setTimeout(async () => {
+      try {
+        setZipLookupBusy(true);
+        const res = await fetch(`https://api.zippopotam.us/us/${zip}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const place = data.places && data.places[0];
+        if (!place) return;
+        lastLookedUpZip.current = zip;
+        setForm((f) =>
+          f.zip === zip ? { ...f, city: place["place name"], state: place["state abbreviation"] } : f
+        );
+      } catch (e) {
+        // Silently ignore — this is a convenience autofill, not a required step.
+      } finally {
+        setZipLookupBusy(false);
+      }
+    }, 500);
+    return () => clearTimeout(zipDebounceRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.zip]);
+
+  // Address suggestions as you type, via OpenStreetMap's free Nominatim search
+  // (no API key needed). Debounced and limited to respect their usage policy.
+  useEffect(() => {
+    const q = (form.address || "").trim();
+    clearTimeout(addressDebounceRef.current);
+    if (q.length < 5) {
+      setAddressSuggestions([]);
+      return;
+    }
+    addressDebounceRef.current = setTimeout(async () => {
+      try {
+        setAddressLookupBusy(true);
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&countrycodes=us&limit=5&q=${encodeURIComponent(q)}`
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        setAddressSuggestions(Array.isArray(data) ? data : []);
+      } catch (e) {
+        // Silently ignore — suggestions are a convenience, typing the address manually always works.
+      } finally {
+        setAddressLookupBusy(false);
+      }
+    }, 500);
+    return () => clearTimeout(addressDebounceRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.address]);
+
+  function selectAddressSuggestion(s) {
+    const a = s.address || {};
+    const houseNumber = a.house_number || "";
+    const road = a.road || a.pedestrian || a.footway || "";
+    const streetLine = [houseNumber, road].filter(Boolean).join(" ") || s.display_name.split(",")[0];
+    const city = a.city || a.town || a.village || a.hamlet || form.city;
+    const state = a.state ? US_STATE_ABBREVIATIONS[a.state] || a.state : form.state;
+    const zip = a.postcode || form.zip;
+    lastLookedUpZip.current = zip || "";
+    setForm((f) => ({ ...f, address: streetLine, city: city || f.city, state: state || f.state, zip: zip || f.zip }));
+    setAddressSuggestions([]);
+    setShowAddressSuggestions(false);
+  }
 
   function submit() {
     const missing = SALE_REQUIRED_FIELDS.filter((f) => {
@@ -4268,7 +4360,31 @@ function SaleForm({ initial, employees, settings, onCancel, onMinimize, onSave, 
         <input value={form.email || ""} onChange={set("email")} style={S.input} placeholder="name@email.com" />
       </Field>
       <Field label="Address *">
-        <input value={form.address || ""} onChange={set("address")} style={S.input} placeholder="123 Main St" />
+        <div style={{ position: "relative" }}>
+          <input
+            value={form.address || ""}
+            onChange={set("address")}
+            onFocus={() => setShowAddressSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowAddressSuggestions(false), 150)}
+            style={S.input}
+            placeholder="123 Main St"
+            autoComplete="off"
+          />
+          {addressLookupBusy && <div style={S.addressLookupSpinner}>Searching…</div>}
+          {showAddressSuggestions && addressSuggestions.length > 0 && (
+            <div style={S.addressSuggestionsBox}>
+              {addressSuggestions.map((s) => (
+                <div
+                  key={s.place_id}
+                  style={S.addressSuggestionRow}
+                  onMouseDown={() => selectAddressSuggestion(s)}
+                >
+                  {s.display_name}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </Field>
       <div style={{ display: "flex", gap: 10 }}>
         <div style={{ flex: 2 }}>
@@ -4283,7 +4399,10 @@ function SaleForm({ initial, employees, settings, onCancel, onMinimize, onSave, 
         </div>
         <div style={{ flex: 1 }}>
           <Field label="Zip code *">
-            <input value={form.zip || ""} onChange={set("zip")} style={S.input} />
+            <div style={{ position: "relative" }}>
+              <input value={form.zip || ""} onChange={set("zip")} style={S.input} />
+              {zipLookupBusy && <div style={S.zipLookupSpinner}>…</div>}
+            </div>
           </Field>
         </div>
       </div>
@@ -5284,6 +5403,45 @@ const S = {
     cursor: "pointer",
   },
   fieldLabel: { fontSize: 11.5, color: T.textMuted, marginBottom: 5, fontWeight: 500 },
+  addressSuggestionsBox: {
+    position: "absolute",
+    top: "calc(100% + 4px)",
+    left: 0,
+    right: 0,
+    background: "#FFFFFF",
+    border: `1px solid ${T.border}`,
+    borderRadius: 8,
+    boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+    zIndex: 20,
+    maxHeight: 220,
+    overflowY: "auto",
+  },
+  addressSuggestionRow: {
+    padding: "9px 12px",
+    fontSize: 12.5,
+    color: T.ink,
+    cursor: "pointer",
+    borderBottom: `1px solid ${T.border}`,
+  },
+  addressLookupSpinner: {
+    position: "absolute",
+    right: 10,
+    top: "50%",
+    transform: "translateY(-50%)",
+    fontSize: 11,
+    color: T.textMuted,
+    background: T.paper,
+    pointerEvents: "none",
+  },
+  zipLookupSpinner: {
+    position: "absolute",
+    right: 10,
+    top: "50%",
+    transform: "translateY(-50%)",
+    fontSize: 11,
+    color: T.textMuted,
+    pointerEvents: "none",
+  },
   input: {
     width: "100%",
     border: `1px solid ${T.border}`,
