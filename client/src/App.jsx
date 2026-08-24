@@ -194,6 +194,7 @@ function blankSale() {
     name: "",
     spouseName: "",
     phone: "",
+    phone2: "",
     email: "",
     address: "",
     city: "",
@@ -4232,11 +4233,19 @@ function SaleForm({ initial, employees, settings, onCancel, onMinimize, onSave, 
           </Field>
         </div>
         <div style={{ flex: 1 }}>
-          <Field label="Email address *">
-            <input value={form.email || ""} onChange={set("email")} style={S.input} placeholder="name@email.com" />
+          <Field label="Secondary phone number">
+            <input
+              value={form.phone2 || ""}
+              onChange={set("phone2")}
+              style={S.input}
+              placeholder="Optional"
+            />
           </Field>
         </div>
       </div>
+      <Field label="Email address *">
+        <input value={form.email || ""} onChange={set("email")} style={S.input} placeholder="name@email.com" />
+      </Field>
       <Field label="Address *">
         <input value={form.address || ""} onChange={set("address")} style={S.input} placeholder="123 Main St" />
       </Field>
