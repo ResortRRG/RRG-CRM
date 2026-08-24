@@ -4873,7 +4873,14 @@ const S = {
   dealValue: { fontFamily: T.mono, fontSize: 14.5, color: T.pineDark, marginTop: 6, fontWeight: 600 },
   contactsWrap: { padding: 20 },
   salesWrap: { padding: 20 },
-  tableScroll: { overflowX: "auto", border: `1px solid ${T.border}`, borderRadius: 10, background: T.paperRaised },
+  tableScroll: {
+    overflowX: "auto",
+    overflowY: "auto",
+    maxHeight: "calc(100vh - 260px)",
+    border: `1px solid ${T.border}`,
+    borderRadius: 10,
+    background: T.paperRaised,
+  },
   leadBadge: {
     fontSize: 10.5,
     fontWeight: 600,
@@ -4905,6 +4912,10 @@ const S = {
     padding: "10px 12px",
     borderBottom: `1px solid ${T.border}`,
     whiteSpace: "nowrap",
+    position: "sticky",
+    top: 0,
+    background: T.paperRaised,
+    zIndex: 1,
   },
   tr: { cursor: "pointer" },
   td: {
