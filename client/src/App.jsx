@@ -581,6 +581,7 @@ export default function TeamCRM() {
   const [leadsYearOffset, setLeadsYearOffset] = useState(0);
   const [confirmRefund, setConfirmRefund] = useState(null); // full sale object being refunded, or null
   const [refundType, setRefundType] = useState("full");
+  const [refundWeekChoice, setRefundWeekChoice] = useState("next");
   const [refundAmounts, setRefundAmounts] = useState({ front: "", close: "", verification: "" });
   const saveTimer = useRef(null);
 
@@ -588,6 +589,7 @@ export default function TeamCRM() {
     if (confirmRefund) {
       setRefundType("full");
       setRefundAmounts({ front: "", close: "", verification: "" });
+      setRefundWeekChoice("next");
     }
   }, [confirmRefund]);
 
@@ -1316,9 +1318,29 @@ export default function TeamCRM() {
     return rows.map((r) => ({ ...r, dayTotal: r.entries.reduce((sum, e) => sum + e.amount, 0) }));
   }
 
+  // Which payroll week a refund's deduction should land in, based on the
+  // choice made when the refund was processed. Defaults to "next" (the week
+  // after the refund was recorded) to match the original, long-standing behavior.
+  function refundTargetWeekStart(sale) {
+    if (!sale.refundedAt) return null;
+    const d = new Date(sale.refundedAt);
+    const day = d.getDay();
+    const diffToMonday = (day + 6) % 7;
+    const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - diffToMonday);
+    monday.setHours(0, 0, 0, 0);
+    const choice = sale.refundWeekChoice || "next";
+    if (choice === "next") monday.setDate(monday.getDate() + 7);
+    else if (choice === "previous") monday.setDate(monday.getDate() - 7);
+    return monday;
+  }
+
   function refundedCreditForEmployee(employeeId, weekStart, weekEnd) {
     return sales
-      .filter((s) => s.refunded && dateInRange(s.refundedAt, weekStart, weekEnd))
+      .filter((s) => {
+        if (!s.refunded) return false;
+        const target = refundTargetWeekStart(s);
+        return target && target.getTime() === weekStart.getTime();
+      })
       .reduce((sum, s) => {
         if (s.refundType === "partial") {
           let add = 0;
@@ -1347,9 +1369,8 @@ export default function TeamCRM() {
     : [];
   const employeeDetailTotalSales = employeeDetailRows.reduce((s, r) => s + r.dayTotal, 0);
   const employeeDetailRate = employeeDetail ? Number(employeeDetail.commissionRate) || 0 : 0;
-  const employeeDetailRefundLookback = lookbackWeek(employeeDetailWeek.start, employeeDetailWeek.end);
   const employeeDetailRefundedCredit = employeeDetail
-    ? refundedCreditForEmployee(employeeDetail.id, employeeDetailRefundLookback.start, employeeDetailRefundLookback.end)
+    ? refundedCreditForEmployee(employeeDetail.id, employeeDetailWeek.start, employeeDetailWeek.end)
     : 0;
   const employeeDetailRefundDeduction = employeeDetailRefundedCredit * (employeeDetailRate / 100);
   const employeeDetailCommission = employeeDetailTotalSales * (employeeDetailRate / 100) - employeeDetailRefundDeduction;
@@ -1413,6 +1434,7 @@ export default function TeamCRM() {
           refundType: opts.type,
           refundAmounts: amounts,
           refundAmount: opts.type === "partial" ? amounts.front + amounts.close + amounts.verification : Number(s.totalPrice) || 0,
+          refundWeekChoice: opts.weekChoice || "next",
         };
       })
     );
@@ -2323,6 +2345,8 @@ export default function TeamCRM() {
                     const empSales = salesForEmployee(emp.id);
                     const empAllTimeTotal = empSales.reduce((s, r) => s + saleCredit(r, emp.id), 0);
                     const weekEntries = weeklySaleEntries(emp.id);
+                    const empPendingRefundCredit = refundedCreditForEmployee(emp.id, currentWeek.start, currentWeek.end);
+                    const empPendingRefundAmount = empPendingRefundCredit * ((Number(emp.commissionRate) || 0) / 100);
                     return (
                       <div key={emp.id} style={S.contactCard} onClick={() => setEmployeeModal({ ...emp })}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -2357,6 +2381,11 @@ export default function TeamCRM() {
                         <div style={S.employeeStats}>
                           {empSales.length} sale{empSales.length === 1 ? "" : "s"} all-time · {money(empAllTimeTotal)}
                         </div>
+                        {empPendingRefundAmount > 0 && (
+                          <div style={S.pendingRefundNote}>
+                            <RotateCcw size={11} /> Pending refund this week: -{money(empPendingRefundAmount)}
+                          </div>
+                        )}
                         {weekEntries.length > 0 && (
                           <div style={S.weeklySaleList}>
                             {weekEntries.map((entry, i) => {
@@ -2666,8 +2695,7 @@ export default function TeamCRM() {
                       const empWeekTotal = empWeekSales.reduce((s, r) => s + saleCredit(r, emp.id), 0);
                       const rate = Number(emp.commissionRate) || 0;
                       const grossCommission = empWeekTotal * (rate / 100);
-                      const refundLookback = lookbackWeek(payrollWeek.start, payrollWeek.end);
-                      const refundedCredit = refundedCreditForEmployee(emp.id, refundLookback.start, refundLookback.end);
+                      const refundedCredit = refundedCreditForEmployee(emp.id, payrollWeek.start, payrollWeek.end);
                       const calculatedRefundDeduction = refundedCredit * (rate / 100);
                       const refundDeductionOverrideVal = getRefundDeductionOverride(emp.id, payrollWeek.start);
                       const refundDeductionIsOverridden = refundDeductionOverrideVal !== null;
@@ -2805,8 +2833,7 @@ export default function TeamCRM() {
                             const empSales = salesForEmployee(emp.id).filter((s) => isSaleInRange(s, payrollWeek.start, payrollWeek.end));
                             const total = empSales.reduce((s, r) => s + saleCredit(r, emp.id), 0);
                             const rate = Number(emp.commissionRate) || 0;
-                            const refundLookback = lookbackWeek(payrollWeek.start, payrollWeek.end);
-                            const refundedCredit = refundedCreditForEmployee(emp.id, refundLookback.start, refundLookback.end);
+                            const refundedCredit = refundedCreditForEmployee(emp.id, payrollWeek.start, payrollWeek.end);
                             const refundOverrideVal = getRefundDeductionOverride(emp.id, payrollWeek.start);
                             const refundDed = refundOverrideVal !== null ? refundOverrideVal : refundedCredit * (rate / 100);
                             const commission = total * (rate / 100) - refundDed;
@@ -3578,7 +3605,8 @@ export default function TeamCRM() {
             </div>
             <div style={{ fontSize: 12.5, color: T.textMuted, marginBottom: 14, lineHeight: 1.5 }}>
               A full refund deducts the whole credited commission from everyone on the lead. A partial refund lets you
-              enter a specific amount to deduct from each person separately.
+              enter a specific amount to deduct from each person separately. Choose below which payroll week that
+              deduction lands in — "Previous week" affects an already-passed week's check, so use it carefully.
             </div>
 
             <Field label="Refund type">
@@ -3625,6 +3653,21 @@ export default function TeamCRM() {
               </div>
             )}
 
+            <Field label="Deduct from">
+              <div style={{ position: "relative" }}>
+                <select
+                  value={refundWeekChoice}
+                  onChange={(e) => setRefundWeekChoice(e.target.value)}
+                  style={S.select}
+                >
+                  <option value="previous">Previous week's check</option>
+                  <option value="current">This week's check</option>
+                  <option value="next">Next week's check</option>
+                </select>
+                <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+              </div>
+            </Field>
+
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
               <button style={S.ghostBtn} onClick={() => setConfirmRefund(null)}>
                 Cancel
@@ -3641,7 +3684,9 @@ export default function TeamCRM() {
                   refundType === "partial" &&
                   !(Number(refundAmounts.front) || Number(refundAmounts.close) || Number(refundAmounts.verification))
                 }
-                onClick={() => markRefunded(confirmRefund.id, { type: refundType, amounts: refundAmounts })}
+                onClick={() =>
+                  markRefunded(confirmRefund.id, { type: refundType, amounts: refundAmounts, weekChoice: refundWeekChoice })
+                }
               >
                 Mark refunded
               </button>
@@ -4900,6 +4945,15 @@ const S = {
     fontSize: 13,
     fontWeight: 600,
     color: T.pineDark,
+  },
+  pendingRefundNote: {
+    display: "flex",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 6,
+    fontSize: 11.5,
+    fontWeight: 600,
+    color: "#A32D2D",
   },
   weeklySaleList: {
     marginTop: 8,
