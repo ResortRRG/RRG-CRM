@@ -2623,7 +2623,7 @@ export default function TeamCRM() {
                                   onChange={(e) => setAttendanceValue(row.employee.id, rrgDayDates[i], e.target.value)}
                                   style={{
                                     ...S.attendanceSelect,
-                                    color: attInfo ? attInfo.color : T.borderStrong,
+                                    color: attInfo ? attInfo.color : T.textMuted,
                                     borderColor: attInfo ? attInfo.color : "transparent",
                                     background: attInfo ? "#FBF6EC" : "transparent",
                                   }}
