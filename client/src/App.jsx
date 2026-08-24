@@ -1334,7 +1334,8 @@ export default function TeamCRM() {
     const diffToMonday = (day + 6) % 7;
     const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - diffToMonday);
     monday.setHours(0, 0, 0, 0);
-    const choice = (sale.refundWeekChoices && sale.refundWeekChoices[roleId]) || "next";
+    const choice =
+      (sale.refundWeekChoices && sale.refundWeekChoices[roleId]) || sale.refundWeekChoice || "next";
     if (choice === "next") monday.setDate(monday.getDate() + 7);
     else if (choice === "previous") monday.setDate(monday.getDate() - 7);
     return monday;
