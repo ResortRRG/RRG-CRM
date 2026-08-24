@@ -1672,8 +1672,11 @@ export default function TeamCRM() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
         * { box-sizing: border-box; }
-        .crm-scroll::-webkit-scrollbar { height: 8px; width: 8px; }
-        .crm-scroll::-webkit-scrollbar-thumb { background: #D8D4C6; border-radius: 4px; }
+        .crm-scroll { scrollbar-width: auto; scrollbar-color: #B8B2A0 #EDEAE0; }
+        .crm-scroll::-webkit-scrollbar { height: 12px; width: 12px; }
+        .crm-scroll::-webkit-scrollbar-track { background: #EDEAE0; border-radius: 6px; }
+        .crm-scroll::-webkit-scrollbar-thumb { background: #B8B2A0; border-radius: 6px; border: 2px solid #EDEAE0; }
+        .crm-scroll::-webkit-scrollbar-thumb:hover { background: #9C9686; }
         .crm-row:hover { background: #F4F2EA; }
         .crm-row-del:hover { color: #A32D2D !important; background: #FCEBEB !important; }
         .crm-scroll input[type="number"]:hover, .crm-scroll input[type="number"]:focus { border-color: #D3CEBD !important; background: #FFFFFF !important; }
