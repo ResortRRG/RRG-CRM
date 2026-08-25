@@ -1773,15 +1773,26 @@ export default function TeamCRM() {
   }
 
   function restoreBackup(backup) {
-    if (backup.contacts) updateContacts(backup.contacts);
-    if (backup.sales) updateSales(backup.sales);
-    if (backup.employees) updateEmployees(backup.employees);
-    if (backup.payrollOverrides) updatePayrollOverrides(backup.payrollOverrides);
-    if (backup.attendance) updateAttendance(backup.attendance);
-    if (backup.settings) updateSettings(backup.settings);
-    if (backup.spiffs) updateSpiffs(backup.spiffs);
-    if (backup.refundDeductionOverrides) updateRefundDeductionOverrides(backup.refundDeductionOverrides);
-    if (backup.expenses) updateExpenses(backup.expenses);
+    if (backup.contacts) setContacts(backup.contacts);
+    if (backup.sales) setSales(backup.sales);
+    if (backup.employees) setEmployees(backup.employees);
+    if (backup.payrollOverrides) setPayrollOverrides(backup.payrollOverrides);
+    if (backup.attendance) setAttendance(backup.attendance);
+    if (backup.settings) setSettings(backup.settings);
+    if (backup.spiffs) setSpiffs(backup.spiffs);
+    if (backup.refundDeductionOverrides) setRefundDeductionOverrides(backup.refundDeductionOverrides);
+    if (backup.expenses) setExpenses(backup.expenses);
+    persist(
+      backup.contacts || null,
+      backup.sales || null,
+      backup.employees || null,
+      backup.payrollOverrides || null,
+      backup.attendance || null,
+      backup.settings || null,
+      backup.spiffs || null,
+      backup.refundDeductionOverrides || null,
+      backup.expenses || null
+    );
     setConfirmRestoreBackup(null);
     setBackupStatus("restored");
     setTimeout(() => window.location.reload(), 1500);
@@ -1844,8 +1855,9 @@ export default function TeamCRM() {
         verificationId: idMap[s.verificationId] || s.verificationId || "",
       })),
     ];
-    updateEmployees(nextEmployees);
-    updateSales(nextSales);
+    setEmployees(nextEmployees);
+    setSales(nextSales);
+    persist(null, nextSales, nextEmployees, null, null, null, null, null, null);
     setConfirmImportLeads(null);
     setBackupStatus("restored");
     setTimeout(() => window.location.reload(), 1500);
