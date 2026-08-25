@@ -3949,6 +3949,7 @@ export default function TeamCRM() {
         <Modal onClose={() => setEmployeeModal(null)}>
           <EmployeeForm
             initial={employeeModal}
+            attendance={attendance}
             onCancel={() => setEmployeeModal(null)}
             onSave={saveEmployee}
             onDelete={
@@ -4498,7 +4499,7 @@ function UserForm({ initial, currentUserId, userCount, onCancel, onSave, onDelet
   );
 }
 
-function EmployeeForm({ initial, onCancel, onSave, onDelete, onToggleActive }) {
+function EmployeeForm({ initial, attendance, onCancel, onSave, onDelete, onToggleActive }) {
   const [form, setForm] = useState(initial);
   const [error, setError] = useState("");
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -4507,6 +4508,19 @@ function EmployeeForm({ initial, onCancel, onSave, onDelete, onToggleActive }) {
   const [filesLoading, setFilesLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [fileError, setFileError] = useState("");
+
+  // All-time attendance tally for this employee — attendance is stored as
+  // { "employeeId__YYYY-MM-DD": "late" | "absent" | "left_early" }.
+  const attendanceCounts = { late: 0, absent: 0, left_early: 0 };
+  if (form.id && attendance) {
+    const prefix = form.id + "__";
+    Object.keys(attendance).forEach((key) => {
+      if (!key.startsWith(prefix)) return;
+      const status = attendance[key];
+      if (attendanceCounts[status] !== undefined) attendanceCounts[status] += 1;
+    });
+  }
+  const attendanceTotal = attendanceCounts.late + attendanceCounts.absent + attendanceCounts.left_early;
 
   async function refreshFiles() {
     if (!form.id) return;
@@ -4652,6 +4666,29 @@ function EmployeeForm({ initial, onCancel, onSave, onDelete, onToggleActive }) {
       <Field label="Start date">
         <input type="date" value={form.startDate || ""} onChange={set("startDate")} style={S.input} />
       </Field>
+      {form.id && (
+        <div style={S.attendanceSummaryBox}>
+          <div style={S.fieldLabel}>Attendance history (all-time)</div>
+          {attendanceTotal === 0 ? (
+            <div style={{ fontSize: 12.5, color: T.textMuted }}>No late, absent, or left-early days recorded yet.</div>
+          ) : (
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+              <div style={S.attendanceSummaryItem}>
+                <span style={{ ...S.attendanceSummaryDot, background: "#B8763E" }} />
+                Late <strong>{attendanceCounts.late}</strong>
+              </div>
+              <div style={S.attendanceSummaryItem}>
+                <span style={{ ...S.attendanceSummaryDot, background: "#A32D2D" }} />
+                Absent <strong>{attendanceCounts.absent}</strong>
+              </div>
+              <div style={S.attendanceSummaryItem}>
+                <span style={{ ...S.attendanceSummaryDot, background: "#8A5A1E" }} />
+                Left early <strong>{attendanceCounts.left_early}</strong>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       <Field label="Notes">
         <textarea
           value={form.notes || ""}
@@ -5299,6 +5336,27 @@ const S = {
   rrgLegendDot: { width: 8, height: 8, borderRadius: "50%", display: "inline-block" },
   rrgChipRow: { display: "flex", flexWrap: "wrap", gap: "3px 6px" },
   rrgChip: { fontFamily: T.mono, fontSize: 14, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" },
+  attendanceSummaryBox: {
+    background: T.paper,
+    border: `1px solid ${T.border}`,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 12,
+  },
+  attendanceSummaryItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    fontSize: 12.5,
+    color: T.ink,
+  },
+  attendanceSummaryDot: {
+    width: 8,
+    height: 8,
+    borderRadius: "50%",
+    display: "inline-block",
+    flexShrink: 0,
+  },
   attendanceSelect: {
     fontSize: 10.5,
     fontWeight: 700,
