@@ -1427,6 +1427,50 @@ export default function TeamCRM() {
     URL.revokeObjectURL(url);
   }
 
+  function exportLeadsCSV(leadsToExport, periodLabel) {
+    const rows = [];
+    rows.push(["Date", "Name", "Phone", "Secondary phone", "Email", "Address", "City", "State", "Zip",
+      "Package price", "Date flex price", "Total price", "Status", "Source", "Submitted to", "Category",
+      "Opener", "Closer", "Verification", "Notes"]);
+    leadsToExport.forEach((s) => {
+      rows.push([
+        formatTimestamp(s.timestamp),
+        s.name || "",
+        s.phone || "",
+        s.phone2 || "",
+        s.email || "",
+        s.address || "",
+        s.city || "",
+        s.state || "",
+        s.zip || "",
+        (Number(s.packagePrice) || 0).toFixed(2),
+        (Number(s.dateFlex) || 0).toFixed(2),
+        (Number(s.totalPrice) || 0).toFixed(2),
+        s.status || "",
+        s.source || "",
+        s.leadSubmittedTo || "",
+        s.leadCategory || "",
+        (employeeById[s.openerId] || {}).name || "",
+        (employeeById[s.closerId] || {}).name || "",
+        (employeeById[s.verificationId] || {}).name || "",
+        s.notes || "",
+      ]);
+    });
+    const csv = rows
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const safeLabel = periodLabel.replace(/[^a-z0-9]+/gi, "-");
+    a.href = url;
+    a.download = `RRG-Leads-${safeLabel}-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   let leadsRange = null;
   let leadsRangeLabel = "";
   if (leadsFilterMode === "day") {
@@ -2476,19 +2520,30 @@ export default function TeamCRM() {
                       {filteredLeads.length} lead{filteredLeads.length === 1 ? "" : "s"}
                       {(leadsFilterMode !== "all" || leadsCategoryFilter) && sales.length !== filteredLeads.length ? ` of ${sales.length}` : ""}
                     </span>
-                    <div style={S.searchWrap}>
-                      <Search size={14} color={T.textMuted} style={{ flexShrink: 0 }} />
-                      <input
-                        value={leadsSearch}
-                        onChange={(e) => setLeadsSearch(e.target.value)}
-                        placeholder="Search leads"
-                        style={S.searchInput}
-                      />
-                      {leadsSearch && (
-                        <button onClick={() => setLeadsSearch("")} style={S.iconBtnGhost}>
-                          <X size={13} color={T.textMuted} />
-                        </button>
-                      )}
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <button
+                        onClick={() =>
+                          exportLeadsCSV(filteredLeads, leadsFilterMode === "all" ? "All time" : leadsRangeLabel)
+                        }
+                        style={S.ghostBtn}
+                        title="Download the leads currently shown as a CSV file"
+                      >
+                        <Download size={14} /> Export CSV
+                      </button>
+                      <div style={S.searchWrap}>
+                        <Search size={14} color={T.textMuted} style={{ flexShrink: 0 }} />
+                        <input
+                          value={leadsSearch}
+                          onChange={(e) => setLeadsSearch(e.target.value)}
+                          placeholder="Search leads"
+                          style={S.searchInput}
+                        />
+                        {leadsSearch && (
+                          <button onClick={() => setLeadsSearch("")} style={S.iconBtnGhost}>
+                            <X size={13} color={T.textMuted} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
 
