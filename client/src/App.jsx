@@ -5581,7 +5581,15 @@ const S = {
     paddingTop: 10,
     borderTop: `1px solid ${T.border}`,
   },
-  leadInfoItem: { display: "flex", flexDirection: "column", gap: 2, fontSize: 12.5, color: T.ink },
+  leadInfoItem: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+    fontSize: 12.5,
+    color: T.ink,
+    minWidth: 0,
+    overflowWrap: "anywhere",
+  },
   leadInfoLabel: { fontSize: 10, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.03em" },
   leadEmployeeRow: {
     display: "flex",
