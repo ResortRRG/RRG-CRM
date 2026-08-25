@@ -1772,30 +1772,35 @@ export default function TeamCRM() {
     reader.readAsText(file);
   }
 
-  function restoreBackup(backup) {
-    if (backup.contacts) setContacts(backup.contacts);
-    if (backup.sales) setSales(backup.sales);
-    if (backup.employees) setEmployees(backup.employees);
-    if (backup.payrollOverrides) setPayrollOverrides(backup.payrollOverrides);
-    if (backup.attendance) setAttendance(backup.attendance);
-    if (backup.settings) setSettings(backup.settings);
-    if (backup.spiffs) setSpiffs(backup.spiffs);
-    if (backup.refundDeductionOverrides) setRefundDeductionOverrides(backup.refundDeductionOverrides);
-    if (backup.expenses) setExpenses(backup.expenses);
-    persist(
-      backup.contacts || null,
-      backup.sales || null,
-      backup.employees || null,
-      backup.payrollOverrides || null,
-      backup.attendance || null,
-      backup.settings || null,
-      backup.spiffs || null,
-      backup.refundDeductionOverrides || null,
-      backup.expenses || null
-    );
-    setConfirmRestoreBackup(null);
-    setBackupStatus("restored");
-    setTimeout(() => window.location.reload(), 1500);
+  async function restoreBackup(backup) {
+    try {
+      if (backup.contacts) setContacts(backup.contacts);
+      if (backup.sales) setSales(backup.sales);
+      if (backup.employees) setEmployees(backup.employees);
+      if (backup.payrollOverrides) setPayrollOverrides(backup.payrollOverrides);
+      if (backup.attendance) setAttendance(backup.attendance);
+      if (backup.settings) setSettings(backup.settings);
+      if (backup.spiffs) setSpiffs(backup.spiffs);
+      if (backup.refundDeductionOverrides) setRefundDeductionOverrides(backup.refundDeductionOverrides);
+      if (backup.expenses) setExpenses(backup.expenses);
+      if (backup.contacts) await window.storage.set("crm:contacts", JSON.stringify(backup.contacts), true);
+      if (backup.sales) await window.storage.set("crm:sales", JSON.stringify(backup.sales), true);
+      if (backup.employees) await window.storage.set("crm:employees", JSON.stringify(backup.employees), true);
+      if (backup.payrollOverrides) await window.storage.set("crm:payrollOverrides", JSON.stringify(backup.payrollOverrides), true);
+      if (backup.attendance) await window.storage.set("crm:attendance", JSON.stringify(backup.attendance), true);
+      if (backup.settings) await window.storage.set("crm:settings", JSON.stringify(backup.settings), true);
+      if (backup.spiffs) await window.storage.set("crm:spiffs", JSON.stringify(backup.spiffs), true);
+      if (backup.refundDeductionOverrides)
+        await window.storage.set("crm:refundDeductionOverrides", JSON.stringify(backup.refundDeductionOverrides), true);
+      if (backup.expenses) await window.storage.set("crm:expenses", JSON.stringify(backup.expenses), true);
+      setConfirmRestoreBackup(null);
+      setBackupStatus("restored");
+      window.location.reload();
+    } catch (err) {
+      console.error("Restore failed:", err);
+      setConfirmRestoreBackup(null);
+      setBackupStatus({ error: "Restore failed: " + (err.message || "unknown error") + " — some data may be inconsistent, check carefully." });
+    }
   }
 
   function handleImportFileSelected(e) {
@@ -1823,7 +1828,7 @@ export default function TeamCRM() {
   // and employees are untouched. Any employee referenced by name that
   // doesn't already exist gets created (inactive, so they don't show up as
   // current team members, but their sales history stays attributed to them).
-  function importLeadsData(importData) {
+  async function importLeadsData(importData) {
     try {
       const idMap = {};
       let nextEmployees = [...employees];
@@ -1859,10 +1864,11 @@ export default function TeamCRM() {
       ];
       setEmployees(nextEmployees);
       setSales(nextSales);
-      persist(null, nextSales, nextEmployees, null, null, null, null, null, null);
+      await window.storage.set("crm:sales", JSON.stringify(nextSales), true);
+      await window.storage.set("crm:employees", JSON.stringify(nextEmployees), true);
       setConfirmImportLeads(null);
       setBackupStatus("restored");
-      setTimeout(() => window.location.reload(), 1500);
+      window.location.reload();
     } catch (err) {
       console.error("Import failed:", err);
       setConfirmImportLeads(null);
