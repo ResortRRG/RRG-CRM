@@ -1824,43 +1824,50 @@ export default function TeamCRM() {
   // doesn't already exist gets created (inactive, so they don't show up as
   // current team members, but their sales history stays attributed to them).
   function importLeadsData(importData) {
-    const idMap = {};
-    let nextEmployees = [...employees];
-    (importData.employees || []).forEach((imp) => {
-      const existing = nextEmployees.find((e) => e.name.trim().toLowerCase() === imp.name.trim().toLowerCase());
-      if (existing) {
-        idMap[imp.tempId] = existing.id;
-      } else {
-        const newId = uid();
-        idMap[imp.tempId] = newId;
-        nextEmployees.push({
-          id: newId,
-          name: imp.name,
-          role: "rep",
-          commissionRate: "",
-          basePay: "",
-          active: false,
-          notes: imp.notes || "Imported from historical data",
-        });
-      }
-    });
-    const nextSales = [
-      ...sales,
-      ...importData.sales.map((s) => ({
-        ...blankSale(),
-        ...s,
-        id: uid(),
-        openerId: idMap[s.openerId] || s.openerId || "",
-        closerId: idMap[s.closerId] || s.closerId || "",
-        verificationId: idMap[s.verificationId] || s.verificationId || "",
-      })),
-    ];
-    setEmployees(nextEmployees);
-    setSales(nextSales);
-    persist(null, nextSales, nextEmployees, null, null, null, null, null, null);
-    setConfirmImportLeads(null);
-    setBackupStatus("restored");
-    setTimeout(() => window.location.reload(), 1500);
+    try {
+      const idMap = {};
+      let nextEmployees = [...employees];
+      (importData.employees || []).forEach((imp) => {
+        const impName = (imp.name || "").trim().toLowerCase();
+        const existing = nextEmployees.find((e) => (e.name || "").trim().toLowerCase() === impName);
+        if (existing) {
+          idMap[imp.tempId] = existing.id;
+        } else {
+          const newId = uid();
+          idMap[imp.tempId] = newId;
+          nextEmployees.push({
+            id: newId,
+            name: imp.name || "Unknown",
+            role: "rep",
+            commissionRate: "",
+            basePay: "",
+            active: false,
+            notes: imp.notes || "Imported from historical data",
+          });
+        }
+      });
+      const nextSales = [
+        ...sales,
+        ...importData.sales.map((s) => ({
+          ...blankSale(),
+          ...s,
+          id: uid(),
+          openerId: idMap[s.openerId] || s.openerId || "",
+          closerId: idMap[s.closerId] || s.closerId || "",
+          verificationId: idMap[s.verificationId] || s.verificationId || "",
+        })),
+      ];
+      setEmployees(nextEmployees);
+      setSales(nextSales);
+      persist(null, nextSales, nextEmployees, null, null, null, null, null, null);
+      setConfirmImportLeads(null);
+      setBackupStatus("restored");
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (err) {
+      console.error("Import failed:", err);
+      setConfirmImportLeads(null);
+      setBackupStatus({ error: "Import failed: " + (err.message || "unknown error") + " — nothing was changed." });
+    }
   }
 
   function saveContact(form) {
