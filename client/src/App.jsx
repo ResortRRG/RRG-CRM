@@ -1600,7 +1600,15 @@ export default function TeamCRM() {
         (r) => `
           <tr>
             <td style="padding:6px 10px;border-bottom:1px solid #E6E2D6;">${r.label}, ${r.date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</td>
-            <td style="padding:6px 10px;border-bottom:1px solid #E6E2D6;">${r.entries.map((e) => `${e.sale.name} ${money(e.amount)}`).join(", ")}</td>
+            <td style="padding:6px 10px;border-bottom:1px solid #E6E2D6;">${r.entries
+              .map((e) => {
+                const t = SALE_TYPES.find((x) => x.id === e.type);
+                const refunded = isEntryRefunded(e.sale, e.type);
+                const color = refunded ? "#A32D2D" : t ? t.color : "#767468";
+                const decoration = refunded ? "text-decoration:line-through;" : "";
+                return `<span style="color:${color};${decoration}font-weight:600;">${e.sale.name} ${money(e.amount)}</span>`;
+              })
+              .join(" &nbsp; ")}</td>
             <td style="padding:6px 10px;border-bottom:1px solid #E6E2D6;text-align:right;">${money(r.dayTotal)}</td>
           </tr>`
       )
