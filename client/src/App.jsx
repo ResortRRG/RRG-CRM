@@ -55,6 +55,16 @@ const ROLE_COLORS = {
 const DEFAULT_SOURCES = ["Dialer", "Paper"];
 const DEFAULT_LEAD_SOURCES = ["Monster", "PGR"];
 const DEFAULT_LEAD_CATEGORIES = ["Monster", "PGR", "Pending", "Chargeback", "Declined"];
+const DEFAULT_EXPENSE_CATEGORIES = [
+  "Rent",
+  "Dialer",
+  "Office Supplies",
+  "Internet",
+  "Legal and Accounting",
+  "Payroll",
+  "Marketing",
+  "Leads",
+];
 const SALE_STATUSES = ["Pending", "Approved", "Declined"];
 const DEFAULT_MIN_WEEKLY_PAY = 400;
 const DEFAULT_COMPANY_NAME = "RRG CRM";
@@ -87,6 +97,7 @@ const DEFAULT_SETTINGS = {
   sources: DEFAULT_SOURCES,
   leadSources: DEFAULT_LEAD_SOURCES,
   leadCategories: DEFAULT_LEAD_CATEGORIES,
+  expenseCategories: DEFAULT_EXPENSE_CATEGORIES,
   monsterCommissionRate: 68,
   pgrCommissionRate: 75,
 };
@@ -590,6 +601,9 @@ export default function TeamCRM() {
   const [dashboardYearOffset, setDashboardYearOffset] = useState(0);
   const [rrgWeekOffset, setRrgWeekOffset] = useState(0);
   const [payrollWeekOffset, setPayrollWeekOffset] = useState(0);
+  const [reportsSubTab, setReportsSubTab] = useState("snapshot"); // 'snapshot' | 'pnl'
+  const [pnlMonthOffset, setPnlMonthOffset] = useState(0);
+  const [expenses, setExpenses] = useState({}); // { "YYYY-MM": { CategoryName: amount } }
   const [reportsFilterMode, setReportsFilterMode] = useState("month"); // 'day' | 'week' | 'month' | 'year' | 'custom' | 'all'
   const [reportsSelectedDate, setReportsSelectedDate] = useState(todayDateStr());
   const [reportsCustomStart, setReportsCustomStart] = useState(shiftDateStr(todayDateStr(), -7));
@@ -612,6 +626,7 @@ export default function TeamCRM() {
   const [adminNewSource, setAdminNewSource] = useState("");
   const [adminNewLeadSource, setAdminNewLeadSource] = useState("");
   const [adminNewCategory, setAdminNewCategory] = useState("");
+  const [adminNewExpenseCategory, setAdminNewExpenseCategory] = useState("");
   const [adminSaved, setAdminSaved] = useState(false);
   const [userModal, setUserModal] = useState(null);
   const [userFormError, setUserFormError] = useState("");
@@ -691,6 +706,12 @@ export default function TeamCRM() {
       setSpiffs(sp && sp.value ? JSON.parse(sp.value) : {});
     } catch (e) {
       setSpiffs({});
+    }
+    try {
+      const ex = await window.storage.get("crm:expenses", true);
+      setExpenses(ex && ex.value ? JSON.parse(ex.value) : {});
+    } catch (e) {
+      setExpenses({});
     }
     try {
       const st = await window.storage.get("crm:settings", true);
@@ -854,7 +875,7 @@ export default function TeamCRM() {
     setCurrentUser(null);
   }
 
-  const persist = useCallback((nextContacts, nextSales, nextEmployees, nextOverrides, nextAttendance, nextSettings, nextSpiffs, nextRefundDeductionOverrides) => {
+  const persist = useCallback((nextContacts, nextSales, nextEmployees, nextOverrides, nextAttendance, nextSettings, nextSpiffs, nextRefundDeductionOverrides, nextExpenses) => {
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
       try {
@@ -867,6 +888,7 @@ export default function TeamCRM() {
         if (nextSpiffs) await window.storage.set("crm:spiffs", JSON.stringify(nextSpiffs), true);
         if (nextRefundDeductionOverrides)
           await window.storage.set("crm:refundDeductionOverrides", JSON.stringify(nextRefundDeductionOverrides), true);
+        if (nextExpenses) await window.storage.set("crm:expenses", JSON.stringify(nextExpenses), true);
       } catch (e) {
         console.error("save failed", e);
       }
@@ -875,37 +897,41 @@ export default function TeamCRM() {
 
   function updateContacts(next) {
     setContacts(next);
-    persist(next, null, null, null, null, null, null, null);
+    persist(next, null, null, null, null, null, null, null, null);
   }
   function updateSales(next) {
     setSales(next);
-    persist(null, next, null, null, null, null, null, null);
+    persist(null, next, null, null, null, null, null, null, null);
   }
   function updateEmployees(next) {
     setEmployees(next);
-    persist(null, null, next, null, null, null, null, null);
+    persist(null, null, next, null, null, null, null, null, null);
   }
   function updatePayrollOverrides(next) {
     setPayrollOverrides(next);
-    persist(null, null, null, next, null, null, null, null);
+    persist(null, null, null, next, null, null, null, null, null);
   }
   function updateAttendance(next) {
     setAttendance(next);
-    persist(null, null, null, null, next, null, null, null);
+    persist(null, null, null, null, next, null, null, null, null);
   }
   function updateSpiffs(next) {
     setSpiffs(next);
-    persist(null, null, null, null, null, null, next, null);
+    persist(null, null, null, null, null, null, next, null, null);
   }
   function updateSettings(next) {
     setSettings(next);
-    persist(null, null, null, null, null, next, null, null);
+    persist(null, null, null, null, null, next, null, null, null);
     setAdminSaved(true);
     setTimeout(() => setAdminSaved(false), 1500);
   }
   function updateRefundDeductionOverrides(next) {
     setRefundDeductionOverrides(next);
-    persist(null, null, null, null, null, null, null, next);
+    persist(null, null, null, null, null, null, null, next, null);
+  }
+  function updateExpenses(next) {
+    setExpenses(next);
+    persist(null, null, null, null, null, null, null, null, next);
   }
 
   function addListItem(listKey, value, clearInput) {
@@ -1242,6 +1268,32 @@ export default function TeamCRM() {
   const reportsPgrTotal = (reportsSourceBreakdown.find((r) => r.source === "PGR") || {}).total || 0;
   const reportsMonsterCommission = reportsMonsterTotal * ((Number(settings.monsterCommissionRate) || 0) / 100);
   const reportsPgrCommission = reportsPgrTotal * ((Number(settings.pgrCommissionRate) || 0) / 100);
+
+  // ---- Profit & Loss ----
+  const pnlMonth = getMonthRange(pnlMonthOffset);
+  const pnlMonthKey = `${pnlMonth.start.getFullYear()}-${String(pnlMonth.start.getMonth() + 1).padStart(2, "0")}`;
+  const pnlMonthLabel = formatMonthLabel(pnlMonth.start);
+  const pnlRevenue = sales
+    .filter((s) => s.status === "Approved" && isSaleInRange(s, pnlMonth.start, pnlMonth.end))
+    .reduce((sum, s) => sum + (Number(s.totalPrice) || 0), 0);
+  const pnlExpensesForMonth = expenses[pnlMonthKey] || {};
+  const pnlExpenseRows = settings.expenseCategories.map((cat) => ({
+    category: cat,
+    amount: Number(pnlExpensesForMonth[cat]) || 0,
+  }));
+  const pnlTotalExpenses = pnlExpenseRows.reduce((sum, r) => sum + r.amount, 0);
+  const pnlNetProfit = pnlRevenue - pnlTotalExpenses;
+  const pnlProfitMargin = pnlRevenue > 0 ? (pnlNetProfit / pnlRevenue) * 100 : 0;
+  function updatePnlExpense(category, value) {
+    const next = {
+      ...expenses,
+      [pnlMonthKey]: {
+        ...(expenses[pnlMonthKey] || {}),
+        [category]: value,
+      },
+    };
+    updateExpenses(next);
+  }
   const reportsEmployeeRows = activeEmployees
     .map((emp) => {
       const empSales = reportsApprovedSales.filter(
@@ -2990,6 +3042,23 @@ export default function TeamCRM() {
 
         {section === "reports" && (
           <div style={S.dashboardWrap}>
+            <div style={S.reportsSubTabs}>
+              <button
+                onClick={() => setReportsSubTab("snapshot")}
+                style={{ ...S.reportsSubTabBtn, ...(reportsSubTab === "snapshot" ? S.reportsSubTabBtnActive : {}) }}
+              >
+                Business Snapshot
+              </button>
+              <button
+                onClick={() => setReportsSubTab("pnl")}
+                style={{ ...S.reportsSubTabBtn, ...(reportsSubTab === "pnl" ? S.reportsSubTabBtnActive : {}) }}
+              >
+                Profit & Loss
+              </button>
+            </div>
+
+            {reportsSubTab === "snapshot" && (
+              <>
             <div style={S.weekNavRow}>
               <div style={S.dashboardSectionLabel}>Business snapshot</div>
               <div style={S.weekNav}>
@@ -3224,6 +3293,95 @@ export default function TeamCRM() {
               {" "}{money(settings.minWeeklyPay)} weekly minimum guarantee, since those apply per calendar week. Visit Payroll for
               exact take-home figures on any given week.
             </div>
+              </>
+            )}
+
+            {reportsSubTab === "pnl" && (
+              <div>
+                <div style={S.weekNavRow}>
+                  <div style={S.dashboardSectionLabel}>Profit & Loss</div>
+                  <div style={S.weekNav}>
+                    <button onClick={() => setPnlMonthOffset((m) => m - 1)} style={S.weekNavBtn} aria-label="Previous month">
+                      ‹
+                    </button>
+                    <button
+                      onClick={() => setPnlMonthOffset(0)}
+                      style={{ ...S.weekNavLabel, ...(pnlMonthOffset === 0 ? S.weekNavLabelActive : {}) }}
+                    >
+                      {pnlMonthLabel}
+                      {pnlMonthOffset === 0 && <span style={S.weekNavThisWeek}>Current</span>}
+                    </button>
+                    <button onClick={() => setPnlMonthOffset((m) => m + 1)} style={S.weekNavBtn} aria-label="Next month">
+                      ›
+                    </button>
+                  </div>
+                </div>
+                <div style={S.hint}>
+                  Revenue is approved sales for {pnlMonthLabel}. Enter your actual expenses for the month below to see net
+                  profit and profit margin. These figures are entered manually since they come from your books, not the CRM.
+                </div>
+
+                <div style={S.sourceGrid}>
+                  <div style={S.sourceCard}>
+                    <div style={S.reportsCardLabel}>Revenue</div>
+                    <div style={{ ...S.sourceValue, color: T.pineDark }}>{money(pnlRevenue)}</div>
+                  </div>
+                  <div style={S.sourceCard}>
+                    <div style={S.reportsCardLabel}>Total expenses</div>
+                    <div style={{ ...S.sourceValue, color: "#A32D2D" }}>{money(pnlTotalExpenses)}</div>
+                  </div>
+                  <div style={S.sourceCard}>
+                    <div style={S.reportsCardLabel}>Net profit</div>
+                    <div style={{ ...S.sourceValue, color: pnlNetProfit >= 0 ? T.pineDark : "#A32D2D" }}>
+                      {money(pnlNetProfit)}
+                    </div>
+                  </div>
+                  <div style={S.sourceCard}>
+                    <div style={S.reportsCardLabel}>Profit margin</div>
+                    <div style={{ ...S.sourceValue, color: pnlProfitMargin >= 0 ? T.pineDark : "#A32D2D" }}>
+                      {pnlRevenue > 0 ? `${pnlProfitMargin.toFixed(1)}%` : "—"}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ ...S.dashboardSectionLabel, marginTop: 20 }}>Business expenses — {pnlMonthLabel}</div>
+                <div className="crm-scroll" style={{ ...S.tableScroll, marginTop: 8 }}>
+                  <table style={S.table}>
+                    <thead>
+                      <tr>
+                        <th style={S.th}>Category</th>
+                        <th style={S.th}>Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pnlExpenseRows.map((row) => (
+                        <tr key={row.category} style={S.tr}>
+                          <td style={{ ...S.td, fontWeight: 500 }}>{row.category}</td>
+                          <td style={S.td}>
+                            <input
+                              type="number"
+                              value={pnlExpensesForMonth[row.category] ?? ""}
+                              onChange={(e) => updatePnlExpense(row.category, e.target.value)}
+                              placeholder="0"
+                              style={{ ...S.input, fontFamily: T.mono, maxWidth: 140 }}
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <td style={{ ...S.td, fontWeight: 700 }}>Total expenses</td>
+                        <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 700 }}>{money(pnlTotalExpenses)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+                <div style={{ ...S.hint, marginTop: 10 }}>
+                  Add or rename expense categories under Admin/Settings → Dropdown lists.
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -3406,6 +3564,34 @@ export default function TeamCRM() {
                     />
                   </div>
                   <button onClick={() => addListItem("leadCategories", adminNewCategory, setAdminNewCategory)} style={S.ghostBtn}>
+                    Add
+                  </button>
+                </div>
+              </div>
+
+              <div style={S.adminListCard}>
+                <div style={S.adminListTitle}>Expense categories (Profit & Loss)</div>
+                <div style={S.adminChipRow}>
+                  {settings.expenseCategories.map((s) => (
+                    <span key={s} style={S.adminChip}>
+                      {s}
+                      <button onClick={() => removeListItem("expenseCategories", s)} style={S.adminChipRemove}>
+                        <X size={10} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <div style={S.adminAddRow}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <input
+                      value={adminNewExpenseCategory}
+                      onChange={(e) => setAdminNewExpenseCategory(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && addListItem("expenseCategories", adminNewExpenseCategory, setAdminNewExpenseCategory)}
+                      placeholder="Add option"
+                      style={S.input}
+                    />
+                  </div>
+                  <button onClick={() => addListItem("expenseCategories", adminNewExpenseCategory, setAdminNewExpenseCategory)} style={S.ghostBtn}>
                     Add
                   </button>
                 </div>
@@ -4772,6 +4958,22 @@ const S = {
   },
   topbarTitle: { fontFamily: T.display, fontSize: 18, fontWeight: 600, color: T.ink },
   dashboardWrap: { padding: 20 },
+  reportsSubTabs: { display: "flex", gap: 6, marginBottom: 16 },
+  reportsSubTabBtn: {
+    border: `1px solid ${T.border}`,
+    background: T.paper,
+    color: T.textMuted,
+    fontSize: 12.5,
+    fontWeight: 500,
+    padding: "7px 14px",
+    borderRadius: 8,
+    cursor: "pointer",
+  },
+  reportsSubTabBtnActive: {
+    background: T.pineDark,
+    color: "#fff",
+    borderColor: T.pineDark,
+  },
   entryScreenWrap: {
     maxWidth: 360,
     margin: "60px auto",
