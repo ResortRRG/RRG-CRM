@@ -1037,7 +1037,6 @@ export default function TeamCRM() {
   const contactById = Object.fromEntries(contacts.map((c) => [c.id, c]));
   const employeeById = Object.fromEntries(employees.map((e) => [e.id, e]));
 
-  const totalSalesValue = sales.reduce((s, r) => s + (r.status === "Approved" ? Number(r.totalPrice) || 0 : 0), 0);
 
   let dashboardRange = null;
   let dashboardRangeLabel = "";
@@ -1063,6 +1062,7 @@ export default function TeamCRM() {
   // marked Approved — a pending or declined sale shows as $0 here regardless of
   // which source it's tagged with, until someone approves it.
   const dashboardApprovedSales = dashboardSales.filter((s) => s.status === "Approved");
+  const totalSalesValue = dashboardApprovedSales.reduce((s, r) => s + (Number(r.totalPrice) || 0), 0);
   function dashboardNavPrev() {
     if (dashboardFilterMode === "day") setDashboardSelectedDate((d) => shiftDateStr(d, -1));
     else if (dashboardFilterMode === "week") setWeekOffset((w) => w - 1);
@@ -1765,13 +1765,15 @@ export default function TeamCRM() {
         {(section === "dashboard" || (section === "sales" && !(currentUser && isSalesEntryRole(currentUser.role)))) && (
           <div style={S.stats}>
             <div style={S.statItem}>
-              <div style={S.statLabel}>total sales</div>
+              <div style={S.statLabel}>
+                total sales {dashboardFilterMode === "all" ? "(all time)" : `(${dashboardRangeLabel})`}
+              </div>
               <div style={S.statValue}>{money(totalSalesValue)}</div>
             </div>
             <div style={S.statDivider} />
             <div style={S.statItem}>
               <div style={S.statLabel}>sales logged</div>
-              <div style={S.statValue}>{sales.length}</div>
+              <div style={S.statValue}>{dashboardSales.length}</div>
             </div>
           </div>
         )}
