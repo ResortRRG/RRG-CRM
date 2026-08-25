@@ -1998,11 +1998,27 @@ export default function TeamCRM() {
             </div>
           </div>
         ) : (
-          section === "sales" && (
+          section === "sales" && (() => {
+            const q = search.trim().toLowerCase();
+            const filteredSalesTab = [...sales]
+              .filter((s) => {
+                if (!q) return true;
+                return (
+                  (s.name || "").toLowerCase().includes(q) ||
+                  (s.email || "").toLowerCase().includes(q) ||
+                  (s.phone || "").toLowerCase().includes(q) ||
+                  (s.phone2 || "").toLowerCase().includes(q) ||
+                  (s.city || "").toLowerCase().includes(q) ||
+                  (s.address || "").toLowerCase().includes(q)
+                );
+              })
+              .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+            return (
           <div style={S.salesWrap}>
                 <div style={S.contactsToolbar}>
                   <span style={S.contactsCount}>
-                    {sales.length} sale{sales.length === 1 ? "" : "s"}
+                    {filteredSalesTab.length} sale{filteredSalesTab.length === 1 ? "" : "s"}
+                    {q && sales.length !== filteredSalesTab.length ? ` of ${sales.length}` : ""}
                   </span>
                   <div style={{ display: "flex", gap: 8 }}>
                     <button
@@ -2014,11 +2030,11 @@ export default function TeamCRM() {
                   </div>
                 </div>
 
-                {sales.length === 0 ? (
+                {filteredSalesTab.length === 0 ? (
                   <div style={S.emptyState}>
                     <TrendingUp size={22} color={T.borderStrong} />
                     <div style={{ marginTop: 8, fontSize: 13, color: T.textMuted }}>
-                      No sales logged yet — add your first one
+                      {q ? "No sales match your search" : "No sales logged yet — add your first one"}
                     </div>
                   </div>
                 ) : (
@@ -2057,8 +2073,7 @@ export default function TeamCRM() {
                         </tr>
                       </thead>
                       <tbody>
-                        {[...sales]
-                          .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+                        {filteredSalesTab
                           .map((s) => (
                             <tr key={s.id} className="crm-row" style={S.tr} onClick={() => setSaleModal({ ...s })}>
                               <td style={S.td}>{formatTimestamp(s.timestamp)}</td>
@@ -2140,7 +2155,8 @@ export default function TeamCRM() {
                   </div>
                 )}
               </div>
-          )
+            );
+          })()
         )}
 
         {section === "leads" && (
