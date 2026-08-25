@@ -582,14 +582,18 @@ export default function TeamCRM() {
   const [viewerOpen, setViewerOpen] = useState(false);
   const [myItemsOnly, setMyItemsOnly] = useState(false);
   const [weekOffset, setWeekOffset] = useState(0);
-  const [dashboardFilterMode, setDashboardFilterMode] = useState("week"); // 'day' | 'week' | 'month' | 'year' | 'all'
+  const [dashboardFilterMode, setDashboardFilterMode] = useState("week"); // 'day' | 'week' | 'month' | 'year' | 'custom' | 'all'
   const [dashboardSelectedDate, setDashboardSelectedDate] = useState(todayDateStr());
+  const [dashboardCustomStart, setDashboardCustomStart] = useState(shiftDateStr(todayDateStr(), -7));
+  const [dashboardCustomEnd, setDashboardCustomEnd] = useState(todayDateStr());
   const [dashboardMonthOffset, setDashboardMonthOffset] = useState(0);
   const [dashboardYearOffset, setDashboardYearOffset] = useState(0);
   const [rrgWeekOffset, setRrgWeekOffset] = useState(0);
   const [payrollWeekOffset, setPayrollWeekOffset] = useState(0);
-  const [reportsFilterMode, setReportsFilterMode] = useState("month"); // 'day' | 'week' | 'month' | 'year' | 'all'
+  const [reportsFilterMode, setReportsFilterMode] = useState("month"); // 'day' | 'week' | 'month' | 'year' | 'custom' | 'all'
   const [reportsSelectedDate, setReportsSelectedDate] = useState(todayDateStr());
+  const [reportsCustomStart, setReportsCustomStart] = useState(shiftDateStr(todayDateStr(), -7));
+  const [reportsCustomEnd, setReportsCustomEnd] = useState(todayDateStr());
   const [reportsWeekOffset, setReportsWeekOffset] = useState(0);
   const [reportsMonthOffset, setReportsMonthOffset] = useState(0);
   const [reportsYearOffset, setReportsYearOffset] = useState(0);
@@ -1056,6 +1060,11 @@ export default function TeamCRM() {
     const y = getYearRange(dashboardYearOffset);
     dashboardRange = y;
     dashboardRangeLabel = formatYearLabel(y.start);
+  } else if (dashboardFilterMode === "custom") {
+    const start = new Date(dashboardCustomStart + "T00:00:00");
+    const end = new Date(dashboardCustomEnd + "T23:59:59");
+    dashboardRange = { start, end };
+    dashboardRangeLabel = formatWeekLabel(start, end);
   }
   const dashboardSales = dashboardRange ? sales.filter((s) => isSaleInRange(s, dashboardRange.start, dashboardRange.end)) : sales;
   // Sales don't count toward source totals or dashboard visibility until they're
@@ -1176,6 +1185,11 @@ export default function TeamCRM() {
     const y = getYearRange(reportsYearOffset);
     reportsRange = y;
     reportsRangeLabel = formatYearLabel(y.start);
+  } else if (reportsFilterMode === "custom") {
+    const start = new Date(reportsCustomStart + "T00:00:00");
+    const end = new Date(reportsCustomEnd + "T23:59:59");
+    reportsRange = { start, end };
+    reportsRangeLabel = formatWeekLabel(start, end);
   }
   function reportsNavPrev() {
     if (reportsFilterMode === "day") setReportsSelectedDate((d) => shiftDateStr(d, -1));
@@ -1785,46 +1799,79 @@ export default function TeamCRM() {
               <div style={S.weekNav}>
                 <div style={{ position: "relative" }}>
                   <select
-                    value={dashboardFilterMode}
-                    onChange={(e) => setDashboardFilterMode(e.target.value)}
-                    style={{ ...S.select, width: 130, paddingRight: 28 }}
+                    value={dashboardFilterMode === "week" && weekOffset === -1 ? "prevweek" : dashboardFilterMode}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "prevweek") {
+                        setDashboardFilterMode("week");
+                        setWeekOffset(-1);
+                      } else if (v === "week") {
+                        setDashboardFilterMode("week");
+                        setWeekOffset(0);
+                      } else {
+                        setDashboardFilterMode(v);
+                      }
+                    }}
+                    style={{ ...S.select, width: 140, paddingRight: 28 }}
                   >
                     {currentUser && currentUser.role === "admin" && <option value="day">Today</option>}
                     <option value="week">This week</option>
+                    <option value="prevweek">Previous week</option>
                     <option value="month">This month</option>
                     <option value="year">This year</option>
+                    <option value="custom">Custom range</option>
                     <option value="all">All time</option>
                   </select>
                   <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
                 </div>
-                {dashboardFilterMode !== "all" && (
-                  <>
-                    <button onClick={dashboardNavPrev} style={S.weekNavBtn} aria-label="Previous">
-                      ‹
-                    </button>
-                    {dashboardFilterMode === "day" ? (
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <input
-                          type="date"
-                          value={dashboardSelectedDate}
-                          onChange={(e) => e.target.value && setDashboardSelectedDate(e.target.value)}
-                          style={{ ...S.weekNavLabel, ...(dashboardNavIsCurrent ? S.weekNavLabelActive : {}), cursor: "pointer" }}
-                        />
-                        {dashboardNavIsCurrent && <span style={S.weekNavThisWeek}>Current</span>}
-                      </div>
-                    ) : (
-                      <button
-                        onClick={dashboardNavReset}
-                        style={{ ...S.weekNavLabel, ...(dashboardNavIsCurrent ? S.weekNavLabelActive : {}) }}
-                      >
-                        {dashboardRangeLabel}
-                        {dashboardNavIsCurrent && <span style={S.weekNavThisWeek}>Current</span>}
+                {dashboardFilterMode === "custom" ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <input
+                      type="date"
+                      value={dashboardCustomStart}
+                      max={dashboardCustomEnd}
+                      onChange={(e) => e.target.value && setDashboardCustomStart(e.target.value)}
+                      style={S.customRangeInput}
+                    />
+                    <span style={{ color: T.textMuted, fontSize: 12 }}>to</span>
+                    <input
+                      type="date"
+                      value={dashboardCustomEnd}
+                      min={dashboardCustomStart}
+                      onChange={(e) => e.target.value && setDashboardCustomEnd(e.target.value)}
+                      style={S.customRangeInput}
+                    />
+                  </div>
+                ) : (
+                  dashboardFilterMode !== "all" && (
+                    <>
+                      <button onClick={dashboardNavPrev} style={S.weekNavBtn} aria-label="Previous">
+                        ‹
                       </button>
-                    )}
-                    <button onClick={dashboardNavNext} style={S.weekNavBtn} aria-label="Next">
-                      ›
-                    </button>
-                  </>
+                      {dashboardFilterMode === "day" ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <input
+                            type="date"
+                            value={dashboardSelectedDate}
+                            onChange={(e) => e.target.value && setDashboardSelectedDate(e.target.value)}
+                            style={{ ...S.weekNavLabel, ...(dashboardNavIsCurrent ? S.weekNavLabelActive : {}), cursor: "pointer" }}
+                          />
+                          {dashboardNavIsCurrent && <span style={S.weekNavThisWeek}>Current</span>}
+                        </div>
+                      ) : (
+                        <button
+                          onClick={dashboardNavReset}
+                          style={{ ...S.weekNavLabel, ...(dashboardNavIsCurrent ? S.weekNavLabelActive : {}) }}
+                        >
+                          {dashboardRangeLabel}
+                          {dashboardNavIsCurrent && <span style={S.weekNavThisWeek}>Current</span>}
+                        </button>
+                      )}
+                      <button onClick={dashboardNavNext} style={S.weekNavBtn} aria-label="Next">
+                        ›
+                      </button>
+                    </>
+                  )
                 )}
               </div>
             </div>
@@ -2932,46 +2979,79 @@ export default function TeamCRM() {
               <div style={S.weekNav}>
                 <div style={{ position: "relative" }}>
                   <select
-                    value={reportsFilterMode}
-                    onChange={(e) => setReportsFilterMode(e.target.value)}
-                    style={{ ...S.select, width: 130, paddingRight: 28 }}
+                    value={reportsFilterMode === "week" && reportsWeekOffset === -1 ? "prevweek" : reportsFilterMode}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "prevweek") {
+                        setReportsFilterMode("week");
+                        setReportsWeekOffset(-1);
+                      } else if (v === "week") {
+                        setReportsFilterMode("week");
+                        setReportsWeekOffset(0);
+                      } else {
+                        setReportsFilterMode(v);
+                      }
+                    }}
+                    style={{ ...S.select, width: 140, paddingRight: 28 }}
                   >
                     <option value="day">Today</option>
                     <option value="week">This week</option>
+                    <option value="prevweek">Previous week</option>
                     <option value="month">This month</option>
                     <option value="year">This year</option>
+                    <option value="custom">Custom range</option>
                     <option value="all">All time</option>
                   </select>
                   <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
                 </div>
-                {reportsFilterMode !== "all" && (
-                  <>
-                    <button onClick={reportsNavPrev} style={S.weekNavBtn} aria-label="Previous">
-                      ‹
-                    </button>
-                    {reportsFilterMode === "day" ? (
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <input
-                          type="date"
-                          value={reportsSelectedDate}
-                          onChange={(e) => e.target.value && setReportsSelectedDate(e.target.value)}
-                          style={{ ...S.weekNavLabel, ...(reportsNavIsCurrent ? S.weekNavLabelActive : {}), cursor: "pointer" }}
-                        />
-                        {reportsNavIsCurrent && <span style={S.weekNavThisWeek}>Current</span>}
-                      </div>
-                    ) : (
-                      <button
-                        onClick={reportsNavReset}
-                        style={{ ...S.weekNavLabel, ...(reportsNavIsCurrent ? S.weekNavLabelActive : {}) }}
-                      >
-                        {reportsRangeLabel}
-                        {reportsNavIsCurrent && <span style={S.weekNavThisWeek}>Current</span>}
+                {reportsFilterMode === "custom" ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <input
+                      type="date"
+                      value={reportsCustomStart}
+                      max={reportsCustomEnd}
+                      onChange={(e) => e.target.value && setReportsCustomStart(e.target.value)}
+                      style={S.customRangeInput}
+                    />
+                    <span style={{ color: T.textMuted, fontSize: 12 }}>to</span>
+                    <input
+                      type="date"
+                      value={reportsCustomEnd}
+                      min={reportsCustomStart}
+                      onChange={(e) => e.target.value && setReportsCustomEnd(e.target.value)}
+                      style={S.customRangeInput}
+                    />
+                  </div>
+                ) : (
+                  reportsFilterMode !== "all" && (
+                    <>
+                      <button onClick={reportsNavPrev} style={S.weekNavBtn} aria-label="Previous">
+                        ‹
                       </button>
-                    )}
-                    <button onClick={reportsNavNext} style={S.weekNavBtn} aria-label="Next">
-                      ›
-                    </button>
-                  </>
+                      {reportsFilterMode === "day" ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <input
+                            type="date"
+                            value={reportsSelectedDate}
+                            onChange={(e) => e.target.value && setReportsSelectedDate(e.target.value)}
+                            style={{ ...S.weekNavLabel, ...(reportsNavIsCurrent ? S.weekNavLabelActive : {}), cursor: "pointer" }}
+                          />
+                          {reportsNavIsCurrent && <span style={S.weekNavThisWeek}>Current</span>}
+                        </div>
+                      ) : (
+                        <button
+                          onClick={reportsNavReset}
+                          style={{ ...S.weekNavLabel, ...(reportsNavIsCurrent ? S.weekNavLabelActive : {}) }}
+                        >
+                          {reportsRangeLabel}
+                          {reportsNavIsCurrent && <span style={S.weekNavThisWeek}>Current</span>}
+                        </button>
+                      )}
+                      <button onClick={reportsNavNext} style={S.weekNavBtn} aria-label="Next">
+                        ›
+                      </button>
+                    </>
+                  )
                 )}
               </div>
             </div>
@@ -4727,6 +4807,16 @@ const S = {
     gap: 6,
   },
   weekNavLabelActive: { borderColor: T.pineDark },
+  customRangeInput: {
+    border: `1px solid ${T.border}`,
+    background: T.paperRaised,
+    color: T.ink,
+    fontSize: 12,
+    fontWeight: 500,
+    padding: "5px 8px",
+    borderRadius: 7,
+    outline: "none",
+  },
   weekNavThisWeek: {
     fontSize: 9.5,
     fontWeight: 600,
