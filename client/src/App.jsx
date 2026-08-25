@@ -1633,14 +1633,10 @@ export default function TeamCRM() {
         <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:20px;background:#FAFAF7;border:1px solid #E6E2D6;border-radius:8px;">
           <tbody>
             <tr>
-              <td style="padding:8px 10px;color:#767468;">Commission (${employeeDetailRate}%)</td>
+              <td style="padding:8px 10px;color:#767468;">Commission</td>
               <td style="padding:8px 10px;text-align:right;" colspan="2">${money(employeeDetailTotalSales * (employeeDetailRate / 100))}</td>
             </tr>
             ${refundRowsHtml}
-            <tr>
-              <td style="padding:8px 10px;color:#767468;">Base pay</td>
-              <td style="padding:8px 10px;text-align:right;" colspan="2">${employeeDetailHasBasePay ? money(employeeDetailBasePay) : "—"}</td>
-            </tr>
             ${employeeDetailSpiff > 0 ? `<tr><td style="padding:8px 10px;color:#8A5A1E;">Spiff</td><td style="padding:8px 10px;text-align:right;" colspan="2">${money(employeeDetailSpiff)}</td></tr>` : ""}
             <tr style="font-weight:700;border-top:1px solid #E6E2D6;">
               <td style="padding:10px;">Total pay</td>
