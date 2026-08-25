@@ -615,8 +615,12 @@ export default function TeamCRM() {
   const [reportsYearOffset, setReportsYearOffset] = useState(0);
   const [employeeDetailId, setEmployeeDetailId] = useState(null);
   const [employeeDetailMinimized, setEmployeeDetailMinimized] = useState(false);
+  const [payslipStatus, setPayslipStatus] = useState(null); // null | 'sending' | 'sent' | { error }
   useEffect(() => {
-    if (employeeDetailId) setEmployeeDetailMinimized(false);
+    if (employeeDetailId) {
+      setEmployeeDetailMinimized(false);
+      setPayslipStatus(null);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employeeDetailId]);
   const [employeesView, setEmployeesView] = useState("active"); // 'active' | 'exemployees'
@@ -1587,6 +1591,88 @@ export default function TeamCRM() {
   const employeeDetailAbsences = employeeDetail ? absentDaysInWeek(employeeDetail.id, employeeDetailWeek.start) : 0;
 
   // ---- actions ----
+  async function sendPayslip() {
+    if (!employeeDetail || !employeeDetail.email) return;
+    setPayslipStatus("sending");
+    const rowsHtml = employeeDetailRows
+      .filter((r) => r.entries.length > 0)
+      .map(
+        (r) => `
+          <tr>
+            <td style="padding:6px 10px;border-bottom:1px solid #E6E2D6;">${r.label}, ${r.date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</td>
+            <td style="padding:6px 10px;border-bottom:1px solid #E6E2D6;">${r.entries.map((e) => `${e.sale.name} ${money(e.amount)}`).join(", ")}</td>
+            <td style="padding:6px 10px;border-bottom:1px solid #E6E2D6;text-align:right;">${money(r.dayTotal)}</td>
+          </tr>`
+      )
+      .join("");
+    const refundRowsHtml = employeeDetailRefundEntries
+      .map(
+        (r) => `
+          <tr>
+            <td style="padding:6px 10px;border-bottom:1px solid #E6E2D6;color:#A32D2D;">Refund — ${r.sale.name}</td>
+            <td style="padding:6px 10px;border-bottom:1px solid #E6E2D6;color:#A32D2D;text-align:right;" colspan="2">-${money(r.credit * (employeeDetailRate / 100))}</td>
+          </tr>`
+      )
+      .join("");
+    const html = `
+      <div style="font-family:Arial,sans-serif;color:#1B1E1A;max-width:600px;margin:0 auto;">
+        <h2 style="margin-bottom:4px;">${settings.companyName}</h2>
+        <p style="color:#767468;margin-top:0;">Payslip for ${employeeDetail.name} — ${employeeDetailWeekLabel}</p>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:16px;">
+          <thead>
+            <tr style="text-align:left;color:#767468;font-size:11px;text-transform:uppercase;">
+              <th style="padding:6px 10px;">Day</th>
+              <th style="padding:6px 10px;">Sales</th>
+              <th style="padding:6px 10px;text-align:right;">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml || '<tr><td colspan="3" style="padding:10px;color:#767468;">No sales this week</td></tr>'}
+          </tbody>
+        </table>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:20px;background:#FAFAF7;border:1px solid #E6E2D6;border-radius:8px;">
+          <tbody>
+            <tr>
+              <td style="padding:8px 10px;color:#767468;">Commission (${employeeDetailRate}%)</td>
+              <td style="padding:8px 10px;text-align:right;" colspan="2">${money(employeeDetailTotalSales * (employeeDetailRate / 100))}</td>
+            </tr>
+            ${refundRowsHtml}
+            <tr>
+              <td style="padding:8px 10px;color:#767468;">Base pay</td>
+              <td style="padding:8px 10px;text-align:right;" colspan="2">${employeeDetailHasBasePay ? money(employeeDetailBasePay) : "—"}</td>
+            </tr>
+            ${employeeDetailSpiff > 0 ? `<tr><td style="padding:8px 10px;color:#8A5A1E;">Spiff</td><td style="padding:8px 10px;text-align:right;" colspan="2">${money(employeeDetailSpiff)}</td></tr>` : ""}
+            <tr style="font-weight:700;border-top:1px solid #E6E2D6;">
+              <td style="padding:10px;">Total pay</td>
+              <td style="padding:10px;text-align:right;" colspan="2">${money(employeeDetailTotalPay)}</td>
+            </tr>
+          </tbody>
+        </table>
+        <p style="color:#767468;font-size:11px;margin-top:20px;">This is an automated payslip from ${settings.companyName}'s CRM.</p>
+      </div>`;
+    try {
+      const res = await fetch("/api/payslip/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: employeeDetail.email,
+          employeeName: employeeDetail.name,
+          subject: `Your payslip — ${employeeDetailWeekLabel}`,
+          html,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPayslipStatus({ error: data.error || "Failed to send" });
+        return;
+      }
+      setPayslipStatus("sent");
+      setTimeout(() => setPayslipStatus(null), 4000);
+    } catch (e) {
+      setPayslipStatus({ error: "Network error — check your connection and try again" });
+    }
+  }
+
   function saveContact(form) {
     if (form.id) {
       updateContacts(contacts.map((c) => (c.id === form.id ? { ...c, ...form } : c)));
@@ -3894,6 +3980,22 @@ export default function TeamCRM() {
                 <div style={S.modalTitle}>{employeeDetail.name}</div>
               </div>
               <RoleBadge role={employeeDetail.role} size="sm" />
+              {payslipStatus === "sent" && <span style={S.payslipSentNote}>Sent ✓</span>}
+              {payslipStatus && typeof payslipStatus === "object" && (
+                <span style={S.payslipErrorNote}>{payslipStatus.error}</span>
+              )}
+              <button
+                type="button"
+                onClick={sendPayslip}
+                disabled={!employeeDetail.email || payslipStatus === "sending"}
+                style={{
+                  ...S.minimizeBtn,
+                  ...(!employeeDetail.email ? { opacity: 0.5, cursor: "not-allowed" } : {}),
+                }}
+                title={employeeDetail.email ? `Email payslip to ${employeeDetail.email}` : "No email on file for this employee"}
+              >
+                <Mail size={14} /> {payslipStatus === "sending" ? "Sending…" : "Send Payslip"}
+              </button>
               <button
                 type="button"
                 onClick={() => setEmployeeDetailMinimized(true)}
@@ -5833,6 +5935,17 @@ const S = {
     padding: "24px 28px",
   },
   modalTitle: { fontFamily: T.display, fontSize: 17, fontWeight: 600, color: T.ink, marginBottom: 14 },
+  payslipSentNote: {
+    fontSize: 11.5,
+    fontWeight: 600,
+    color: T.pineDark,
+  },
+  payslipErrorNote: {
+    fontSize: 11,
+    fontWeight: 500,
+    color: "#A32D2D",
+    maxWidth: 220,
+  },
   minimizeBtn: {
     display: "flex",
     alignItems: "center",
