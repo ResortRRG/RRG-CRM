@@ -602,7 +602,9 @@ export default function TeamCRM() {
   const [rrgWeekOffset, setRrgWeekOffset] = useState(0);
   const [payrollWeekOffset, setPayrollWeekOffset] = useState(0);
   const [reportsSubTab, setReportsSubTab] = useState("snapshot"); // 'snapshot' | 'pnl'
+  const [pnlMode, setPnlMode] = useState("month"); // 'month' | 'week'
   const [pnlMonthOffset, setPnlMonthOffset] = useState(0);
+  const [pnlWeekOffset, setPnlWeekOffset] = useState(0);
   const [expenses, setExpenses] = useState({}); // { "YYYY-MM": { CategoryName: amount } }
   const [reportsFilterMode, setReportsFilterMode] = useState("month"); // 'day' | 'week' | 'month' | 'year' | 'custom' | 'all'
   const [reportsSelectedDate, setReportsSelectedDate] = useState(todayDateStr());
@@ -1052,6 +1054,47 @@ export default function TeamCRM() {
     return total;
   }
 
+  // Same formula as Payroll's "Total owed this week" footer, but callable for
+  // any arbitrary week — used to auto-total payroll cost into Profit & Loss.
+  function computeWeeklyPayrollTotal(weekStart, weekEnd) {
+    return activeEmployees.reduce((sum, emp) => {
+      const override = getPayrollOverride(emp.id, weekStart);
+      if (override !== null) return sum + override;
+      const empSales = salesForEmployee(emp.id).filter((s) => isSaleInRange(s, weekStart, weekEnd));
+      const total = empSales.reduce((s, r) => s + saleCredit(r, emp.id), 0);
+      const rate = Number(emp.commissionRate) || 0;
+      const refundedCredit = refundedCreditForEmployee(emp.id, weekStart, weekEnd);
+      const refundOverrideVal = getRefundDeductionOverride(emp.id, weekStart);
+      const refundDed = refundOverrideVal !== null ? refundOverrideVal : refundedCredit * (rate / 100);
+      const commission = total * (rate / 100) - refundDed;
+      const hasBasePay = emp.basePay !== "" && emp.basePay !== undefined && emp.basePay !== null;
+      const basePay = hasBasePay ? Number(emp.basePay) || 0 : 0;
+      const spiffTotal = spiffTotalInWeek(emp.id, weekStart);
+      return sum + Math.max(commission + basePay + spiffTotal, effectiveMinGuarantee(emp.id, weekStart));
+    }, 0);
+  }
+  // Sums payroll across every Mon–Sat week whose Monday falls within the
+  // given date range — used for the P&L's monthly payroll total, so each
+  // week is only counted once even if it straddles two calendar months.
+  function payrollTotalForRange(rangeStart, rangeEnd) {
+    let total = 0;
+    let cursor = new Date(rangeStart);
+    const day = cursor.getDay();
+    const diffToMonday = (day + 6) % 7;
+    cursor.setDate(cursor.getDate() - diffToMonday);
+    cursor.setHours(0, 0, 0, 0);
+    while (cursor <= rangeEnd) {
+      if (cursor >= rangeStart) {
+        const weekEnd = new Date(cursor);
+        weekEnd.setDate(weekEnd.getDate() + 5);
+        weekEnd.setHours(23, 59, 59, 999);
+        total += computeWeeklyPayrollTotal(new Date(cursor), weekEnd);
+      }
+      cursor.setDate(cursor.getDate() + 7);
+    }
+    return total;
+  }
+
   // ---- derived ----
   const q = search.trim().toLowerCase();
   const vName = viewer.name.trim().toLowerCase();
@@ -1271,16 +1314,37 @@ export default function TeamCRM() {
 
   // ---- Profit & Loss ----
   const pnlMonth = getMonthRange(pnlMonthOffset);
-  const pnlMonthKey = `${pnlMonth.start.getFullYear()}-${String(pnlMonth.start.getMonth() + 1).padStart(2, "0")}`;
-  const pnlMonthLabel = formatMonthLabel(pnlMonth.start);
+  const pnlWeek = getWeekRange(pnlWeekOffset);
+  const pnlPeriodStart = pnlMode === "week" ? pnlWeek.start : pnlMonth.start;
+  const pnlPeriodEnd = pnlMode === "week" ? pnlWeek.end : pnlMonth.end;
+  const pnlPeriodLabel = pnlMode === "week" ? formatWeekLabel(pnlWeek.start, pnlWeek.end) : formatMonthLabel(pnlMonth.start);
+  // Expenses are always entered per calendar month (the source of truth).
+  // In weekly view, that same monthly figure is prorated down to a per-week
+  // share instead of asking anyone to re-enter numbers weekly.
+  const pnlExpenseSourceMonthDate = pnlMode === "week" ? pnlWeek.start : pnlMonth.start;
+  const pnlExpenseSourceMonthKey = `${pnlExpenseSourceMonthDate.getFullYear()}-${String(pnlExpenseSourceMonthDate.getMonth() + 1).padStart(2, "0")}`;
+  const pnlExpenseSourceMonthLabel = formatMonthLabel(pnlExpenseSourceMonthDate);
+  const pnlDaysInSourceMonth = new Date(
+    pnlExpenseSourceMonthDate.getFullYear(),
+    pnlExpenseSourceMonthDate.getMonth() + 1,
+    0
+  ).getDate();
+  const pnlWeeksInSourceMonth = pnlDaysInSourceMonth / 7;
+  const pnlMonthKey = pnlExpenseSourceMonthKey;
+  const pnlMonthLabel = pnlExpenseSourceMonthLabel;
   const pnlRevenue = sales
-    .filter((s) => s.status === "Approved" && isSaleInRange(s, pnlMonth.start, pnlMonth.end))
+    .filter((s) => s.status === "Approved" && isSaleInRange(s, pnlPeriodStart, pnlPeriodEnd))
     .reduce((sum, s) => sum + (Number(s.totalPrice) || 0), 0);
   const pnlExpensesForMonth = expenses[pnlMonthKey] || {};
-  const pnlExpenseRows = settings.expenseCategories.map((cat) => ({
-    category: cat,
-    amount: Number(pnlExpensesForMonth[cat]) || 0,
-  }));
+  const pnlAutoPayrollTotal = payrollTotalForRange(pnlPeriodStart, pnlPeriodEnd);
+  const pnlExpenseRows = settings.expenseCategories.map((cat) => {
+    if (cat === "Payroll") {
+      return { category: cat, amount: pnlAutoPayrollTotal, auto: true };
+    }
+    const monthlyAmount = Number(pnlExpensesForMonth[cat]) || 0;
+    const amount = pnlMode === "week" ? monthlyAmount / pnlWeeksInSourceMonth : monthlyAmount;
+    return { category: cat, amount, auto: false };
+  });
   const pnlTotalExpenses = pnlExpenseRows.reduce((sum, r) => sum + r.amount, 0);
   const pnlNetProfit = pnlRevenue - pnlTotalExpenses;
   const pnlProfitMargin = pnlRevenue > 0 ? (pnlNetProfit / pnlRevenue) * 100 : 0;
@@ -3301,24 +3365,57 @@ export default function TeamCRM() {
                 <div style={S.weekNavRow}>
                   <div style={S.dashboardSectionLabel}>Profit & Loss</div>
                   <div style={S.weekNav}>
-                    <button onClick={() => setPnlMonthOffset((m) => m - 1)} style={S.weekNavBtn} aria-label="Previous month">
-                      ‹
-                    </button>
-                    <button
-                      onClick={() => setPnlMonthOffset(0)}
-                      style={{ ...S.weekNavLabel, ...(pnlMonthOffset === 0 ? S.weekNavLabelActive : {}) }}
-                    >
-                      {pnlMonthLabel}
-                      {pnlMonthOffset === 0 && <span style={S.weekNavThisWeek}>Current</span>}
-                    </button>
-                    <button onClick={() => setPnlMonthOffset((m) => m + 1)} style={S.weekNavBtn} aria-label="Next month">
-                      ›
-                    </button>
+                    <div style={{ position: "relative" }}>
+                      <select
+                        value={pnlMode}
+                        onChange={(e) => setPnlMode(e.target.value)}
+                        style={{ ...S.select, width: 110, paddingRight: 28 }}
+                      >
+                        <option value="month">Monthly</option>
+                        <option value="week">Weekly</option>
+                      </select>
+                      <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+                    </div>
+                    {pnlMode === "week" ? (
+                      <>
+                        <button onClick={() => setPnlWeekOffset((w) => w - 1)} style={S.weekNavBtn} aria-label="Previous week">
+                          ‹
+                        </button>
+                        <button
+                          onClick={() => setPnlWeekOffset(0)}
+                          style={{ ...S.weekNavLabel, ...(pnlWeekOffset === 0 ? S.weekNavLabelActive : {}) }}
+                        >
+                          {pnlPeriodLabel}
+                          {pnlWeekOffset === 0 && <span style={S.weekNavThisWeek}>Current</span>}
+                        </button>
+                        <button onClick={() => setPnlWeekOffset((w) => w + 1)} style={S.weekNavBtn} aria-label="Next week">
+                          ›
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={() => setPnlMonthOffset((m) => m - 1)} style={S.weekNavBtn} aria-label="Previous month">
+                          ‹
+                        </button>
+                        <button
+                          onClick={() => setPnlMonthOffset(0)}
+                          style={{ ...S.weekNavLabel, ...(pnlMonthOffset === 0 ? S.weekNavLabelActive : {}) }}
+                        >
+                          {pnlPeriodLabel}
+                          {pnlMonthOffset === 0 && <span style={S.weekNavThisWeek}>Current</span>}
+                        </button>
+                        <button onClick={() => setPnlMonthOffset((m) => m + 1)} style={S.weekNavBtn} aria-label="Next month">
+                          ›
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
                 <div style={S.hint}>
-                  Revenue is approved sales for {pnlMonthLabel}. Enter your actual expenses for the month below to see net
-                  profit and profit margin. These figures are entered manually since they come from your books, not the CRM.
+                  Revenue is approved sales for {pnlPeriodLabel}. Payroll is calculated automatically from actual payroll
+                  data for this period. {pnlMode === "week"
+                    ? `Other expenses are entered monthly (${pnlExpenseSourceMonthLabel}) and shown here as a 1/${pnlWeeksInSourceMonth.toFixed(1)} weekly share — edit them from Monthly view.`
+                    : "Enter your actual monthly expenses below — these come from your books, not the CRM."}
                 </div>
 
                 <div style={S.sourceGrid}>
@@ -3356,15 +3453,24 @@ export default function TeamCRM() {
                     <tbody>
                       {pnlExpenseRows.map((row) => (
                         <tr key={row.category} style={S.tr}>
-                          <td style={{ ...S.td, fontWeight: 500 }}>{row.category}</td>
+                          <td style={{ ...S.td, fontWeight: 500 }}>
+                            {row.category}
+                            {row.auto && <span style={S.pnlAutoBadge}>Auto</span>}
+                          </td>
                           <td style={S.td}>
-                            <input
-                              type="number"
-                              value={pnlExpensesForMonth[row.category] ?? ""}
-                              onChange={(e) => updatePnlExpense(row.category, e.target.value)}
-                              placeholder="0"
-                              style={{ ...S.input, fontFamily: T.mono, maxWidth: 140 }}
-                            />
+                            {row.auto ? (
+                              <span style={{ fontFamily: T.mono, fontSize: 13, color: T.ink }}>{money(row.amount)}</span>
+                            ) : pnlMode === "week" ? (
+                              <span style={{ fontFamily: T.mono, fontSize: 13, color: T.textMuted }}>{money(row.amount)}</span>
+                            ) : (
+                              <input
+                                type="number"
+                                value={pnlExpensesForMonth[row.category] ?? ""}
+                                onChange={(e) => updatePnlExpense(row.category, e.target.value)}
+                                placeholder="0"
+                                style={{ ...S.input, fontFamily: T.mono, maxWidth: 140 }}
+                              />
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -4973,6 +5079,17 @@ const S = {
     background: T.pineDark,
     color: "#fff",
     borderColor: T.pineDark,
+  },
+  pnlAutoBadge: {
+    marginLeft: 8,
+    fontSize: 9.5,
+    fontWeight: 600,
+    color: T.pineDark,
+    background: "#EAF3EC",
+    padding: "1px 6px",
+    borderRadius: 10,
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
   },
   entryScreenWrap: {
     maxWidth: 360,
