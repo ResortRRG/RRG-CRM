@@ -1494,13 +1494,24 @@ export default function TeamCRM() {
   // choice, since different employees involved may want different timing.
   function refundTargetWeekStart(sale, roleId) {
     if (!sale.refundedAt) return null;
+    const choice =
+      (sale.refundWeekChoices && sale.refundWeekChoices[roleId]) || sale.refundWeekChoice || "next";
+    // A choice that isn't one of the three fixed options is a specific
+    // "YYYY-MM-DD" date someone picked — use the Mon–Sat week containing it.
+    if (choice !== "previous" && choice !== "current" && choice !== "next") {
+      const [y, m, d] = choice.split("-").map(Number);
+      const picked = new Date(y, m - 1, d);
+      const pickedDay = picked.getDay();
+      const pickedDiffToMonday = (pickedDay + 6) % 7;
+      const pickedMonday = new Date(y, m - 1, d - pickedDiffToMonday);
+      pickedMonday.setHours(0, 0, 0, 0);
+      return pickedMonday;
+    }
     const d = new Date(sale.refundedAt);
     const day = d.getDay();
     const diffToMonday = (day + 6) % 7;
     const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - diffToMonday);
     monday.setHours(0, 0, 0, 0);
-    const choice =
-      (sale.refundWeekChoices && sale.refundWeekChoices[roleId]) || sale.refundWeekChoice || "next";
     if (choice === "next") monday.setDate(monday.getDate() + 7);
     else if (choice === "previous") monday.setDate(monday.getDate() - 7);
     return monday;
@@ -4113,6 +4124,8 @@ export default function TeamCRM() {
               {REFUND_TARGET_OPTIONS.map((opt) => {
                 const empId = employeeIdForRole(confirmRefund, opt.id);
                 const emp = empId ? employeeById[empId] : null;
+                const choice = refundWeekChoices[opt.id];
+                const isCustom = !["previous", "current", "next"].includes(choice);
                 return (
                   <div key={opt.id} style={S.refundRoleBlock}>
                     <div style={S.refundRoleBlockLabel}>{emp ? `${opt.label} — ${emp.name}` : `${opt.label} — unassigned`}</div>
@@ -4135,18 +4148,33 @@ export default function TeamCRM() {
                       )}
                       <div style={{ position: "relative", flex: 1 }}>
                         <select
-                          value={refundWeekChoices[opt.id]}
-                          onChange={(e) => setRefundWeekChoices((c) => ({ ...c, [opt.id]: e.target.value }))}
+                          value={isCustom ? "custom" : choice}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setRefundWeekChoices((c) => ({
+                              ...c,
+                              [opt.id]: v === "custom" ? todayDateStr() : v,
+                            }));
+                          }}
                           disabled={!emp}
                           style={{ ...S.select, ...(emp ? {} : { background: T.border, cursor: "not-allowed", color: T.textMuted }) }}
                         >
                           <option value="previous">Previous week's check</option>
                           <option value="current">This week's check</option>
                           <option value="next">Next week's check</option>
+                          <option value="custom">Custom date…</option>
                         </select>
                         <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
                       </div>
                     </div>
+                    {isCustom && emp && (
+                      <input
+                        type="date"
+                        value={choice}
+                        onChange={(e) => e.target.value && setRefundWeekChoices((c) => ({ ...c, [opt.id]: e.target.value }))}
+                        style={{ ...S.customRangeInput, marginTop: 8, width: "100%" }}
+                      />
+                    )}
                   </div>
                 );
               })}
