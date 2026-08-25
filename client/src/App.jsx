@@ -620,6 +620,7 @@ export default function TeamCRM() {
   const [backupStatus, setBackupStatus] = useState(null); // null | 'restored' | { error }
   const [confirmRestoreBackup, setConfirmRestoreBackup] = useState(null); // parsed backup object pending confirmation, or null
   const [confirmImportLeads, setConfirmImportLeads] = useState(null); // parsed import object pending confirmation, or null
+  const [confirmMergeEmployees, setConfirmMergeEmployees] = useState(null); // { merges: [...] } pending confirmation, or null
   useEffect(() => {
     if (employeeDetailId) {
       setEmployeeDetailMinimized(false);
@@ -1873,6 +1874,57 @@ export default function TeamCRM() {
       console.error("Import failed:", err);
       setConfirmImportLeads(null);
       setBackupStatus({ error: "Import failed: " + (err.message || "unknown error") + " — nothing was changed." });
+    }
+  }
+
+  // Merges historical placeholder employees (e.g. "Cotey", created during a
+  // leads import) into their real, full-name employee record. Every sale
+  // crediting the placeholder gets reassigned to the real employee, and the
+  // placeholder record is removed. Matching is by exact name (case-insensitive)
+  // on both sides — if either isn't found, that specific pair is skipped and
+  // reported, so nothing gets silently mismatched.
+  async function mergeEmployees(mergePairs) {
+    try {
+      const notFound = [];
+      let nextEmployees = [...employees];
+      const idRedirect = {}; // placeholder employee id -> real employee id
+      mergePairs.forEach(({ from, to }) => {
+        const fromEmp = nextEmployees.find((e) => (e.name || "").trim().toLowerCase() === from.trim().toLowerCase());
+        const toEmp = nextEmployees.find((e) => (e.name || "").trim().toLowerCase() === to.trim().toLowerCase());
+        if (!fromEmp) {
+          notFound.push(`"${from}" (placeholder not found)`);
+          return;
+        }
+        if (!toEmp) {
+          notFound.push(`"${to}" (real employee not found)`);
+          return;
+        }
+        if (fromEmp.id === toEmp.id) return; // already the same record
+        idRedirect[fromEmp.id] = toEmp.id;
+      });
+      const placeholderIds = new Set(Object.keys(idRedirect));
+      nextEmployees = nextEmployees.filter((e) => !placeholderIds.has(e.id));
+      const nextSales = sales.map((s) => ({
+        ...s,
+        openerId: idRedirect[s.openerId] || s.openerId,
+        closerId: idRedirect[s.closerId] || s.closerId,
+        verificationId: idRedirect[s.verificationId] || s.verificationId,
+      }));
+      setEmployees(nextEmployees);
+      setSales(nextSales);
+      await window.storage.set("crm:sales", JSON.stringify(nextSales), true);
+      await window.storage.set("crm:employees", JSON.stringify(nextEmployees), true);
+      setConfirmMergeEmployees(null);
+      if (notFound.length > 0) {
+        setBackupStatus({ error: "Some merges couldn't be matched and were skipped: " + notFound.join(", ") });
+      } else {
+        setBackupStatus("restored");
+      }
+      setTimeout(() => window.location.reload(), notFound.length > 0 ? 4000 : 500);
+    } catch (err) {
+      console.error("Merge failed:", err);
+      setConfirmMergeEmployees(null);
+      setBackupStatus({ error: "Merge failed: " + (err.message || "unknown error") + " — nothing was changed." });
     }
   }
 
@@ -4033,6 +4085,22 @@ export default function TeamCRM() {
                 <Upload size={14} /> Import historical leads
                 <input type="file" accept=".json" onChange={handleImportFileSelected} style={{ display: "none" }} />
               </label>
+              <button
+                onClick={() =>
+                  setConfirmMergeEmployees([
+                    { from: "Cotey", to: "Cotey Kewley" },
+                    { from: "Nick", to: "Nicholas Pelloni" },
+                    { from: "Allan", to: "Allan Lund" },
+                    { from: "Cheyenne", to: "Cheyenne Woodring" },
+                    { from: "Tina", to: "Cristina Rossi" },
+                    { from: "Cristina", to: "Cristina Rossi" },
+                    { from: "Leigha", to: "Kasha Mosley" },
+                  ])
+                }
+                style={S.ghostBtn}
+              >
+                <Users size={14} /> Merge duplicate employees
+              </button>
             </div>
             {backupStatus && typeof backupStatus === "object" && (
               <div style={S.payslipErrorNote}>{backupStatus.error}</div>
@@ -4085,6 +4153,48 @@ export default function TeamCRM() {
             </button>
             <button style={S.primaryBtn} onClick={() => importLeadsData(confirmImportLeads)}>
               Import
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Confirm merge employees */}
+      {confirmMergeEmployees && (
+        <Modal onClose={() => setConfirmMergeEmployees(null)} narrow>
+          <div style={{ fontFamily: T.display, fontSize: 17, fontWeight: 500, color: T.ink, marginBottom: 6 }}>
+            Merge duplicate employee records?
+          </div>
+          <div style={{ fontSize: 12.5, color: T.textMuted, marginBottom: 12, lineHeight: 1.5 }}>
+            Every sale currently credited to the placeholder name will be reassigned to the real employee, and the
+            placeholder record will be removed. This can't be undone.
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16 }}>
+            {confirmMergeEmployees.map((m, i) => (
+              <div
+                key={i}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  fontSize: 12.5,
+                  background: T.paper,
+                  border: `1px solid ${T.border}`,
+                  borderRadius: 7,
+                  padding: "6px 10px",
+                }}
+              >
+                <span style={{ color: T.textMuted }}>{m.from}</span>
+                <span style={{ color: T.borderStrong }}>→</span>
+                <span style={{ fontWeight: 600 }}>{m.to}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button style={S.ghostBtn} onClick={() => setConfirmMergeEmployees(null)}>
+              Cancel
+            </button>
+            <button style={S.primaryBtn} onClick={() => mergeEmployees(confirmMergeEmployees)}>
+              Merge
             </button>
           </div>
         </Modal>
