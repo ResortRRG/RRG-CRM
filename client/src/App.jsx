@@ -619,6 +619,7 @@ export default function TeamCRM() {
   const [payslipStatus, setPayslipStatus] = useState(null); // null | 'sending' | 'sent' | { error }
   const [backupStatus, setBackupStatus] = useState(null); // null | 'restored' | { error }
   const [confirmRestoreBackup, setConfirmRestoreBackup] = useState(null); // parsed backup object pending confirmation, or null
+  const [confirmImportLeads, setConfirmImportLeads] = useState(null); // parsed import object pending confirmation, or null
   useEffect(() => {
     if (employeeDetailId) {
       setEmployeeDetailMinimized(false);
@@ -1782,6 +1783,70 @@ export default function TeamCRM() {
     if (backup.refundDeductionOverrides) updateRefundDeductionOverrides(backup.refundDeductionOverrides);
     if (backup.expenses) updateExpenses(backup.expenses);
     setConfirmRestoreBackup(null);
+    setBackupStatus("restored");
+    setTimeout(() => window.location.reload(), 1500);
+  }
+
+  function handleImportFileSelected(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result);
+        if (!parsed || !Array.isArray(parsed.sales)) {
+          setBackupStatus({ error: "That doesn't look like a valid import file — expected a 'sales' list." });
+          return;
+        }
+        setBackupStatus(null);
+        setConfirmImportLeads(parsed);
+      } catch (err) {
+        setBackupStatus({ error: "Couldn't read that file — make sure it's a valid import file." });
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  // Adds historical records ON TOP of what's already here — existing sales
+  // and employees are untouched. Any employee referenced by name that
+  // doesn't already exist gets created (inactive, so they don't show up as
+  // current team members, but their sales history stays attributed to them).
+  function importLeadsData(importData) {
+    const idMap = {};
+    let nextEmployees = [...employees];
+    (importData.employees || []).forEach((imp) => {
+      const existing = nextEmployees.find((e) => e.name.trim().toLowerCase() === imp.name.trim().toLowerCase());
+      if (existing) {
+        idMap[imp.tempId] = existing.id;
+      } else {
+        const newId = uid();
+        idMap[imp.tempId] = newId;
+        nextEmployees.push({
+          id: newId,
+          name: imp.name,
+          role: "rep",
+          commissionRate: "",
+          basePay: "",
+          active: false,
+          notes: imp.notes || "Imported from historical data",
+        });
+      }
+    });
+    const nextSales = [
+      ...sales,
+      ...importData.sales.map((s) => ({
+        ...blankSale(),
+        ...s,
+        id: uid(),
+        openerId: idMap[s.openerId] || s.openerId || "",
+        closerId: idMap[s.closerId] || s.closerId || "",
+        verificationId: idMap[s.verificationId] || s.verificationId || "",
+      })),
+    ];
+    updateEmployees(nextEmployees);
+    updateSales(nextSales);
+    setConfirmImportLeads(null);
     setBackupStatus("restored");
     setTimeout(() => window.location.reload(), 1500);
   }
@@ -3939,12 +4004,16 @@ export default function TeamCRM() {
                 <Upload size={14} /> Restore from backup
                 <input type="file" accept=".json" onChange={handleBackupFileSelected} style={{ display: "none" }} />
               </label>
+              <label style={{ ...S.ghostBtn, display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                <Upload size={14} /> Import historical leads
+                <input type="file" accept=".json" onChange={handleImportFileSelected} style={{ display: "none" }} />
+              </label>
             </div>
             {backupStatus && typeof backupStatus === "object" && (
               <div style={S.payslipErrorNote}>{backupStatus.error}</div>
             )}
             {backupStatus === "restored" && (
-              <div style={S.payslipSentNote}>Restored ✓ — reloading…</div>
+              <div style={S.payslipSentNote}>Done ✓ — reloading…</div>
             )}
           </div>
         )}
@@ -3967,6 +4036,30 @@ export default function TeamCRM() {
             </button>
             <button style={S.dangerBtn} onClick={() => restoreBackup(confirmRestoreBackup)}>
               Restore backup
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Confirm import leads */}
+      {confirmImportLeads && (
+        <Modal onClose={() => setConfirmImportLeads(null)} narrow>
+          <div style={{ fontFamily: T.display, fontSize: 17, fontWeight: 500, color: T.ink, marginBottom: 6 }}>
+            Import {confirmImportLeads.sales.length} historical lead{confirmImportLeads.sales.length === 1 ? "" : "s"}?
+          </div>
+          <div style={{ fontSize: 12.5, color: T.textMuted, marginBottom: 16, lineHeight: 1.5 }}>
+            This adds {confirmImportLeads.sales.length} lead{confirmImportLeads.sales.length === 1 ? "" : "s"} on top of
+            what's already in the CRM — nothing existing gets changed or removed.
+            {confirmImportLeads.employees && confirmImportLeads.employees.length > 0
+              ? ` It'll also create ${confirmImportLeads.employees.length} inactive employee record${confirmImportLeads.employees.length === 1 ? "" : "s"} for names referenced in this data that don't already exist, so those historical sales stay properly attributed.`
+              : ""}
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button style={S.ghostBtn} onClick={() => setConfirmImportLeads(null)}>
+              Cancel
+            </button>
+            <button style={S.primaryBtn} onClick={() => importLeadsData(confirmImportLeads)}>
+              Import
             </button>
           </div>
         </Modal>
