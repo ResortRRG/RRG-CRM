@@ -22,6 +22,7 @@ import {
   Undo2,
   BarChart3,
   Download,
+  Upload,
   Settings,
   Tag,
   Eye,
@@ -616,6 +617,8 @@ export default function TeamCRM() {
   const [employeeDetailId, setEmployeeDetailId] = useState(null);
   const [employeeDetailMinimized, setEmployeeDetailMinimized] = useState(false);
   const [payslipStatus, setPayslipStatus] = useState(null); // null | 'sending' | 'sent' | { error }
+  const [backupStatus, setBackupStatus] = useState(null); // null | 'restored' | { error }
+  const [confirmRestoreBackup, setConfirmRestoreBackup] = useState(null); // parsed backup object pending confirmation, or null
   useEffect(() => {
     if (employeeDetailId) {
       setEmployeeDetailMinimized(false);
@@ -1675,6 +1678,68 @@ export default function TeamCRM() {
     } catch (e) {
       setPayslipStatus({ error: "Network error — check your connection and try again" });
     }
+  }
+
+  function downloadBackup() {
+    const backup = {
+      backedUpAt: new Date().toLocaleString("en-US"),
+      companyName: settings.companyName,
+      contacts,
+      sales,
+      employees,
+      payrollOverrides,
+      attendance,
+      settings,
+      spiffs,
+      refundDeductionOverrides,
+      expenses,
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const dateStr = todayDateStr();
+    a.href = url;
+    a.download = `rrg-crm-backup-${dateStr}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function handleBackupFileSelected(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = ""; // allow selecting the same file again later
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result);
+        if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.sales)) {
+          setBackupStatus({ error: "That doesn't look like a valid backup file." });
+          return;
+        }
+        setBackupStatus(null);
+        setConfirmRestoreBackup(parsed);
+      } catch (err) {
+        setBackupStatus({ error: "Couldn't read that file — make sure it's a backup downloaded from this CRM." });
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function restoreBackup(backup) {
+    if (backup.contacts) updateContacts(backup.contacts);
+    if (backup.sales) updateSales(backup.sales);
+    if (backup.employees) updateEmployees(backup.employees);
+    if (backup.payrollOverrides) updatePayrollOverrides(backup.payrollOverrides);
+    if (backup.attendance) updateAttendance(backup.attendance);
+    if (backup.settings) updateSettings(backup.settings);
+    if (backup.spiffs) updateSpiffs(backup.spiffs);
+    if (backup.refundDeductionOverrides) updateRefundDeductionOverrides(backup.refundDeductionOverrides);
+    if (backup.expenses) updateExpenses(backup.expenses);
+    setConfirmRestoreBackup(null);
+    setBackupStatus("restored");
+    setTimeout(() => window.location.reload(), 1500);
   }
 
   function saveContact(form) {
@@ -3804,9 +3869,53 @@ export default function TeamCRM() {
                 </div>
               </div>
             </div>
+
+            <div style={{ ...S.dashboardSectionLabel, marginTop: 28 }}>Backup & Restore</div>
+            <div style={S.hint}>
+              Download everything in this CRM — sales, employees, payroll history, attendance, settings, and more — as a
+              single file you can save somewhere safe. If anything ever goes wrong, restoring from that file brings
+              everything back exactly as it was when you downloaded it.
+            </div>
+            <div style={{ display: "flex", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
+              <button onClick={downloadBackup} style={S.primaryBtn}>
+                <Download size={14} /> Download backup
+              </button>
+              <label style={{ ...S.ghostBtn, display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                <Upload size={14} /> Restore from backup
+                <input type="file" accept=".json" onChange={handleBackupFileSelected} style={{ display: "none" }} />
+              </label>
+            </div>
+            {backupStatus && typeof backupStatus === "object" && (
+              <div style={S.payslipErrorNote}>{backupStatus.error}</div>
+            )}
+            {backupStatus === "restored" && (
+              <div style={S.payslipSentNote}>Restored ✓ — reloading…</div>
+            )}
           </div>
         )}
       </div>
+
+      {/* Confirm restore backup */}
+      {confirmRestoreBackup && (
+        <Modal onClose={() => setConfirmRestoreBackup(null)} narrow>
+          <div style={{ fontFamily: T.display, fontSize: 17, fontWeight: 500, color: T.ink, marginBottom: 6 }}>
+            Restore this backup?
+          </div>
+          <div style={{ fontSize: 12.5, color: T.textMuted, marginBottom: 16, lineHeight: 1.5 }}>
+            This replaces everything currently in the CRM — sales, employees, payroll history, attendance, settings, and
+            more — with what's in this backup file, dated {confirmRestoreBackup.backedUpAt || "unknown"}. This can't be
+            undone. Consider downloading a fresh backup of the current data first if you're not sure.
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button style={S.ghostBtn} onClick={() => setConfirmRestoreBackup(null)}>
+              Cancel
+            </button>
+            <button style={S.dangerBtn} onClick={() => restoreBackup(confirmRestoreBackup)}>
+              Restore backup
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {/* User modal */}
       {userModal && (
