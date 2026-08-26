@@ -612,6 +612,7 @@ export default function TeamCRM() {
   const [expenseTransactions, setExpenseTransactions] = useState([]); // [{ id, date, category, amount, notes }] — itemized entries
   const [expenseModal, setExpenseModal] = useState(null); // null | transaction object (always has an id, even before first save)
   const [expenseModalError, setExpenseModalError] = useState("");
+  const [confirmClearMonthExpenses, setConfirmClearMonthExpenses] = useState(null); // month key pending confirmation, or null
   const [reportsFilterMode, setReportsFilterMode] = useState("month"); // 'day' | 'week' | 'month' | 'year' | 'custom' | 'all'
   const [reportsSelectedDate, setReportsSelectedDate] = useState(todayDateStr());
   const [reportsCustomStart, setReportsCustomStart] = useState(shiftDateStr(todayDateStr(), -7));
@@ -1427,6 +1428,21 @@ export default function TeamCRM() {
       await window.storage.set("crm:expenseTransactions", JSON.stringify(next), true);
     } catch (err) {
       console.error("Expense delete failed:", err);
+    }
+  }
+  async function clearMonthExpenses(monthKey) {
+    const nextExpenses = { ...expenses };
+    delete nextExpenses[monthKey];
+    const nextTransactions = expenseTransactions.filter((t) => !t.date || t.date.slice(0, 7) !== monthKey);
+    setExpenses(nextExpenses);
+    setExpenseTransactions(nextTransactions);
+    try {
+      await window.storage.set("crm:expenses", JSON.stringify(nextExpenses), true);
+      await window.storage.set("crm:expenseTransactions", JSON.stringify(nextTransactions), true);
+      setConfirmClearMonthExpenses(null);
+    } catch (err) {
+      console.error("Clear month expenses failed:", err);
+      setBackupStatus({ error: "Couldn't clear that month's expenses: " + (err.message || "unknown error") });
     }
   }
   const reportsEmployeeRows = activeEmployees
@@ -3947,22 +3963,31 @@ export default function TeamCRM() {
 
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 20 }}>
                   <div style={S.dashboardSectionLabel}>Business expenses — {pnlMonthLabel}</div>
-                  <button
-                    onClick={() => {
-                      setExpenseModalError("");
-                      setExpenseModal({
-                        id: uid(),
-                        date: todayDateStr(),
-                        category: settings.expenseCategories.find((c) => c !== "Payroll") || "",
-                        amount: "",
-                        notes: "",
-                        isNew: true,
-                      });
-                    }}
-                    style={S.primaryBtn}
-                  >
-                    <Plus size={14} /> New Expense
-                  </button>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      onClick={() => setConfirmClearMonthExpenses(pnlMonthKey)}
+                      style={S.dangerGhostBtn}
+                      title={`Clear every expense entry for ${pnlMonthLabel}`}
+                    >
+                      <Trash2 size={13} /> Clear this month
+                    </button>
+                    <button
+                      onClick={() => {
+                        setExpenseModalError("");
+                        setExpenseModal({
+                          id: uid(),
+                          date: todayDateStr(),
+                          category: settings.expenseCategories.find((c) => c !== "Payroll") || "",
+                          amount: "",
+                          notes: "",
+                          isNew: true,
+                        });
+                      }}
+                      style={S.primaryBtn}
+                    >
+                      <Plus size={14} /> New Expense
+                    </button>
+                  </div>
                 </div>
                 <div className="crm-scroll" style={{ ...S.tableScroll, marginTop: 8 }}>
                   <table style={S.table}>
@@ -4493,6 +4518,27 @@ export default function TeamCRM() {
                 : null
             }
           />
+        </Modal>
+      )}
+
+      {/* Confirm clear month expenses */}
+      {confirmClearMonthExpenses && (
+        <Modal onClose={() => setConfirmClearMonthExpenses(null)} narrow>
+          <div style={{ fontFamily: T.display, fontSize: 17, fontWeight: 500, color: T.ink, marginBottom: 6 }}>
+            Clear this month's expenses?
+          </div>
+          <div style={{ fontSize: 12.5, color: T.textMuted, marginBottom: 16, lineHeight: 1.5 }}>
+            This removes every logged expense and every manually-typed amount for {pnlMonthLabel} — Payroll (which is
+            automatic) isn't affected, and no other month is touched. This can't be undone.
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button style={S.ghostBtn} onClick={() => setConfirmClearMonthExpenses(null)}>
+              Cancel
+            </button>
+            <button style={S.dangerBtn} onClick={() => clearMonthExpenses(confirmClearMonthExpenses)}>
+              Clear {pnlMonthLabel}
+            </button>
+          </div>
         </Modal>
       )}
 
