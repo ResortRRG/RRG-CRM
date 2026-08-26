@@ -1137,7 +1137,8 @@ export default function TeamCRM() {
       const hasBasePay = emp.basePay !== "" && emp.basePay !== undefined && emp.basePay !== null;
       const basePay = hasBasePay ? Number(emp.basePay) || 0 : 0;
       const spiffTotal = spiffTotalInWeek(emp.id, weekStart);
-      return sum + Math.max(commission + basePay + spiffTotal, effectiveMinGuarantee(emp.id, weekStart));
+      const guaranteedBase = Math.max(commission + basePay, effectiveMinGuarantee(emp.id, weekStart));
+      return sum + guaranteedBase + spiffTotal;
     }, 0);
   }
   // Sums payroll across every Mon–Sat week whose Monday falls within the
@@ -1745,12 +1746,13 @@ export default function TeamCRM() {
     employeeDetail && employeeDetail.basePay !== "" && employeeDetail.basePay !== undefined && employeeDetail.basePay !== null;
   const employeeDetailBasePay = employeeDetailHasBasePay ? Number(employeeDetail.basePay) || 0 : 0;
   const employeeDetailSpiff = employeeDetail ? spiffTotalInWeek(employeeDetail.id, employeeDetailWeek.start) : 0;
-  const employeeDetailRawTotalPay = employeeDetailCommission + employeeDetailBasePay + employeeDetailSpiff;
+  const employeeDetailRawBasePay = employeeDetailCommission + employeeDetailBasePay;
   const employeeDetailMinGuarantee = employeeDetail
     ? effectiveMinGuarantee(employeeDetail.id, employeeDetailWeek.start)
     : settings.minWeeklyPay;
-  const employeeDetailTotalPay = Math.max(employeeDetailRawTotalPay, employeeDetailMinGuarantee);
-  const employeeDetailGuarantee = employeeDetailRawTotalPay < employeeDetailMinGuarantee;
+  const employeeDetailGuaranteedBase = Math.max(employeeDetailRawBasePay, employeeDetailMinGuarantee);
+  const employeeDetailTotalPay = employeeDetailGuaranteedBase + employeeDetailSpiff;
+  const employeeDetailGuarantee = employeeDetailRawBasePay < employeeDetailMinGuarantee;
   const employeeDetailAbsences = employeeDetail ? absentDaysInWeek(employeeDetail.id, employeeDetailWeek.start) : 0;
 
   // ---- actions ----
@@ -3519,10 +3521,11 @@ export default function TeamCRM() {
                       const basePay = hasBasePay ? Number(emp.basePay) || 0 : 0;
                       const spiffTotal = spiffTotalInWeek(emp.id, payrollWeek.start);
                       const spiffPaidUnpaid = spiffPaidAndUnpaidInWeek(emp.id, payrollWeek.start);
-                      const rawTotalPay = commissionOwed + basePay + spiffTotal;
+                      const rawBasePay = commissionOwed + basePay;
                       const empMinGuarantee = effectiveMinGuarantee(emp.id, payrollWeek.start);
-                      const computedTotalPay = Math.max(rawTotalPay, empMinGuarantee);
-                      const guaranteeApplied = rawTotalPay < empMinGuarantee;
+                      const guaranteedBase = Math.max(rawBasePay, empMinGuarantee);
+                      const computedTotalPay = guaranteedBase + spiffTotal;
+                      const guaranteeApplied = rawBasePay < empMinGuarantee;
                       const empAbsences = absentDaysInWeek(emp.id, payrollWeek.start);
                       const override = getPayrollOverride(emp.id, payrollWeek.start);
                       const totalPay = override !== null ? override : computedTotalPay;
@@ -3670,7 +3673,8 @@ export default function TeamCRM() {
                             const hasBasePay = emp.basePay !== "" && emp.basePay !== undefined && emp.basePay !== null;
                             const basePay = hasBasePay ? Number(emp.basePay) || 0 : 0;
                             const spiffTotal = spiffTotalInWeek(emp.id, payrollWeek.start);
-                            return sum + Math.max(commission + basePay + spiffTotal, effectiveMinGuarantee(emp.id, payrollWeek.start));
+                            const guaranteedBase = Math.max(commission + basePay, effectiveMinGuarantee(emp.id, payrollWeek.start));
+                            return sum + guaranteedBase + spiffTotal;
                           }, 0)
                         )}
                       </td>
