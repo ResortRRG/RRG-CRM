@@ -2615,7 +2615,7 @@ export default function TeamCRM() {
                   (s.address || "").toLowerCase().includes(q)
                 );
               })
-              .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+              .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
             return (
           <div style={S.salesWrap}>
                 <div style={S.contactsToolbar}>
