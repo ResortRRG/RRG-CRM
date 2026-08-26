@@ -1104,6 +1104,22 @@ export default function TeamCRM() {
     }
     return total;
   }
+  // Splits a week's spiffs into paid (already handed over, won't hit the
+  // check) vs unpaid (still owed, will be added to the check) — used so
+  // Payroll can show both, color-coded, instead of just one combined number.
+  function spiffPaidAndUnpaidInWeek(employeeId, weekStart) {
+    let paid = 0;
+    let unpaid = 0;
+    for (let i = 0; i < 6; i++) {
+      const date = new Date(weekStart);
+      date.setDate(weekStart.getDate() + i);
+      const entry = getSpiffEntry(employeeId, date);
+      const amt = Number(entry.amount) || 0;
+      if (entry.paid) paid += amt;
+      else unpaid += amt;
+    }
+    return { paid, unpaid };
+  }
 
   // Same formula as Payroll's "Total owed this week" footer, but callable for
   // any arbitrary week — used to auto-total payroll cost into Profit & Loss.
@@ -3502,6 +3518,7 @@ export default function TeamCRM() {
                       const hasBasePay = emp.basePay !== "" && emp.basePay !== undefined && emp.basePay !== null;
                       const basePay = hasBasePay ? Number(emp.basePay) || 0 : 0;
                       const spiffTotal = spiffTotalInWeek(emp.id, payrollWeek.start);
+                      const spiffPaidUnpaid = spiffPaidAndUnpaidInWeek(emp.id, payrollWeek.start);
                       const rawTotalPay = commissionOwed + basePay + spiffTotal;
                       const empMinGuarantee = effectiveMinGuarantee(emp.id, payrollWeek.start);
                       const computedTotalPay = Math.max(rawTotalPay, empMinGuarantee);
@@ -3576,8 +3593,23 @@ export default function TeamCRM() {
                           <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 500 }}>
                             {hasBasePay ? money(basePay) : "—"}
                           </td>
-                          <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 500, color: spiffTotal > 0 ? "#8A5A1E" : T.borderStrong }}>
-                            {spiffTotal > 0 ? money(spiffTotal) : "—"}
+                          <td style={{ ...S.td, fontFamily: T.mono, fontSize: 13, fontWeight: 600 }}>
+                            {spiffPaidUnpaid.paid === 0 && spiffPaidUnpaid.unpaid === 0 ? (
+                              <span style={{ color: T.borderStrong }}>—</span>
+                            ) : (
+                              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                                {spiffPaidUnpaid.unpaid > 0 && (
+                                  <span style={{ color: "#A32D2D" }} title="Not yet paid — will be added to this check">
+                                    {money(spiffPaidUnpaid.unpaid)}
+                                  </span>
+                                )}
+                                {spiffPaidUnpaid.paid > 0 && (
+                                  <span style={{ color: "#1F4536" }} title="Already paid same-day — won't be added to this check">
+                                    {money(spiffPaidUnpaid.paid)}
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </td>
                           <td style={{ ...S.td, whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
                             <div style={S.totalPayCell}>
