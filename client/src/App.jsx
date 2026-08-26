@@ -1187,6 +1187,7 @@ export default function TeamCRM() {
     };
   });
   const declinedSales = dashboardSales.filter((s) => s.status === "Declined");
+  const pendingSales = dashboardSales.filter((s) => s.status === "Pending");
   const chargebackSales = dashboardSales.filter((s) => s.refunded);
   const dashboardChartSegments = [
     ...salesBySource.map((row) => ({
@@ -2371,6 +2372,17 @@ export default function TeamCRM() {
                   <div style={S.sourceValue}>{money(row.total)}</div>
                 </div>
               ))}
+              <div style={S.sourceCard}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ ...S.leadBadge, background: "#F3E9DA", color: "#8A5A1E", fontSize: 16 }}>Pending</span>
+                  <span style={S.sourceCount}>
+                    {pendingSales.length} sale{pendingSales.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+                <div style={S.sourceValue}>
+                  {money(pendingSales.reduce((sum, r) => sum + (Number(r.totalPrice) || 0), 0))}
+                </div>
+              </div>
               <div style={S.sourceCard}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <span style={{ ...S.leadBadge, background: "#FCEBEB", color: "#A32D2D", fontSize: 16 }}>Declined</span>
