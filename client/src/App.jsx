@@ -5805,10 +5805,15 @@ function ExpenseFileButton({ expenseKey, disabled }) {
             </div>
           )}
           {error && <div style={{ fontSize: 11.5, color: "#A32D2D", marginBottom: 8 }}>{error}</div>}
-          <label style={{ ...S.ghostBtn, display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
-            <Upload size={14} /> {uploading ? "Uploading…" : "Add file"}
-            <input type="file" onChange={handleFileSelect} disabled={uploading} style={{ display: "none" }} />
-          </label>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <label style={{ ...S.ghostBtn, display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+              <Upload size={14} /> {uploading ? "Uploading…" : "Add file"}
+              <input type="file" onChange={handleFileSelect} disabled={uploading} style={{ display: "none" }} />
+            </label>
+            <button onClick={() => setOpen(false)} style={S.primaryBtn}>
+              Done
+            </button>
+          </div>
         </Modal>
       )}
     </div>
