@@ -23,6 +23,7 @@ import {
   BarChart3,
   Download,
   Upload,
+  Paperclip,
   Settings,
   Tag,
   Eye,
@@ -3902,19 +3903,22 @@ export default function TeamCRM() {
                             {row.auto && <span style={S.pnlAutoBadge}>Auto</span>}
                           </td>
                           <td style={S.td}>
-                            {row.auto ? (
-                              <span style={{ fontFamily: T.mono, fontSize: 13, color: T.ink }}>{money(row.amount)}</span>
-                            ) : pnlMode === "week" ? (
-                              <span style={{ fontFamily: T.mono, fontSize: 13, color: T.textMuted }}>{money(row.amount)}</span>
-                            ) : (
-                              <input
-                                type="number"
-                                value={pnlExpensesForMonth[row.category] ?? ""}
-                                onChange={(e) => updatePnlExpense(row.category, e.target.value)}
-                                placeholder="0"
-                                style={{ ...S.input, fontFamily: T.mono, maxWidth: 140 }}
-                              />
-                            )}
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              {row.auto ? (
+                                <span style={{ fontFamily: T.mono, fontSize: 13, color: T.ink }}>{money(row.amount)}</span>
+                              ) : pnlMode === "week" ? (
+                                <span style={{ fontFamily: T.mono, fontSize: 13, color: T.textMuted }}>{money(row.amount)}</span>
+                              ) : (
+                                <input
+                                  type="number"
+                                  value={pnlExpensesForMonth[row.category] ?? ""}
+                                  onChange={(e) => updatePnlExpense(row.category, e.target.value)}
+                                  placeholder="0"
+                                  style={{ ...S.input, fontFamily: T.mono, maxWidth: 140 }}
+                                />
+                              )}
+                              <ExpenseFileButton expenseKey={`${pnlMonthKey}_${row.category}`} disabled={row.auto} />
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -5682,6 +5686,131 @@ function SaleForm({ initial, employees, settings, onCancel, onMinimize, onSave, 
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Small paperclip button that opens a popover for attaching receipts/invoices
+// to a specific expense category + month. expenseKey should be something like
+// "2026-08_Rent" so files stay tied to the exact month and category.
+function ExpenseFileButton({ expenseKey, disabled }) {
+  const [open, setOpen] = useState(false);
+  const [files, setFiles] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function refreshFiles() {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/expenses/${encodeURIComponent(expenseKey)}/files`, { credentials: "include" });
+      const data = await res.json();
+      setFiles(data.files || []);
+    } catch (e) {
+      setError("Couldn't load files");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (open) refreshFiles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  async function handleFileSelect(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploading(true);
+    setError("");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`/api/expenses/${encodeURIComponent(expenseKey)}/files`, {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      await refreshFiles();
+    } catch (e) {
+      setError("Upload failed. Try again.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleDelete(fileId) {
+    try {
+      await fetch(`/api/expenses/${encodeURIComponent(expenseKey)}/files/${fileId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      setFiles((prev) => prev.filter((f) => f.id !== fileId));
+    } catch (e) {
+      setError("Couldn't delete that file");
+    }
+  }
+
+  return (
+    <div style={{ position: "relative", display: "inline-block" }}>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        disabled={disabled}
+        style={{ ...S.iconBtnGhost, ...(disabled ? { opacity: 0.4, cursor: "not-allowed" } : {}) }}
+        title="Attach a receipt or invoice"
+      >
+        <Paperclip size={14} color={T.textMuted} />
+      </button>
+      {open && (
+        <Modal onClose={() => setOpen(false)} narrow>
+          <div style={{ fontFamily: T.display, fontSize: 16, fontWeight: 500, color: T.ink, marginBottom: 10 }}>
+            Attachments
+          </div>
+          {loading ? (
+            <div style={{ fontSize: 12.5, color: T.textMuted }}>Loading…</div>
+          ) : files.length === 0 ? (
+            <div style={{ fontSize: 12.5, color: T.textMuted, marginBottom: 12 }}>No files attached yet.</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+              {files.map((f) => (
+                <div
+                  key={f.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    fontSize: 12.5,
+                    background: T.paper,
+                    border: `1px solid ${T.border}`,
+                    borderRadius: 7,
+                    padding: "6px 10px",
+                  }}
+                >
+                  <a
+                    href={`/api/expenses/${encodeURIComponent(expenseKey)}/files/${f.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ color: T.ink, flex: 1, textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                  >
+                    {f.filename}
+                  </a>
+                  <button onClick={() => handleDelete(f.id)} style={S.iconBtnGhost}>
+                    <Trash2 size={12} color={T.textMuted} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {error && <div style={{ fontSize: 11.5, color: "#A32D2D", marginBottom: 8 }}>{error}</div>}
+          <label style={{ ...S.ghostBtn, display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+            <Upload size={14} /> {uploading ? "Uploading…" : "Add file"}
+            <input type="file" onChange={handleFileSelect} disabled={uploading} style={{ display: "none" }} />
+          </label>
+        </Modal>
+      )}
     </div>
   );
 }

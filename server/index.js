@@ -6,6 +6,7 @@ import { initDb } from "./db.js";
 import { registerAuthRoutes } from "./auth.js";
 import { registerStorageRoutes } from "./storageRoutes.js";
 import { registerEmployeeFileRoutes } from "./employeeFiles.js";
+import { registerExpenseFileRoutes } from "./expenseFiles.js";
 import { registerPayslipRoutes } from "./payslipRoutes.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -17,6 +18,7 @@ app.use(cookieParser());
 registerAuthRoutes(app);
 registerStorageRoutes(app);
 registerEmployeeFileRoutes(app);
+registerExpenseFileRoutes(app);
 registerPayslipRoutes(app);
 
 // Serve the built React app (client/dist) in production.

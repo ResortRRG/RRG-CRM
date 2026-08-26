@@ -41,3 +41,18 @@ CREATE TABLE IF NOT EXISTS employee_files (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_employee_files_employee_id ON employee_files(employee_id);
+
+-- Receipt/invoice attachments for Profit & Loss expense categories, keyed by
+-- an expense_key like "2026-08_Rent" (month + category). Same storage
+-- approach as employee_files — small team's worth of receipts fits fine
+-- directly in the database.
+CREATE TABLE IF NOT EXISTS expense_files (
+  id TEXT PRIMARY KEY,
+  expense_key TEXT NOT NULL,
+  filename TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  file_data BYTEA NOT NULL,
+  uploaded_by TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_expense_files_expense_key ON expense_files(expense_key);
