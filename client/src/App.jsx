@@ -610,7 +610,8 @@ export default function TeamCRM() {
   const [pnlWeekOffset, setPnlWeekOffset] = useState(0);
   const [expenses, setExpenses] = useState({}); // { "YYYY-MM": { CategoryName: amount } } — legacy single-number entry
   const [expenseTransactions, setExpenseTransactions] = useState([]); // [{ id, date, category, amount, notes }] — itemized entries
-  const [expenseModal, setExpenseModal] = useState(null); // null | 'new' | transaction object
+  const [expenseModal, setExpenseModal] = useState(null); // null | transaction object (always has an id, even before first save)
+  const [expenseModalError, setExpenseModalError] = useState("");
   const [reportsFilterMode, setReportsFilterMode] = useState("month"); // 'day' | 'week' | 'month' | 'year' | 'custom' | 'all'
   const [reportsSelectedDate, setReportsSelectedDate] = useState(todayDateStr());
   const [reportsCustomStart, setReportsCustomStart] = useState(shiftDateStr(todayDateStr(), -7));
@@ -1403,16 +1404,30 @@ export default function TeamCRM() {
     };
     updateExpenses(next);
   }
-  function saveExpenseTransaction(form) {
-    if (form.id) {
-      updateExpenseTransactions(expenseTransactions.map((t) => (t.id === form.id ? { ...t, ...form } : t)));
-    } else {
-      updateExpenseTransactions([...expenseTransactions, { ...form, id: uid() }]);
+  async function saveExpenseTransaction(form) {
+    const exists = expenseTransactions.some((t) => t.id === form.id);
+    const { isNew, ...cleanForm } = form; // strip the isNew marker, it's only for the form's own bookkeeping
+    const next = exists
+      ? expenseTransactions.map((t) => (t.id === form.id ? { ...t, ...cleanForm } : t))
+      : [...expenseTransactions, cleanForm];
+    setExpenseTransactions(next);
+    try {
+      await window.storage.set("crm:expenseTransactions", JSON.stringify(next), true);
+      setExpenseModal(null);
+      setExpenseModalError("");
+    } catch (err) {
+      console.error("Expense save failed:", err);
+      setExpenseModalError("Couldn't save — " + (err.message || "unknown error") + ". Try again.");
     }
-    setExpenseModal(null);
   }
-  function deleteExpenseTransaction(id) {
-    updateExpenseTransactions(expenseTransactions.filter((t) => t.id !== id));
+  async function deleteExpenseTransaction(id) {
+    const next = expenseTransactions.filter((t) => t.id !== id);
+    setExpenseTransactions(next);
+    try {
+      await window.storage.set("crm:expenseTransactions", JSON.stringify(next), true);
+    } catch (err) {
+      console.error("Expense delete failed:", err);
+    }
   }
   const reportsEmployeeRows = activeEmployees
     .map((emp) => {
@@ -3933,14 +3948,17 @@ export default function TeamCRM() {
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 20 }}>
                   <div style={S.dashboardSectionLabel}>Business expenses — {pnlMonthLabel}</div>
                   <button
-                    onClick={() =>
+                    onClick={() => {
+                      setExpenseModalError("");
                       setExpenseModal({
+                        id: uid(),
                         date: todayDateStr(),
                         category: settings.expenseCategories.find((c) => c !== "Payroll") || "",
                         amount: "",
                         notes: "",
-                      })
-                    }
+                        isNew: true,
+                      });
+                    }}
                     style={S.primaryBtn}
                   >
                     <Plus size={14} /> New Expense
@@ -3963,22 +3981,7 @@ export default function TeamCRM() {
                               {row.auto && <span style={S.pnlAutoBadge}>Auto</span>}
                             </td>
                             <td style={S.td}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                {row.auto ? (
-                                  <span style={{ fontFamily: T.mono, fontSize: 13, color: T.ink }}>{money(row.amount)}</span>
-                                ) : pnlMode === "week" ? (
-                                  <span style={{ fontFamily: T.mono, fontSize: 13, color: T.textMuted }}>{money(row.amount)}</span>
-                                ) : (
-                                  <input
-                                    type="number"
-                                    value={pnlExpensesForMonth[row.category] ?? ""}
-                                    onChange={(e) => updatePnlExpense(row.category, e.target.value)}
-                                    placeholder="0"
-                                    style={{ ...S.input, fontFamily: T.mono, maxWidth: 140 }}
-                                  />
-                                )}
-                                <ExpenseFileButton expenseKey={`${pnlMonthKey}_${row.category}`} disabled={row.auto} />
-                              </div>
+                              <span style={{ fontFamily: T.mono, fontSize: 13, color: T.ink }}>{money(row.amount)}</span>
                             </td>
                           </tr>
                           {row.transactions.length > 0 && (
@@ -3999,7 +4002,15 @@ export default function TeamCRM() {
                                       <span style={{ flex: 1, color: T.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                         {t.notes}
                                       </span>
-                                      <button onClick={() => setExpenseModal(t)} style={S.iconBtnGhost} title="Edit">
+                                      <ExpenseFileButton expenseKey={`txn_${t.id}`} />
+                                      <button
+                                        onClick={() => {
+                                          setExpenseModalError("");
+                                          setExpenseModal(t);
+                                        }}
+                                        style={S.iconBtnGhost}
+                                        title="Edit"
+                                      >
                                         <Pencil size={11} color={T.textMuted} />
                                       </button>
                                       <button onClick={() => deleteExpenseTransaction(t.id)} style={S.iconBtnGhost} title="Delete">
@@ -4466,14 +4477,20 @@ export default function TeamCRM() {
 
       {/* Add/edit expense transaction */}
       {expenseModal && (
-        <Modal onClose={() => setExpenseModal(null)} narrow>
+        <Modal onClose={() => setExpenseModal(null)}>
           <ExpenseTransactionForm
             initial={expenseModal}
             categories={settings.expenseCategories.filter((c) => c !== "Payroll")}
+            error={expenseModalError}
             onCancel={() => setExpenseModal(null)}
             onSave={saveExpenseTransaction}
             onDelete={
-              expenseModal.id ? () => deleteExpenseTransaction(expenseModal.id) && setExpenseModal(null) : null
+              !expenseModal.isNew
+                ? async () => {
+                    await deleteExpenseTransaction(expenseModal.id);
+                    setExpenseModal(null);
+                  }
+                : null
             }
           />
         </Modal>
@@ -5009,7 +5026,7 @@ function Modal({ children, onClose, narrow, wide, disableBackdropClose, fullScre
   );
 }
 
-function ExpenseTransactionForm({ initial, categories, onCancel, onSave, onDelete }) {
+function ExpenseTransactionForm({ initial, categories, error: saveError, onCancel, onSave, onDelete }) {
   const [form, setForm] = useState(initial);
   const [error, setError] = useState("");
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -5027,12 +5044,16 @@ function ExpenseTransactionForm({ initial, categories, onCancel, onSave, onDelet
       setError("Choose a date first");
       return;
     }
+    setError("");
     onSave({ ...form, amount: Number(form.amount) });
   }
 
   return (
     <div>
-      <div style={S.modalTitle}>{form.id ? "Edit expense" : "New Expense"}</div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+        <div style={{ ...S.modalTitle, marginBottom: 0 }}>{form.isNew ? "New Expense" : "Edit expense"}</div>
+        <ExpenseFileButton expenseKey={`txn_${form.id}`} />
+      </div>
       <Field label="Date">
         <input type="date" value={form.date || ""} onChange={set("date")} style={S.input} />
       </Field>
@@ -5067,6 +5088,7 @@ function ExpenseTransactionForm({ initial, categories, onCancel, onSave, onDelet
         />
       </Field>
       {error && <div style={S.errorText}>{error}</div>}
+      {saveError && <div style={S.errorText}>{saveError}</div>}
       <div style={{ display: "flex", gap: 8, justifyContent: onDelete ? "space-between" : "flex-end", marginTop: 4 }}>
         {onDelete && (
           <button onClick={onDelete} style={S.dangerGhostBtn}>
@@ -5078,7 +5100,7 @@ function ExpenseTransactionForm({ initial, categories, onCancel, onSave, onDelet
             Cancel
           </button>
           <button onClick={submit} style={S.primaryBtn}>
-            {form.id ? "Save" : "New Expense"}
+            {form.isNew ? "New Expense" : "Save"}
           </button>
         </div>
       </div>
