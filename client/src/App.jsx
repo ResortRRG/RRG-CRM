@@ -1061,9 +1061,21 @@ export default function TeamCRM() {
   function spiffKey(employeeId, date) {
     return employeeId + "__" + date.toISOString().slice(0, 10);
   }
-  function getSpiff(employeeId, date) {
+  // Spiffs used to be stored as a plain number per employee/day. Now they can
+  // also carry a "paid" flag (paid same-day in cash, so it shouldn't also
+  // land on their check) — getSpiffEntry reads either shape transparently.
+  function getSpiffEntry(employeeId, date) {
     const key = spiffKey(employeeId, date);
-    return spiffs[key] !== undefined ? spiffs[key] : "";
+    const raw = spiffs[key];
+    if (raw === undefined) return { amount: "", paid: false };
+    if (typeof raw === "number" || typeof raw === "string") return { amount: raw, paid: false };
+    return { amount: raw.amount ?? "", paid: !!raw.paid };
+  }
+  function getSpiff(employeeId, date) {
+    return getSpiffEntry(employeeId, date).amount;
+  }
+  function getSpiffPaid(employeeId, date) {
+    return getSpiffEntry(employeeId, date).paid;
   }
   function setSpiffValue(employeeId, date, amount) {
     const key = spiffKey(employeeId, date);
@@ -1072,15 +1084,23 @@ export default function TeamCRM() {
       delete next[key];
       updateSpiffs(next);
     } else {
-      updateSpiffs({ ...spiffs, [key]: Number(amount) || 0 });
+      const existing = getSpiffEntry(employeeId, date);
+      updateSpiffs({ ...spiffs, [key]: { amount: Number(amount) || 0, paid: existing.paid } });
     }
+  }
+  function setSpiffPaid(employeeId, date, paid) {
+    const key = spiffKey(employeeId, date);
+    const existing = getSpiffEntry(employeeId, date);
+    if (existing.amount === "" || Number(existing.amount) === 0) return; // nothing to mark paid without an amount
+    updateSpiffs({ ...spiffs, [key]: { amount: Number(existing.amount) || 0, paid } });
   }
   function spiffTotalInWeek(employeeId, weekStart) {
     let total = 0;
     for (let i = 0; i < 6; i++) {
       const date = new Date(weekStart);
       date.setDate(weekStart.getDate() + i);
-      total += Number(getSpiff(employeeId, date)) || 0;
+      const entry = getSpiffEntry(employeeId, date);
+      if (!entry.paid) total += Number(entry.amount) || 0;
     }
     return total;
   }
@@ -3382,6 +3402,18 @@ export default function TeamCRM() {
                                       : {}),
                                   }}
                                 />
+                                {getSpiff(row.employee.id, rrgDayDates[i]) !== "" &&
+                                  Number(getSpiff(row.employee.id, rrgDayDates[i])) !== 0 && (
+                                    <label style={S.spiffPaidLabel} title="Already paid same-day — won't add to their check">
+                                      <input
+                                        type="checkbox"
+                                        checked={getSpiffPaid(row.employee.id, rrgDayDates[i])}
+                                        onChange={(e) => setSpiffPaid(row.employee.id, rrgDayDates[i], e.target.checked)}
+                                        style={{ margin: 0 }}
+                                      />
+                                      Paid
+                                    </label>
+                                  )}
                               </div>
                             </td>
                           );
@@ -6371,6 +6403,17 @@ const S = {
     maxWidth: 74,
     color: T.textMuted,
     background: "transparent",
+  },
+  spiffPaidLabel: {
+    display: "flex",
+    alignItems: "center",
+    gap: 3,
+    fontSize: 9,
+    fontWeight: 600,
+    color: "#8A5A1E",
+    marginTop: 2,
+    cursor: "pointer",
+    userSelect: "none",
   },
   sourceGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 4 },
   sourceCard: {
