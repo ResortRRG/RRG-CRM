@@ -30,6 +30,7 @@ import {
   Eye,
   EyeOff,
   Minus,
+  FileText,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -40,6 +41,7 @@ const NAV_ITEMS = [
   { id: "rrgboard", label: "RRG Board", icon: LayoutGrid },
   { id: "payroll", label: "Payroll", icon: Wallet },
   { id: "reports", label: "Reports", icon: BarChart3 },
+  { id: "information", label: "Information", icon: FileText },
   { id: "admin", label: "Admin / Settings", icon: Settings },
 ];
 
@@ -610,6 +612,9 @@ export default function TeamCRM() {
   const [pnlWeekOffset, setPnlWeekOffset] = useState(0);
   const [expenses, setExpenses] = useState({}); // { "YYYY-MM": { CategoryName: amount } } — legacy single-number entry
   const [expenseTransactions, setExpenseTransactions] = useState([]); // [{ id, date, category, amount, notes }] — itemized entries
+  const [infoNotes, setInfoNotes] = useState([]); // [{ id, date, title, body }] — free-form notes
+  const [infoNoteModal, setInfoNoteModal] = useState(null); // null | note object
+  const [infoNoteError, setInfoNoteError] = useState("");
   const [expenseModal, setExpenseModal] = useState(null); // null | transaction object (always has an id, even before first save)
   const [expenseModalError, setExpenseModalError] = useState("");
   const [confirmClearMonthExpenses, setConfirmClearMonthExpenses] = useState(null); // month key pending confirmation, or null
@@ -739,6 +744,12 @@ export default function TeamCRM() {
       setExpenseTransactions(et && et.value ? JSON.parse(et.value) : []);
     } catch (e) {
       setExpenseTransactions([]);
+    }
+    try {
+      const inf = await window.storage.get("crm:infoNotes", true);
+      setInfoNotes(inf && inf.value ? JSON.parse(inf.value) : []);
+    } catch (e) {
+      setInfoNotes([]);
     }
     try {
       const st = await window.storage.get("crm:settings", true);
@@ -1482,6 +1493,32 @@ export default function TeamCRM() {
       setBackupStatus({ error: "Couldn't clear that month's expenses: " + (err.message || "unknown error") });
     }
   }
+  async function saveInfoNote(form) {
+    const exists = infoNotes.some((n) => n.id === form.id);
+    const { isNew, ...cleanForm } = form;
+    const next = exists
+      ? infoNotes.map((n) => (n.id === form.id ? { ...n, ...cleanForm } : n))
+      : [...infoNotes, cleanForm];
+    setInfoNotes(next);
+    try {
+      await window.storage.set("crm:infoNotes", JSON.stringify(next), true);
+      setInfoNoteModal(null);
+      setInfoNoteError("");
+    } catch (err) {
+      console.error("Note save failed:", err);
+      setInfoNoteError("Couldn't save — " + (err.message || "unknown error") + ". Try again.");
+    }
+  }
+  async function deleteInfoNote(id) {
+    const next = infoNotes.filter((n) => n.id !== id);
+    setInfoNotes(next);
+    try {
+      await window.storage.set("crm:infoNotes", JSON.stringify(next), true);
+    } catch (err) {
+      console.error("Note delete failed:", err);
+    }
+  }
+
   const reportsEmployeeRows = activeEmployees
     .map((emp) => {
       const empSales = reportsApprovedSales.filter(
@@ -1856,6 +1893,7 @@ export default function TeamCRM() {
       refundDeductionOverrides,
       expenses,
       expenseTransactions,
+      infoNotes,
     };
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -1902,6 +1940,7 @@ export default function TeamCRM() {
       if (backup.refundDeductionOverrides) setRefundDeductionOverrides(backup.refundDeductionOverrides);
       if (backup.expenses) setExpenses(backup.expenses);
       if (backup.expenseTransactions) setExpenseTransactions(backup.expenseTransactions);
+      if (backup.infoNotes) setInfoNotes(backup.infoNotes);
       if (backup.contacts) await window.storage.set("crm:contacts", JSON.stringify(backup.contacts), true);
       if (backup.sales) await window.storage.set("crm:sales", JSON.stringify(backup.sales), true);
       if (backup.employees) await window.storage.set("crm:employees", JSON.stringify(backup.employees), true);
@@ -1914,6 +1953,7 @@ export default function TeamCRM() {
       if (backup.expenses) await window.storage.set("crm:expenses", JSON.stringify(backup.expenses), true);
       if (backup.expenseTransactions)
         await window.storage.set("crm:expenseTransactions", JSON.stringify(backup.expenseTransactions), true);
+      if (backup.infoNotes) await window.storage.set("crm:infoNotes", JSON.stringify(backup.infoNotes), true);
       setConfirmRestoreBackup(null);
       setBackupStatus("restored");
       window.location.reload();
@@ -4134,6 +4174,78 @@ export default function TeamCRM() {
           </div>
         )}
 
+        {section === "information" && (
+          <div style={S.dashboardWrap}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={S.dashboardSectionLabel}>Information</div>
+              <button
+                onClick={() => {
+                  setInfoNoteError("");
+                  setInfoNoteModal({ id: uid(), date: todayDateStr(), title: "", body: "", isNew: true });
+                }}
+                style={S.primaryBtn}
+              >
+                <Plus size={14} /> New Note
+              </button>
+            </div>
+            <div style={S.hint}>Anything worth remembering — contacts, passwords, reminders, instructions.</div>
+
+            {infoNotes.length === 0 ? (
+              <div style={S.emptyState}>
+                <FileText size={22} color={T.borderStrong} />
+                <div style={{ marginTop: 8, fontSize: 13, color: T.textMuted }}>
+                  No notes yet — add your first one
+                </div>
+              </div>
+            ) : (
+              <div style={S.infoNotesGrid}>
+                {[...infoNotes]
+                  .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
+                  .map((n) => (
+                    <div
+                      key={n.id}
+                      style={S.infoNoteCard}
+                      onClick={() => {
+                        setInfoNoteError("");
+                        setInfoNoteModal(n);
+                      }}
+                    >
+                      <div style={S.infoNoteHeader}>
+                        <div style={S.infoNoteTitle}>{n.title}</div>
+                        <div style={S.infoNoteDate}>
+                          {n.date
+                            ? new Date(n.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                            : ""}
+                        </div>
+                      </div>
+                      <div style={S.infoNoteBody}>{n.body}</div>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Add/edit information note */}
+        {infoNoteModal && (
+          <Modal onClose={() => setInfoNoteModal(null)}>
+            <NoteForm
+              initial={infoNoteModal}
+              error={infoNoteError}
+              onCancel={() => setInfoNoteModal(null)}
+              onSave={saveInfoNote}
+              onDelete={
+                !infoNoteModal.isNew
+                  ? async () => {
+                      await deleteInfoNote(infoNoteModal.id);
+                      setInfoNoteModal(null);
+                    }
+                  : null
+              }
+            />
+          </Modal>
+        )}
+
         {section === "admin" && (
           <div style={S.dashboardWrap}>
             <div style={S.dashboardSectionLabel}>Users & access</div>
@@ -5215,6 +5327,58 @@ function ExpenseTransactionForm({ initial, categories, error: saveError, onCance
           </button>
           <button onClick={submit} style={S.primaryBtn}>
             {form.isNew ? "New Expense" : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NoteForm({ initial, error: saveError, onCancel, onSave, onDelete }) {
+  const [form, setForm] = useState(initial);
+  const [error, setError] = useState("");
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+
+  function submit() {
+    if (!form.title || !form.title.trim()) {
+      setError("Give this note a title first");
+      return;
+    }
+    setError("");
+    onSave(form);
+  }
+
+  return (
+    <div>
+      <div style={S.modalTitle}>{form.isNew ? "New Note" : "Edit note"}</div>
+      <Field label="Date">
+        <input type="date" value={form.date || ""} onChange={set("date")} style={S.input} />
+      </Field>
+      <Field label="Title">
+        <input autoFocus value={form.title || ""} onChange={set("title")} style={S.input} placeholder="e.g. Landlord contact info" />
+      </Field>
+      <Field label="Notes">
+        <textarea
+          value={form.body || ""}
+          onChange={set("body")}
+          style={{ ...S.input, minHeight: 140, resize: "vertical" }}
+          placeholder="Type whatever you need to remember here…"
+        />
+      </Field>
+      {error && <div style={S.errorText}>{error}</div>}
+      {saveError && <div style={S.errorText}>{saveError}</div>}
+      <div style={{ display: "flex", gap: 8, justifyContent: onDelete ? "space-between" : "flex-end", marginTop: 4 }}>
+        {onDelete && (
+          <button onClick={onDelete} style={S.dangerGhostBtn}>
+            <Trash2 size={13} /> Delete
+          </button>
+        )}
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={onCancel} style={S.ghostBtn}>
+            Cancel
+          </button>
+          <button onClick={submit} style={S.primaryBtn}>
+            {form.isNew ? "New Note" : "Save"}
           </button>
         </div>
       </div>
@@ -6322,6 +6486,47 @@ const S = {
     gap: 10,
     fontSize: 12,
     padding: "3px 4px",
+  },
+  infoNotesGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+    gap: 12,
+    marginTop: 16,
+  },
+  infoNoteCard: {
+    background: T.paperRaised,
+    border: `1px solid ${T.border}`,
+    borderRadius: 10,
+    padding: 14,
+    cursor: "pointer",
+  },
+  infoNoteHeader: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 8,
+    marginBottom: 8,
+  },
+  infoNoteTitle: {
+    fontSize: 14,
+    fontWeight: 600,
+    color: T.ink,
+  },
+  infoNoteDate: {
+    fontSize: 10.5,
+    color: T.textMuted,
+    whiteSpace: "nowrap",
+    flexShrink: 0,
+  },
+  infoNoteBody: {
+    fontSize: 12.5,
+    color: T.textMuted,
+    lineHeight: 1.5,
+    whiteSpace: "pre-wrap",
+    overflow: "hidden",
+    display: "-webkit-box",
+    WebkitLineClamp: 5,
+    WebkitBoxOrient: "vertical",
   },
   entryScreenWrap: {
     maxWidth: 360,
