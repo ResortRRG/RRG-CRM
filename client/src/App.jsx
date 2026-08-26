@@ -5704,10 +5704,16 @@ function ExpenseFileButton({ expenseKey, disabled }) {
     setLoading(true);
     try {
       const res = await fetch(`/api/expenses/${encodeURIComponent(expenseKey)}/files`, { credentials: "include" });
+      if (!res.ok) {
+        console.error("Expense files list failed:", res.status);
+        throw new Error("status " + res.status);
+      }
       const data = await res.json();
       setFiles(data.files || []);
-    } catch (e) {
-      setError("Couldn't load files");
+      setError("");
+    } catch (err) {
+      console.error("Expense files list error:", err);
+      setError("Couldn't load files: " + (err.message || "unknown error"));
     } finally {
       setLoading(false);
     }
@@ -5732,10 +5738,21 @@ function ExpenseFileButton({ expenseKey, disabled }) {
         credentials: "include",
         body: formData,
       });
-      if (!res.ok) throw new Error("Upload failed");
+      if (!res.ok) {
+        let detail = `status ${res.status}`;
+        try {
+          const body = await res.json();
+          if (body && body.error) detail = body.error;
+        } catch (parseErr) {
+          // response wasn't JSON — keep the status code as the detail
+        }
+        console.error("Expense file upload failed:", detail);
+        throw new Error(detail);
+      }
       await refreshFiles();
-    } catch (e) {
-      setError("Upload failed. Try again.");
+    } catch (err) {
+      console.error("Expense file upload error:", err);
+      setError("Upload failed: " + (err.message || "unknown error"));
     } finally {
       setUploading(false);
     }
