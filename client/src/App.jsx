@@ -1307,6 +1307,7 @@ export default function TeamCRM() {
   const reportsApprovedSales = reportsSales.filter((s) => s.status === "Approved");
 
   const reportsTotalSalesValue = reportsApprovedSales.reduce((s, r) => s + (Number(r.totalPrice) || 0), 0);
+  const reportsAverageSalePrice = reportsApprovedSales.length > 0 ? reportsTotalSalesValue / reportsApprovedSales.length : 0;
   const reportsTotalPackagePrice = reportsApprovedSales.reduce((s, r) => s + (Number(r.packagePrice) || 0), 0);
   const reportsTotalDateFlex = reportsApprovedSales.reduce((s, r) => s + (Number(r.dateFlex) || 0), 0);
   const reportsTotalRefunded = reportsRefundedSales.reduce((s, r) => s + (Number(r.refundAmount) || 0), 0);
@@ -3660,6 +3661,12 @@ export default function TeamCRM() {
                   <span style={S.sourceCount}>{reportsApprovedSales.length} sale{reportsApprovedSales.length === 1 ? "" : "s"}</span>
                 </div>
                 <div style={S.sourceValue}>{money(reportsTotalSalesValue)}</div>
+              </div>
+              <div style={S.sourceCard}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={S.reportsCardLabel}>Average sale price</span>
+                </div>
+                <div style={S.sourceValue}>{money(reportsAverageSalePrice)}</div>
               </div>
               <div style={S.sourceCard}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
