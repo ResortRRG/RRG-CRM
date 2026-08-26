@@ -634,6 +634,7 @@ export default function TeamCRM() {
   const [employeesView, setEmployeesView] = useState("active"); // 'active' | 'exemployees'
   const [employeeDetailWeekOffset, setEmployeeDetailWeekOffset] = useState(0);
   const [leadsSearch, setLeadsSearch] = useState("");
+  const [showDuplicateCustomers, setShowDuplicateCustomers] = useState(false);
   const [leadsFilterMode, setLeadsFilterMode] = useState("all"); // 'day' | 'week' | 'month' | 'year' | 'all'
   const [leadsSelectedDate, setLeadsSelectedDate] = useState(todayDateStr());
   const [leadsCategoryFilter, setLeadsCategoryFilter] = useState(""); // '' | 'Monster' | 'PGR' | 'Chargeback' | 'Declined'
@@ -2662,6 +2663,20 @@ export default function TeamCRM() {
                 })
                 .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
 
+              // Group ALL sales (not just the filtered/visible ones) by
+              // customer name to find repeat customers — someone who bought
+              // more than once shouldn't look like an unrelated duplicate.
+              const nameGroups = {};
+              sales.forEach((s) => {
+                const key = (s.name || "").trim().toLowerCase();
+                if (!key) return;
+                if (!nameGroups[key]) nameGroups[key] = [];
+                nameGroups[key].push(s);
+              });
+              const duplicateCustomerGroups = Object.values(nameGroups)
+                .filter((group) => group.length > 1)
+                .map((group) => [...group].sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0)));
+
               return (
                 <>
                   <div style={S.contactsToolbar}>
@@ -2679,6 +2694,15 @@ export default function TeamCRM() {
                       >
                         <Download size={14} /> Export CSV
                       </button>
+                      {duplicateCustomerGroups.length > 0 && (
+                        <button
+                          onClick={() => setShowDuplicateCustomers((v) => !v)}
+                          style={{ ...S.ghostBtn, ...(showDuplicateCustomers ? S.refundTypeActive : {}) }}
+                          title="Customers with more than one sale on file"
+                        >
+                          <Users size={14} /> Repeat customers ({duplicateCustomerGroups.length})
+                        </button>
+                      )}
                       <div style={S.searchWrap}>
                         <Search size={14} color={T.textMuted} style={{ flexShrink: 0 }} />
                         <input
@@ -2695,6 +2719,37 @@ export default function TeamCRM() {
                       </div>
                     </div>
                   </div>
+
+                  {showDuplicateCustomers && duplicateCustomerGroups.length > 0 && (
+                    <div style={S.duplicateCustomersPanel}>
+                      {duplicateCustomerGroups.map((group, gi) => (
+                        <div key={gi} style={S.duplicateCustomerCard}>
+                          <div style={S.duplicateCustomerName}>
+                            {group[0].name} <span style={S.duplicateCustomerCount}>{group.length} sales</span>
+                          </div>
+                          <div style={S.duplicateCustomerRows}>
+                            {group.map((s) => (
+                              <div key={s.id} style={S.duplicateCustomerRow} onClick={() => setSaleModal({ ...s })}>
+                                <span style={{ color: T.textMuted, minWidth: 130 }}>{formatTimestamp(s.timestamp)}</span>
+                                <span style={{ flex: 1 }}>{money(s.totalPrice)}</span>
+                                <span
+                                  style={{
+                                    ...S.leadBadge,
+                                    background:
+                                      s.status === "Approved" ? "#EAF3EC" : s.status === "Declined" ? "#FCEBEB" : "#F3E9DA",
+                                    color:
+                                      s.status === "Approved" ? T.pineDark : s.status === "Declined" ? "#A32D2D" : "#8A5A1E",
+                                  }}
+                                >
+                                  {s.status}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   <div style={S.weekNavRow}>
                     <div style={{ position: "relative" }}>
@@ -6116,6 +6171,47 @@ const S = {
   },
   leadBadgeMonster: { background: "#F3E9DA", color: "#8A5A1E" },
   leadBadgePGR: { background: "#E1EAF5", color: "#2A5488" },
+  duplicateCustomersPanel: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+    marginBottom: 16,
+  },
+  duplicateCustomerCard: {
+    background: T.paperRaised,
+    border: `1px solid ${T.border}`,
+    borderRadius: 10,
+    padding: 12,
+  },
+  duplicateCustomerName: {
+    fontSize: 14,
+    fontWeight: 600,
+    color: T.ink,
+    marginBottom: 8,
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  },
+  duplicateCustomerCount: {
+    fontSize: 11,
+    fontWeight: 500,
+    color: T.textMuted,
+  },
+  duplicateCustomerRows: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+  },
+  duplicateCustomerRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    fontSize: 12.5,
+    padding: "6px 8px",
+    borderRadius: 6,
+    cursor: "pointer",
+    background: T.paper,
+  },
   sourceBadge: {
     fontSize: 10.5,
     fontWeight: 600,
