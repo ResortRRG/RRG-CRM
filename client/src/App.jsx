@@ -5719,6 +5719,14 @@ function ExpenseFileButton({ expenseKey, disabled }) {
     }
   }
 
+  // Fetch on mount too (not just when opened) so the badge below is
+  // accurate from the moment the page loads — otherwise there's no way to
+  // tell at a glance whether a category already has something attached.
+  useEffect(() => {
+    refreshFiles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (open) refreshFiles();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -5776,11 +5784,18 @@ function ExpenseFileButton({ expenseKey, disabled }) {
         type="button"
         onClick={() => setOpen(true)}
         disabled={disabled}
-        style={{ ...S.iconBtnGhost, ...(disabled ? { opacity: 0.4, cursor: "not-allowed" } : {}) }}
-        title="Attach a receipt or invoice"
+        style={{
+          ...S.iconBtnGhost,
+          ...(files.length > 0 ? { background: "#EAF3EC" } : {}),
+          ...(disabled ? { opacity: 0.4, cursor: "not-allowed" } : {}),
+        }}
+        title={files.length > 0 ? `${files.length} file${files.length === 1 ? "" : "s"} attached` : "Attach a receipt or invoice"}
       >
-        <Paperclip size={14} color={T.textMuted} />
+        <Paperclip size={14} color={files.length > 0 ? T.pineDark : T.textMuted} />
       </button>
+      {files.length > 0 && (
+        <span style={S.expenseFileBadge}>{files.length}</span>
+      )}
       {open && (
         <Modal onClose={() => setOpen(false)} narrow>
           <div style={{ fontFamily: T.display, fontSize: 16, fontWeight: 500, color: T.ink, marginBottom: 10 }}>
@@ -6381,6 +6396,23 @@ const S = {
     borderRadius: 6,
     cursor: "pointer",
     background: T.paper,
+  },
+  expenseFileBadge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    background: T.pineDark,
+    color: "#fff",
+    fontSize: 9,
+    fontWeight: 700,
+    borderRadius: 20,
+    minWidth: 14,
+    height: 14,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "0 3px",
+    pointerEvents: "none",
   },
   sourceBadge: {
     fontSize: 10.5,
