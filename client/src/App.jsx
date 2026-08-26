@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, Fragment } from "react";
 import "./storageClient.js";
 import {
   Plus,
@@ -24,6 +24,7 @@ import {
   Download,
   Upload,
   Paperclip,
+  Pencil,
   Settings,
   Tag,
   Eye,
@@ -607,7 +608,9 @@ export default function TeamCRM() {
   const [pnlMode, setPnlMode] = useState("month"); // 'month' | 'week'
   const [pnlMonthOffset, setPnlMonthOffset] = useState(0);
   const [pnlWeekOffset, setPnlWeekOffset] = useState(0);
-  const [expenses, setExpenses] = useState({}); // { "YYYY-MM": { CategoryName: amount } }
+  const [expenses, setExpenses] = useState({}); // { "YYYY-MM": { CategoryName: amount } } — legacy single-number entry
+  const [expenseTransactions, setExpenseTransactions] = useState([]); // [{ id, date, category, amount, notes }] — itemized entries
+  const [expenseModal, setExpenseModal] = useState(null); // null | 'new' | transaction object
   const [reportsFilterMode, setReportsFilterMode] = useState("month"); // 'day' | 'week' | 'month' | 'year' | 'custom' | 'all'
   const [reportsSelectedDate, setReportsSelectedDate] = useState(todayDateStr());
   const [reportsCustomStart, setReportsCustomStart] = useState(shiftDateStr(todayDateStr(), -7));
@@ -728,6 +731,12 @@ export default function TeamCRM() {
       setExpenses(ex && ex.value ? JSON.parse(ex.value) : {});
     } catch (e) {
       setExpenses({});
+    }
+    try {
+      const et = await window.storage.get("crm:expenseTransactions", true);
+      setExpenseTransactions(et && et.value ? JSON.parse(et.value) : []);
+    } catch (e) {
+      setExpenseTransactions([]);
     }
     try {
       const st = await window.storage.get("crm:settings", true);
@@ -891,7 +900,7 @@ export default function TeamCRM() {
     setCurrentUser(null);
   }
 
-  const persist = useCallback((nextContacts, nextSales, nextEmployees, nextOverrides, nextAttendance, nextSettings, nextSpiffs, nextRefundDeductionOverrides, nextExpenses) => {
+  const persist = useCallback((nextContacts, nextSales, nextEmployees, nextOverrides, nextAttendance, nextSettings, nextSpiffs, nextRefundDeductionOverrides, nextExpenses, nextExpenseTransactions) => {
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
       try {
@@ -905,6 +914,8 @@ export default function TeamCRM() {
         if (nextRefundDeductionOverrides)
           await window.storage.set("crm:refundDeductionOverrides", JSON.stringify(nextRefundDeductionOverrides), true);
         if (nextExpenses) await window.storage.set("crm:expenses", JSON.stringify(nextExpenses), true);
+        if (nextExpenseTransactions)
+          await window.storage.set("crm:expenseTransactions", JSON.stringify(nextExpenseTransactions), true);
       } catch (e) {
         console.error("save failed", e);
       }
@@ -947,7 +958,11 @@ export default function TeamCRM() {
   }
   function updateExpenses(next) {
     setExpenses(next);
-    persist(null, null, null, null, null, null, null, null, next);
+    persist(null, null, null, null, null, null, null, null, next, null);
+  }
+  function updateExpenseTransactions(next) {
+    setExpenseTransactions(next);
+    persist(null, null, null, null, null, null, null, null, null, next);
   }
 
   function addListItem(listKey, value, clearInput) {
@@ -1353,13 +1368,27 @@ export default function TeamCRM() {
     .reduce((sum, s) => sum + (Number(s.totalPrice) || 0), 0);
   const pnlExpensesForMonth = expenses[pnlMonthKey] || {};
   const pnlAutoPayrollTotal = payrollTotalForRange(pnlPeriodStart, pnlPeriodEnd);
+  // Individually-logged expenses (via "Add expense") for this month, grouped
+  // by category — these add on top of whatever's typed directly into the
+  // amount field, so both ways of entering expenses combine cleanly.
+  const pnlTransactionsByCategory = {};
+  expenseTransactions.forEach((t) => {
+    if (!t.date || t.date.slice(0, 7) !== pnlMonthKey) return;
+    if (!pnlTransactionsByCategory[t.category]) pnlTransactionsByCategory[t.category] = [];
+    pnlTransactionsByCategory[t.category].push(t);
+  });
   const pnlExpenseRows = settings.expenseCategories.map((cat) => {
     if (cat === "Payroll") {
-      return { category: cat, amount: pnlAutoPayrollTotal, auto: true };
+      return { category: cat, amount: pnlAutoPayrollTotal, auto: true, transactions: [] };
     }
-    const monthlyAmount = Number(pnlExpensesForMonth[cat]) || 0;
+    const catTransactions = (pnlTransactionsByCategory[cat] || []).sort(
+      (a, b) => new Date(b.date) - new Date(a.date)
+    );
+    const transactionTotal = catTransactions.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+    const manualAmount = Number(pnlExpensesForMonth[cat]) || 0;
+    const monthlyAmount = manualAmount + transactionTotal;
     const amount = pnlMode === "week" ? monthlyAmount / pnlWeeksInSourceMonth : monthlyAmount;
-    return { category: cat, amount, auto: false };
+    return { category: cat, amount, auto: false, transactions: catTransactions };
   });
   const pnlTotalExpenses = pnlExpenseRows.reduce((sum, r) => sum + r.amount, 0);
   const pnlNetProfit = pnlRevenue - pnlTotalExpenses;
@@ -1373,6 +1402,17 @@ export default function TeamCRM() {
       },
     };
     updateExpenses(next);
+  }
+  function saveExpenseTransaction(form) {
+    if (form.id) {
+      updateExpenseTransactions(expenseTransactions.map((t) => (t.id === form.id ? { ...t, ...form } : t)));
+    } else {
+      updateExpenseTransactions([...expenseTransactions, { ...form, id: uid() }]);
+    }
+    setExpenseModal(null);
+  }
+  function deleteExpenseTransaction(id) {
+    updateExpenseTransactions(expenseTransactions.filter((t) => t.id !== id));
   }
   const reportsEmployeeRows = activeEmployees
     .map((emp) => {
@@ -1746,6 +1786,7 @@ export default function TeamCRM() {
       spiffs,
       refundDeductionOverrides,
       expenses,
+      expenseTransactions,
     };
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -1791,6 +1832,7 @@ export default function TeamCRM() {
       if (backup.spiffs) setSpiffs(backup.spiffs);
       if (backup.refundDeductionOverrides) setRefundDeductionOverrides(backup.refundDeductionOverrides);
       if (backup.expenses) setExpenses(backup.expenses);
+      if (backup.expenseTransactions) setExpenseTransactions(backup.expenseTransactions);
       if (backup.contacts) await window.storage.set("crm:contacts", JSON.stringify(backup.contacts), true);
       if (backup.sales) await window.storage.set("crm:sales", JSON.stringify(backup.sales), true);
       if (backup.employees) await window.storage.set("crm:employees", JSON.stringify(backup.employees), true);
@@ -1801,6 +1843,8 @@ export default function TeamCRM() {
       if (backup.refundDeductionOverrides)
         await window.storage.set("crm:refundDeductionOverrides", JSON.stringify(backup.refundDeductionOverrides), true);
       if (backup.expenses) await window.storage.set("crm:expenses", JSON.stringify(backup.expenses), true);
+      if (backup.expenseTransactions)
+        await window.storage.set("crm:expenseTransactions", JSON.stringify(backup.expenseTransactions), true);
       setConfirmRestoreBackup(null);
       setBackupStatus("restored");
       window.location.reload();
@@ -3886,7 +3930,22 @@ export default function TeamCRM() {
                   </div>
                 </div>
 
-                <div style={{ ...S.dashboardSectionLabel, marginTop: 20 }}>Business expenses — {pnlMonthLabel}</div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 20 }}>
+                  <div style={S.dashboardSectionLabel}>Business expenses — {pnlMonthLabel}</div>
+                  <button
+                    onClick={() =>
+                      setExpenseModal({
+                        date: todayDateStr(),
+                        category: settings.expenseCategories.find((c) => c !== "Payroll") || "",
+                        amount: "",
+                        notes: "",
+                      })
+                    }
+                    style={S.primaryBtn}
+                  >
+                    <Plus size={14} /> New Expense
+                  </button>
+                </div>
                 <div className="crm-scroll" style={{ ...S.tableScroll, marginTop: 8 }}>
                   <table style={S.table}>
                     <thead>
@@ -3897,30 +3956,62 @@ export default function TeamCRM() {
                     </thead>
                     <tbody>
                       {pnlExpenseRows.map((row) => (
-                        <tr key={row.category} style={S.tr}>
-                          <td style={{ ...S.td, fontWeight: 500 }}>
-                            {row.category}
-                            {row.auto && <span style={S.pnlAutoBadge}>Auto</span>}
-                          </td>
-                          <td style={S.td}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              {row.auto ? (
-                                <span style={{ fontFamily: T.mono, fontSize: 13, color: T.ink }}>{money(row.amount)}</span>
-                              ) : pnlMode === "week" ? (
-                                <span style={{ fontFamily: T.mono, fontSize: 13, color: T.textMuted }}>{money(row.amount)}</span>
-                              ) : (
-                                <input
-                                  type="number"
-                                  value={pnlExpensesForMonth[row.category] ?? ""}
-                                  onChange={(e) => updatePnlExpense(row.category, e.target.value)}
-                                  placeholder="0"
-                                  style={{ ...S.input, fontFamily: T.mono, maxWidth: 140 }}
-                                />
-                              )}
-                              <ExpenseFileButton expenseKey={`${pnlMonthKey}_${row.category}`} disabled={row.auto} />
-                            </div>
-                          </td>
-                        </tr>
+                        <Fragment key={row.category}>
+                          <tr style={S.tr}>
+                            <td style={{ ...S.td, fontWeight: 500 }}>
+                              {row.category}
+                              {row.auto && <span style={S.pnlAutoBadge}>Auto</span>}
+                            </td>
+                            <td style={S.td}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                {row.auto ? (
+                                  <span style={{ fontFamily: T.mono, fontSize: 13, color: T.ink }}>{money(row.amount)}</span>
+                                ) : pnlMode === "week" ? (
+                                  <span style={{ fontFamily: T.mono, fontSize: 13, color: T.textMuted }}>{money(row.amount)}</span>
+                                ) : (
+                                  <input
+                                    type="number"
+                                    value={pnlExpensesForMonth[row.category] ?? ""}
+                                    onChange={(e) => updatePnlExpense(row.category, e.target.value)}
+                                    placeholder="0"
+                                    style={{ ...S.input, fontFamily: T.mono, maxWidth: 140 }}
+                                  />
+                                )}
+                                <ExpenseFileButton expenseKey={`${pnlMonthKey}_${row.category}`} disabled={row.auto} />
+                              </div>
+                            </td>
+                          </tr>
+                          {row.transactions.length > 0 && (
+                            <tr>
+                              <td colSpan={2} style={{ padding: "0 12px 10px 12px", borderBottom: `1px solid ${T.border}` }}>
+                                <div style={S.pnlTransactionList}>
+                                  {row.transactions.map((t) => (
+                                    <div key={t.id} style={S.pnlTransactionRow}>
+                                      <span style={{ color: T.textMuted, minWidth: 90 }}>
+                                        {t.date
+                                          ? new Date(t.date + "T00:00:00").toLocaleDateString("en-US", {
+                                              month: "short",
+                                              day: "numeric",
+                                            })
+                                          : "—"}
+                                      </span>
+                                      <span style={{ fontFamily: T.mono, minWidth: 70 }}>{money(t.amount)}</span>
+                                      <span style={{ flex: 1, color: T.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                        {t.notes}
+                                      </span>
+                                      <button onClick={() => setExpenseModal(t)} style={S.iconBtnGhost} title="Edit">
+                                        <Pencil size={11} color={T.textMuted} />
+                                      </button>
+                                      <button onClick={() => deleteExpenseTransaction(t.id)} style={S.iconBtnGhost} title="Delete">
+                                        <Trash2 size={11} color={T.textMuted} />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
                       ))}
                     </tbody>
                     <tfoot>
@@ -4370,6 +4461,21 @@ export default function TeamCRM() {
               Merge {mergeBuilderPairs.length || ""} {mergeBuilderPairs.length === 1 ? "pair" : "pairs"}
             </button>
           </div>
+        </Modal>
+      )}
+
+      {/* Add/edit expense transaction */}
+      {expenseModal && (
+        <Modal onClose={() => setExpenseModal(null)} narrow>
+          <ExpenseTransactionForm
+            initial={expenseModal}
+            categories={settings.expenseCategories.filter((c) => c !== "Payroll")}
+            onCancel={() => setExpenseModal(null)}
+            onSave={saveExpenseTransaction}
+            onDelete={
+              expenseModal.id ? () => deleteExpenseTransaction(expenseModal.id) && setExpenseModal(null) : null
+            }
+          />
         </Modal>
       )}
 
@@ -4898,6 +5004,83 @@ function Modal({ children, onClose, narrow, wide, disableBackdropClose, fullScre
         onClick={(e) => e.stopPropagation()}
       >
         {children}
+      </div>
+    </div>
+  );
+}
+
+function ExpenseTransactionForm({ initial, categories, onCancel, onSave, onDelete }) {
+  const [form, setForm] = useState(initial);
+  const [error, setError] = useState("");
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+
+  function submit() {
+    if (!form.category) {
+      setError("Choose a category first");
+      return;
+    }
+    if (!form.amount || Number(form.amount) <= 0) {
+      setError("Enter an amount first");
+      return;
+    }
+    if (!form.date) {
+      setError("Choose a date first");
+      return;
+    }
+    onSave({ ...form, amount: Number(form.amount) });
+  }
+
+  return (
+    <div>
+      <div style={S.modalTitle}>{form.id ? "Edit expense" : "New Expense"}</div>
+      <Field label="Date">
+        <input type="date" value={form.date || ""} onChange={set("date")} style={S.input} />
+      </Field>
+      <Field label="Category">
+        <div style={{ position: "relative" }}>
+          <select value={form.category || ""} onChange={set("category")} style={S.select}>
+            <option value="">Choose category</option>
+            {categories.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+          <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+        </div>
+      </Field>
+      <Field label="Amount">
+        <input
+          type="number"
+          value={form.amount ?? ""}
+          onChange={set("amount")}
+          style={{ ...S.input, fontFamily: T.mono }}
+          placeholder="0.00"
+        />
+      </Field>
+      <Field label="Notes">
+        <input
+          value={form.notes || ""}
+          onChange={set("notes")}
+          style={S.input}
+          placeholder="e.g. Olive Garden — client lunch"
+        />
+      </Field>
+      {error && <div style={S.errorText}>{error}</div>}
+      <div style={{ display: "flex", gap: 8, justifyContent: onDelete ? "space-between" : "flex-end", marginTop: 4 }}>
+        {onDelete && (
+          <button onClick={onDelete} style={S.dangerGhostBtn}>
+            <Trash2 size={13} /> Delete
+          </button>
+        )}
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={onCancel} style={S.ghostBtn}>
+            Cancel
+          </button>
+          <button onClick={submit} style={S.primaryBtn}>
+            {form.id ? "Save" : "New Expense"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -5988,6 +6171,21 @@ const S = {
     borderRadius: 10,
     textTransform: "uppercase",
     letterSpacing: "0.03em",
+  },
+  pnlTransactionList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 3,
+    background: T.paper,
+    borderRadius: 7,
+    padding: 8,
+  },
+  pnlTransactionRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    fontSize: 12,
+    padding: "3px 4px",
   },
   entryScreenWrap: {
     maxWidth: 360,
