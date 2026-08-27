@@ -1435,9 +1435,21 @@ export default function TeamCRM() {
   const pnlWeeksInSourceMonth = pnlDaysInSourceMonth / 7;
   const pnlMonthKey = pnlExpenseSourceMonthKey;
   const pnlMonthLabel = pnlExpenseSourceMonthLabel;
-  const pnlRevenue = sales
-    .filter((s) => s.status === "Approved" && isSaleInRange(s, pnlPeriodStart, pnlPeriodEnd))
+  const pnlPeriodSales = sales.filter((s) => s.status === "Approved" && isSaleInRange(s, pnlPeriodStart, pnlPeriodEnd));
+  const pnlMonsterRevenue =
+    pnlPeriodSales
+      .filter((s) => s.leadSubmittedTo === "Monster")
+      .reduce((sum, s) => sum + (Number(s.totalPrice) || 0), 0) * ((Number(settings.monsterCommissionRate) || 0) / 100);
+  const pnlPgrRevenue =
+    pnlPeriodSales
+      .filter((s) => s.leadSubmittedTo === "PGR")
+      .reduce((sum, s) => sum + (Number(s.totalPrice) || 0), 0) * ((Number(settings.pgrCommissionRate) || 0) / 100);
+  // Sales not tagged Monster or PGR (e.g. Dialer/Paper self-sourced leads)
+  // don't have a vendor commission split, so they count at full value.
+  const pnlOtherRevenue = pnlPeriodSales
+    .filter((s) => s.leadSubmittedTo !== "Monster" && s.leadSubmittedTo !== "PGR")
     .reduce((sum, s) => sum + (Number(s.totalPrice) || 0), 0);
+  const pnlRevenue = pnlMonsterRevenue + pnlPgrRevenue + pnlOtherRevenue;
   const pnlExpensesForMonth = expenses[pnlMonthKey] || {};
   const pnlAutoPayrollTotal = payrollTotalForRange(pnlPeriodStart, pnlPeriodEnd);
   // Individually-logged expenses (via "Add expense") for this month, grouped
@@ -4074,8 +4086,9 @@ export default function TeamCRM() {
                   </div>
                 </div>
                 <div style={S.hint}>
-                  Revenue is approved sales for {pnlPeriodLabel}. Payroll is calculated automatically from actual payroll
-                  data for this period. {pnlMode === "week"
+                  Revenue is your actual commission for {pnlPeriodLabel} — {settings.monsterCommissionRate}% of Monster
+                  sales and {settings.pgrCommissionRate}% of PGR sales, not the customer's full package price. Payroll
+                  is calculated automatically from actual payroll data for this period. {pnlMode === "week"
                     ? `Other expenses are entered monthly (${pnlExpenseSourceMonthLabel}) and shown here as a 1/${pnlWeeksInSourceMonth.toFixed(1)} weekly share — edit them from Monthly view.`
                     : "Enter your actual monthly expenses below — these come from your books, not the CRM."}
                 </div>
