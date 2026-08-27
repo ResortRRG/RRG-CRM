@@ -610,6 +610,8 @@ export default function TeamCRM() {
   const [pnlMode, setPnlMode] = useState("month"); // 'month' | 'week'
   const [pnlMonthOffset, setPnlMonthOffset] = useState(0);
   const [pnlWeekOffset, setPnlWeekOffset] = useState(0);
+  const [pnlCustomStart, setPnlCustomStart] = useState(shiftDateStr(todayDateStr(), -7));
+  const [pnlCustomEnd, setPnlCustomEnd] = useState(todayDateStr());
   const [expenses, setExpenses] = useState({}); // { "YYYY-MM": { CategoryName: amount } } — legacy single-number entry
   const [expenseTransactions, setExpenseTransactions] = useState([]); // [{ id, date, category, amount, notes }] — itemized entries
   const [infoNotes, setInfoNotes] = useState([]); // [{ id, date, title, body }] — free-form notes
@@ -1418,9 +1420,31 @@ export default function TeamCRM() {
   // ---- Profit & Loss ----
   const pnlMonth = getMonthRange(pnlMonthOffset);
   const pnlWeek = getWeekRange(pnlWeekOffset);
-  const pnlPeriodStart = pnlMode === "week" ? pnlWeek.start : pnlMonth.start;
-  const pnlPeriodEnd = pnlMode === "week" ? pnlWeek.end : pnlMonth.end;
-  const pnlPeriodLabel = pnlMode === "week" ? formatWeekLabel(pnlWeek.start, pnlWeek.end) : formatMonthLabel(pnlMonth.start);
+  const pnlPeriodStart =
+    pnlMode === "week"
+      ? pnlWeek.start
+      : pnlMode === "month"
+      ? pnlMonth.start
+      : pnlMode === "custom"
+      ? new Date(pnlCustomStart + "T00:00:00")
+      : new Date(2000, 0, 1); // "all"
+  const pnlPeriodEnd =
+    pnlMode === "week"
+      ? pnlWeek.end
+      : pnlMode === "month"
+      ? pnlMonth.end
+      : pnlMode === "custom"
+      ? new Date(pnlCustomEnd + "T23:59:59")
+      : new Date(2100, 0, 1); // "all"
+  const pnlPeriodLabel =
+    pnlMode === "week"
+      ? formatWeekLabel(pnlWeek.start, pnlWeek.end)
+      : pnlMode === "month"
+      ? formatMonthLabel(pnlMonth.start)
+      : pnlMode === "custom"
+      ? formatWeekLabel(pnlPeriodStart, pnlPeriodEnd)
+      : "All time";
+  const pnlIsMultiMonth = pnlMode === "all" || pnlMode === "custom";
   // Expenses are always entered per calendar month (the source of truth).
   // In weekly view, that same monthly figure is prorated down to a per-week
   // share instead of asking anyone to re-enter numbers weekly.
@@ -1434,7 +1458,7 @@ export default function TeamCRM() {
   ).getDate();
   const pnlWeeksInSourceMonth = pnlDaysInSourceMonth / 7;
   const pnlMonthKey = pnlExpenseSourceMonthKey;
-  const pnlMonthLabel = pnlExpenseSourceMonthLabel;
+  const pnlMonthLabel = pnlIsMultiMonth ? pnlPeriodLabel : pnlExpenseSourceMonthLabel;
   const pnlPeriodSales = sales.filter((s) => s.status === "Approved" && isSaleInRange(s, pnlPeriodStart, pnlPeriodEnd));
   const pnlMonsterRevenue =
     pnlPeriodSales
@@ -1452,22 +1476,34 @@ export default function TeamCRM() {
   const pnlRevenue = pnlMonsterRevenue + pnlPgrRevenue + pnlOtherRevenue;
   const pnlExpensesForMonth = expenses[pnlMonthKey] || {};
   const pnlAutoPayrollTotal = payrollTotalForRange(pnlPeriodStart, pnlPeriodEnd);
-  // Individually-logged expenses (via "Add expense") for this month, grouped
-  // by category — these add on top of whatever's typed directly into the
-  // amount field, so both ways of entering expenses combine cleanly.
-  const pnlTransactionsByCategory = {};
-  expenseTransactions.forEach((t) => {
-    if (!t.date || t.date.slice(0, 7) !== pnlMonthKey) return;
-    if (!pnlTransactionsByCategory[t.category]) pnlTransactionsByCategory[t.category] = [];
-    pnlTransactionsByCategory[t.category].push(t);
-  });
   const pnlExpenseRows = settings.expenseCategories.map((cat) => {
     if (cat === "Payroll") {
       return { category: cat, amount: pnlAutoPayrollTotal, auto: true, transactions: [] };
     }
-    const catTransactions = (pnlTransactionsByCategory[cat] || []).sort(
-      (a, b) => new Date(b.date) - new Date(a.date)
-    );
+    if (pnlIsMultiMonth) {
+      // Custom range / All time can span many months — sum every logged
+      // transaction whose own date falls in the window directly, plus any
+      // legacy manually-typed month totals whose month overlaps the window.
+      const catTransactions = expenseTransactions
+        .filter((t) => t.category === cat && t.date && isSaleInRange({ timestamp: t.date }, pnlPeriodStart, pnlPeriodEnd))
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
+      const transactionTotal = catTransactions.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+      let legacyTotal = 0;
+      Object.keys(expenses).forEach((monthKey) => {
+        const [y, m] = monthKey.split("-").map(Number);
+        const monthDate = new Date(y, m - 1, 1);
+        if (monthDate >= pnlPeriodStart && monthDate <= pnlPeriodEnd) {
+          legacyTotal += Number(expenses[monthKey][cat]) || 0;
+        }
+      });
+      return { category: cat, amount: transactionTotal + legacyTotal, auto: false, transactions: catTransactions };
+    }
+    // Individually-logged expenses (via "New Expense") for this single
+    // month, grouped by category — these add on top of whatever's typed
+    // directly into the amount field, so both ways combine cleanly.
+    const catTransactions = expenseTransactions
+      .filter((t) => t.category === cat && t.date && t.date.slice(0, 7) === pnlMonthKey)
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
     const transactionTotal = catTransactions.reduce((s, t) => s + (Number(t.amount) || 0), 0);
     const manualAmount = Number(pnlExpensesForMonth[cat]) || 0;
     const monthlyAmount = manualAmount + transactionTotal;
@@ -4041,16 +4077,48 @@ export default function TeamCRM() {
                   <div style={S.weekNav}>
                     <div style={{ position: "relative" }}>
                       <select
-                        value={pnlMode}
-                        onChange={(e) => setPnlMode(e.target.value)}
-                        style={{ ...S.select, width: 110, paddingRight: 28 }}
+                        value={pnlMode === "week" && pnlWeekOffset === -1 ? "prevweek" : pnlMode}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === "prevweek") {
+                            setPnlMode("week");
+                            setPnlWeekOffset(-1);
+                          } else if (v === "week") {
+                            setPnlMode("week");
+                            setPnlWeekOffset(0);
+                          } else {
+                            setPnlMode(v);
+                          }
+                        }}
+                        style={{ ...S.select, width: 130, paddingRight: 28 }}
                       >
-                        <option value="month">Monthly</option>
-                        <option value="week">Weekly</option>
+                        <option value="week">This week</option>
+                        <option value="prevweek">Previous week</option>
+                        <option value="month">This month</option>
+                        <option value="custom">Custom range</option>
+                        <option value="all">All time</option>
                       </select>
                       <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
                     </div>
-                    {pnlMode === "week" ? (
+                    {pnlMode === "custom" ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <input
+                          type="date"
+                          value={pnlCustomStart}
+                          max={pnlCustomEnd}
+                          onChange={(e) => e.target.value && setPnlCustomStart(e.target.value)}
+                          style={S.customRangeInput}
+                        />
+                        <span style={{ color: T.textMuted, fontSize: 12 }}>to</span>
+                        <input
+                          type="date"
+                          value={pnlCustomEnd}
+                          min={pnlCustomStart}
+                          onChange={(e) => e.target.value && setPnlCustomEnd(e.target.value)}
+                          style={S.customRangeInput}
+                        />
+                      </div>
+                    ) : pnlMode === "all" ? null : pnlMode === "week" ? (
                       <>
                         <button onClick={() => setPnlWeekOffset((w) => w - 1)} style={S.weekNavBtn} aria-label="Previous week">
                           ‹
@@ -4118,31 +4186,22 @@ export default function TeamCRM() {
 
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 20 }}>
                   <div style={S.dashboardSectionLabel}>Business expenses — {pnlMonthLabel}</div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button
-                      onClick={() => setConfirmClearMonthExpenses(pnlMonthKey)}
-                      style={S.dangerGhostBtn}
-                      title={`Clear every expense entry for ${pnlMonthLabel}`}
-                    >
-                      <Trash2 size={13} /> Clear this month
-                    </button>
-                    <button
-                      onClick={() => {
-                        setExpenseModalError("");
-                        setExpenseModal({
-                          id: uid(),
-                          date: todayDateStr(),
-                          category: settings.expenseCategories.find((c) => c !== "Payroll") || "",
-                          amount: "",
-                          notes: "",
-                          isNew: true,
-                        });
-                      }}
-                      style={S.primaryBtn}
-                    >
-                      <Plus size={14} /> New Expense
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => {
+                      setExpenseModalError("");
+                      setExpenseModal({
+                        id: uid(),
+                        date: todayDateStr(),
+                        category: settings.expenseCategories.find((c) => c !== "Payroll") || "",
+                        amount: "",
+                        notes: "",
+                        isNew: true,
+                      });
+                    }}
+                    style={S.primaryBtn}
+                  >
+                    <Plus size={14} /> New Expense
+                  </button>
                 </div>
                 <div className="crm-scroll" style={{ ...S.tableScroll, marginTop: 8 }}>
                   <table style={S.table}>
@@ -4745,27 +4804,6 @@ export default function TeamCRM() {
                 : null
             }
           />
-        </Modal>
-      )}
-
-      {/* Confirm clear month expenses */}
-      {confirmClearMonthExpenses && (
-        <Modal onClose={() => setConfirmClearMonthExpenses(null)} narrow>
-          <div style={{ fontFamily: T.display, fontSize: 17, fontWeight: 500, color: T.ink, marginBottom: 6 }}>
-            Clear this month's expenses?
-          </div>
-          <div style={{ fontSize: 12.5, color: T.textMuted, marginBottom: 16, lineHeight: 1.5 }}>
-            This removes every logged expense and every manually-typed amount for {pnlMonthLabel} — Payroll (which is
-            automatic) isn't affected, and no other month is touched. This can't be undone.
-          </div>
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-            <button style={S.ghostBtn} onClick={() => setConfirmClearMonthExpenses(null)}>
-              Cancel
-            </button>
-            <button style={S.dangerBtn} onClick={() => clearMonthExpenses(confirmClearMonthExpenses)}>
-              Clear {pnlMonthLabel}
-            </button>
-          </div>
         </Modal>
       )}
 
