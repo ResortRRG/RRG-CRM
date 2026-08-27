@@ -1135,7 +1135,7 @@ export default function TeamCRM() {
   // Same formula as Payroll's "Total owed this week" footer, but callable for
   // any arbitrary week — used to auto-total payroll cost into Profit & Loss.
   function computeWeeklyPayrollTotal(weekStart, weekEnd) {
-    return activeEmployees.reduce((sum, emp) => {
+    return employeesForWeek(weekStart).reduce((sum, emp) => {
       const override = getPayrollOverride(emp.id, weekStart);
       if (override !== null) return sum + override;
       const empSales = salesForEmployee(emp.id).filter((s) => isSaleInRange(s, weekStart, weekEnd));
@@ -1286,6 +1286,27 @@ export default function TeamCRM() {
   }
 
   const activeEmployees = employees.filter((e) => e.active !== false);
+  // For week-specific views (RRG Board, Payroll) — an employee should show
+  // up for a given week if they'd already started by then, AND either
+  // they're still active or weren't let go until after that week. This lets
+  // a former employee's history stay intact on old weeks while keeping them
+  // off brand-new weeks, and keeps a brand-new hire off weeks before they started.
+  function employeesForWeek(weekStart) {
+    return employees.filter((e) => {
+      if (e.startDate) {
+        const start = new Date(e.startDate + "T00:00:00");
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        if (start > weekEnd) return false;
+      }
+      if (e.active !== false) return true;
+      if (e.deactivatedDate) {
+        const deactivated = new Date(e.deactivatedDate + "T00:00:00");
+        return weekStart < deactivated;
+      }
+      return false; // deactivated with no recorded date — legacy data, hide as before
+    });
+  }
   const exEmployees = employees.filter((e) => e.active === false);
 
   const rrg = getWeekRange(rrgWeekOffset);
@@ -1296,7 +1317,7 @@ export default function TeamCRM() {
     return d;
   });
   const rrgWeekSales = sales.filter((s) => isSaleInRange(s, rrg.start, rrg.end) && s.status === "Approved");
-  const rrgBoard = activeEmployees.map((emp) => {
+  const rrgBoard = employeesForWeek(rrg.start).map((emp) => {
     const days = Array.from({ length: 6 }, () => []);
     rrgWeekSales.forEach((s) => {
       const idx = getWeekdayIndex(new Date(s.timestamp));
@@ -1313,6 +1334,7 @@ export default function TeamCRM() {
 
   const payrollWeek = getWeekRange(payrollWeekOffset);
   const payrollWeekLabel = formatWeekLabel(payrollWeek.start, payrollWeek.end);
+  const payrollEmployeesForWeek = employeesForWeek(payrollWeek.start);
 
   const currentWeek = getWeekRange(0);
 
@@ -2172,11 +2194,11 @@ export default function TeamCRM() {
     setEmployeeModal(null);
   }
   function deactivateEmployee(id) {
-    updateEmployees(employees.map((e) => (e.id === id ? { ...e, active: false } : e)));
+    updateEmployees(employees.map((e) => (e.id === id ? { ...e, active: false, deactivatedDate: todayDateStr() } : e)));
     setEmployeeModal(null);
   }
   function reactivateEmployee(id) {
-    updateEmployees(employees.map((e) => (e.id === id ? { ...e, active: true } : e)));
+    updateEmployees(employees.map((e) => (e.id === id ? { ...e, active: true, deactivatedDate: null } : e)));
     setEmployeeModal(null);
   }
   // Moves an employee up/down relative to its position within a displayed subset
@@ -3353,7 +3375,7 @@ export default function TeamCRM() {
               Each day cell has a small dropdown under the sales — use it to mark someone Late, Left early, or Absent for that day. Below that, enter a dollar amount to record a daily Spiff — it carries over into that person's Payroll for the week.
             </div>
 
-            {activeEmployees.length === 0 ? (
+            {rrgBoard.length === 0 ? (
               <div style={S.emptyState}>
                 <LayoutGrid size={22} color={T.borderStrong} />
                 <div style={{ marginTop: 8, fontSize: 13, color: T.textMuted }}>
@@ -3381,7 +3403,7 @@ export default function TeamCRM() {
                           <div style={S.reorderCell}>
                             <div style={S.reorderBtns}>
                               <button
-                                onClick={() => moveEmployee(row.employee.id, "up", activeEmployees)}
+                                onClick={() => moveEmployee(row.employee.id, "up", employeesForWeek(rrg.start))}
                                 disabled={rowIdx === 0}
                                 style={{ ...S.reorderBtn, ...(rowIdx === 0 ? S.reorderBtnDisabled : {}) }}
                                 aria-label="Move up"
@@ -3389,7 +3411,7 @@ export default function TeamCRM() {
                                 <ChevronUp size={11} />
                               </button>
                               <button
-                                onClick={() => moveEmployee(row.employee.id, "down", activeEmployees)}
+                                onClick={() => moveEmployee(row.employee.id, "down", employeesForWeek(rrg.start))}
                                 disabled={rowIdx === rrgBoard.length - 1}
                                 style={{ ...S.reorderBtn, ...(rowIdx === rrgBoard.length - 1 ? S.reorderBtnDisabled : {}) }}
                                 aria-label="Move down"
@@ -3521,7 +3543,7 @@ export default function TeamCRM() {
               Everyone is guaranteed at least {money(settings.minWeeklyPay)} for the week — if commission plus base pay comes in under that, they're paid the guaranteed amount instead. Sales Total reflects only the week shown here, not an all-time figure. Each day marked Absent on the RRG Board knocks {money(ABSENCE_GUARANTEE_DEDUCTION)} off that person's guarantee for the week. Refunds marked in All Leads deduct the involved employees' credited commission from the payroll week right after the refund was recorded — that Refund Deduction amount is editable too, so if someone's paying a refund back over a few pay periods instead of all at once, you can lower this week's amount and it'll show a reset button to bring back the full calculated figure. Total pay is editable the same way — click into the amount to override it for that person's that week; a reset button brings back the calculated number.
             </div>
 
-            {activeEmployees.length === 0 ? (
+            {payrollEmployeesForWeek.length === 0 ? (
               <div style={S.emptyState}>
                 <Wallet size={22} color={T.borderStrong} />
                 <div style={{ marginTop: 8, fontSize: 13, color: T.textMuted }}>
@@ -3545,7 +3567,7 @@ export default function TeamCRM() {
                     </tr>
                   </thead>
                   <tbody>
-                    {activeEmployees.map((emp, empIdx) => {
+                    {payrollEmployeesForWeek.map((emp, empIdx) => {
                       const empSales = salesForEmployee(emp.id);
                       const empWeekSales = empSales.filter((s) => isSaleInRange(s, payrollWeek.start, payrollWeek.end));
                       const empWeekTotal = empWeekSales.reduce((s, r) => s + saleCredit(r, emp.id), 0);
@@ -3576,7 +3598,7 @@ export default function TeamCRM() {
                             <div style={S.reorderCell}>
                               <div style={S.reorderBtns} onClick={(e) => e.stopPropagation()}>
                                 <button
-                                  onClick={() => moveEmployee(emp.id, "up", activeEmployees)}
+                                  onClick={() => moveEmployee(emp.id, "up", payrollEmployeesForWeek)}
                                   disabled={empIdx === 0}
                                   style={{ ...S.reorderBtn, ...(empIdx === 0 ? S.reorderBtnDisabled : {}) }}
                                   aria-label="Move up"
@@ -3584,9 +3606,9 @@ export default function TeamCRM() {
                                   <ChevronUp size={11} />
                                 </button>
                                 <button
-                                  onClick={() => moveEmployee(emp.id, "down", activeEmployees)}
-                                  disabled={empIdx === activeEmployees.length - 1}
-                                  style={{ ...S.reorderBtn, ...(empIdx === activeEmployees.length - 1 ? S.reorderBtnDisabled : {}) }}
+                                  onClick={() => moveEmployee(emp.id, "down", payrollEmployeesForWeek)}
+                                  disabled={empIdx === payrollEmployeesForWeek.length - 1}
+                                  style={{ ...S.reorderBtn, ...(empIdx === payrollEmployeesForWeek.length - 1 ? S.reorderBtnDisabled : {}) }}
                                   aria-label="Move down"
                                 >
                                   <ChevronDown size={11} />
@@ -3700,7 +3722,7 @@ export default function TeamCRM() {
                       <td style={S.td} />
                       <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 600, color: T.pineDark }}>
                         {money(
-                          activeEmployees.reduce((sum, emp) => {
+                          payrollEmployeesForWeek.reduce((sum, emp) => {
                             const override = getPayrollOverride(emp.id, payrollWeek.start);
                             if (override !== null) return sum + override;
                             const empSales = salesForEmployee(emp.id).filter((s) => isSaleInRange(s, payrollWeek.start, payrollWeek.end));
