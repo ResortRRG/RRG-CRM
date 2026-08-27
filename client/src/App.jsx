@@ -2571,6 +2571,17 @@ export default function TeamCRM() {
                   {money(declinedSales.reduce((sum, r) => sum + (Number(r.totalPrice) || 0), 0))}
                 </div>
               </div>
+              <div style={S.sourceCard}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ ...S.leadBadge, background: chartColor("Chargeback") + "22", color: chartColor("Chargeback"), fontSize: 16 }}>Chargeback</span>
+                  <span style={S.sourceCount}>
+                    {chargebackSales.length} sale{chargebackSales.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+                <div style={S.sourceValue}>
+                  {money(chargebackSales.reduce((sum, r) => sum + (Number(r.refundAmount) || 0), 0))}
+                </div>
+              </div>
             </div>
 
             <div style={{ ...S.dashboardSectionLabel, marginTop: 24 }}>
@@ -2847,7 +2858,8 @@ export default function TeamCRM() {
                     s.name.toLowerCase().includes(q2) ||
                     (s.email || "").toLowerCase().includes(q2) ||
                     (s.phone || "").toLowerCase().includes(q2) ||
-                    (s.city || "").toLowerCase().includes(q2)
+                    (s.city || "").toLowerCase().includes(q2) ||
+                    (s.genieNumber || "").toLowerCase().includes(q2)
                   );
                 })
                 .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
@@ -2897,7 +2909,7 @@ export default function TeamCRM() {
                         <input
                           value={leadsSearch}
                           onChange={(e) => setLeadsSearch(e.target.value)}
-                          placeholder="Search leads"
+                          placeholder="Search leads or Genie #"
                           style={S.searchInput}
                         />
                         {leadsSearch && (
