@@ -637,6 +637,7 @@ export default function TeamCRM() {
   const [mergeBuilderPairs, setMergeBuilderPairs] = useState([]); // [{ fromId, toId, fromName, toName }]
   const [mergeBuilderFromId, setMergeBuilderFromId] = useState("");
   const [mergeBuilderToId, setMergeBuilderToId] = useState("");
+  const [confirmDeactivateEmployee, setConfirmDeactivateEmployee] = useState(null); // { id, name, date } | null
   useEffect(() => {
     if (employeeDetailId) {
       setEmployeeDetailMinimized(false);
@@ -2283,9 +2284,10 @@ export default function TeamCRM() {
     setConfirmDelete(null);
     setEmployeeModal(null);
   }
-  function deactivateEmployee(id) {
-    updateEmployees(employees.map((e) => (e.id === id ? { ...e, active: false, deactivatedDate: todayDateStr() } : e)));
+  function deactivateEmployee(id, date) {
+    updateEmployees(employees.map((e) => (e.id === id ? { ...e, active: false, deactivatedDate: date || todayDateStr() } : e)));
     setEmployeeModal(null);
+    setConfirmDeactivateEmployee(null);
   }
   function reactivateEmployee(id) {
     updateEmployees(employees.map((e) => (e.id === id ? { ...e, active: true, deactivatedDate: null } : e)));
@@ -4639,36 +4641,6 @@ export default function TeamCRM() {
                 <Upload size={14} /> Import historical leads
                 <input type="file" accept=".json" onChange={handleImportFileSelected} style={{ display: "none" }} />
               </label>
-              <button
-                onClick={() => {
-                  const knownPairs = [
-                    { from: "Cotey", to: "Cotey Kewley" },
-                    { from: "Nick", to: "Nicholas Pelloni" },
-                    { from: "Allan", to: "Allan Lund" },
-                    { from: "Cheyenne", to: "Cheyenne Woodring" },
-                    { from: "Tina", to: "Cristina Rossi" },
-                    { from: "Cristina", to: "Cristina Rossi" },
-                    { from: "Leigha", to: "Kasha Mosley" },
-                    { from: "Spinks", to: "Christopher Spinks" },
-                    { from: "Tory", to: "Tory Brush" },
-                  ];
-                  const resolved = knownPairs
-                    .map(({ from, to }) => {
-                      const fromEmp = employees.find((e) => (e.name || "").trim().toLowerCase() === from.trim().toLowerCase());
-                      const toEmp = employees.find((e) => (e.name || "").trim().toLowerCase() === to.trim().toLowerCase());
-                      if (!fromEmp || !toEmp || fromEmp.id === toEmp.id) return null;
-                      return { fromId: fromEmp.id, toId: toEmp.id, fromName: fromEmp.name, toName: toEmp.name };
-                    })
-                    .filter(Boolean);
-                  setMergeBuilderPairs(resolved);
-                  setMergeBuilderFromId("");
-                  setMergeBuilderToId("");
-                  setMergeBuilderOpen(true);
-                }}
-                style={S.ghostBtn}
-              >
-                <Users size={14} /> Merge duplicate employees
-              </button>
             </div>
             {backupStatus && typeof backupStatus === "object" && (
               <div style={S.payslipErrorNote}>{backupStatus.error}</div>
@@ -4727,120 +4699,6 @@ export default function TeamCRM() {
       )}
 
       {/* Merge employees builder */}
-      {mergeBuilderOpen && (
-        <Modal onClose={() => setMergeBuilderOpen(false)}>
-          <div style={{ fontFamily: T.display, fontSize: 17, fontWeight: 500, color: T.ink, marginBottom: 6 }}>
-            Merge duplicate employee records
-          </div>
-          <div style={{ fontSize: 12.5, color: T.textMuted, marginBottom: 14, lineHeight: 1.5 }}>
-            Pick a duplicate ("From") and the real employee it should merge into ("To"). Every sale credited to the
-            duplicate gets reassigned, and the duplicate record is removed. This can't be undone.
-          </div>
-
-          <div style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 12 }}>
-            <div style={{ flex: 1 }}>
-              <Field label="From (duplicate)">
-                <div style={{ position: "relative" }}>
-                  <select value={mergeBuilderFromId} onChange={(e) => setMergeBuilderFromId(e.target.value)} style={S.select}>
-                    <option value="">Choose employee</option>
-                    {[...employees]
-                      .sort((a, b) => a.name.localeCompare(b.name))
-                      .map((e) => (
-                        <option key={e.id} value={e.id}>
-                          {e.name}
-                          {e.active === false ? " (inactive)" : ""}
-                        </option>
-                      ))}
-                  </select>
-                  <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
-                </div>
-              </Field>
-            </div>
-            <div style={{ flex: 1 }}>
-              <Field label="To (keep this one)">
-                <div style={{ position: "relative" }}>
-                  <select value={mergeBuilderToId} onChange={(e) => setMergeBuilderToId(e.target.value)} style={S.select}>
-                    <option value="">Choose employee</option>
-                    {[...employees]
-                      .sort((a, b) => a.name.localeCompare(b.name))
-                      .map((e) => (
-                        <option key={e.id} value={e.id}>
-                          {e.name}
-                          {e.active === false ? " (inactive)" : ""}
-                        </option>
-                      ))}
-                  </select>
-                  <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
-                </div>
-              </Field>
-            </div>
-            <button
-              style={{ ...S.ghostBtn, flexShrink: 0 }}
-              disabled={!mergeBuilderFromId || !mergeBuilderToId || mergeBuilderFromId === mergeBuilderToId}
-              onClick={() => {
-                const fromEmp = employees.find((e) => e.id === mergeBuilderFromId);
-                const toEmp = employees.find((e) => e.id === mergeBuilderToId);
-                if (!fromEmp || !toEmp) return;
-                if (mergeBuilderPairs.some((p) => p.fromId === fromEmp.id)) return;
-                setMergeBuilderPairs((prev) => [
-                  ...prev,
-                  { fromId: fromEmp.id, toId: toEmp.id, fromName: fromEmp.name, toName: toEmp.name },
-                ]);
-                setMergeBuilderFromId("");
-                setMergeBuilderToId("");
-              }}
-            >
-              Add
-            </button>
-          </div>
-
-          {mergeBuilderPairs.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16 }}>
-              {mergeBuilderPairs.map((m, i) => (
-                <div
-                  key={i}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    fontSize: 12.5,
-                    background: T.paper,
-                    border: `1px solid ${T.border}`,
-                    borderRadius: 7,
-                    padding: "6px 10px",
-                  }}
-                >
-                  <span style={{ color: T.textMuted, flex: 1 }}>{m.fromName}</span>
-                  <span style={{ color: T.borderStrong }}>→</span>
-                  <span style={{ fontWeight: 600, flex: 1 }}>{m.toName}</span>
-                  <button
-                    onClick={() => setMergeBuilderPairs((prev) => prev.filter((_, j) => j !== i))}
-                    style={S.iconBtnGhost}
-                  >
-                    <X size={13} color={T.textMuted} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-            <button style={S.ghostBtn} onClick={() => setMergeBuilderOpen(false)}>
-              Cancel
-            </button>
-            <button
-              style={{ ...S.primaryBtn, ...(mergeBuilderPairs.length === 0 ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
-              disabled={mergeBuilderPairs.length === 0}
-              onClick={() => {
-                setMergeBuilderOpen(false);
-                mergeEmployees(mergeBuilderPairs);
-              }}
-            >
-              Merge {mergeBuilderPairs.length || ""} {mergeBuilderPairs.length === 1 ? "pair" : "pairs"}
-            </button>
-          </div>
-        </Modal>
-      )}
 
       {/* Add/edit expense transaction */}
       {expenseModal && (
@@ -5017,10 +4875,42 @@ export default function TeamCRM() {
                 ? () =>
                     employeeModal.active === false
                       ? reactivateEmployee(employeeModal.id)
-                      : deactivateEmployee(employeeModal.id)
+                      : setConfirmDeactivateEmployee({ id: employeeModal.id, name: employeeModal.name, date: todayDateStr() })
                 : null
             }
           />
+        </Modal>
+      )}
+
+      {/* Confirm deactivate employee with a chosen date */}
+      {confirmDeactivateEmployee && (
+        <Modal onClose={() => setConfirmDeactivateEmployee(null)} narrow>
+          <div style={{ fontFamily: T.display, fontSize: 17, fontWeight: 500, color: T.ink, marginBottom: 6 }}>
+            Deactivate {confirmDeactivateEmployee.name}?
+          </div>
+          <div style={{ fontSize: 12.5, color: T.textMuted, marginBottom: 14, lineHeight: 1.5 }}>
+            Choose the date this actually took effect. They'll still show up correctly on RRG Board and Payroll for
+            any week before that date, but won't appear on the week that starts on or after it.
+          </div>
+          <Field label="Deactivation date">
+            <input
+              type="date"
+              value={confirmDeactivateEmployee.date}
+              onChange={(e) => e.target.value && setConfirmDeactivateEmployee((c) => ({ ...c, date: e.target.value }))}
+              style={S.input}
+            />
+          </Field>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
+            <button style={S.ghostBtn} onClick={() => setConfirmDeactivateEmployee(null)}>
+              Cancel
+            </button>
+            <button
+              style={S.dangerBtn}
+              onClick={() => deactivateEmployee(confirmDeactivateEmployee.id, confirmDeactivateEmployee.date)}
+            >
+              Deactivate
+            </button>
+          </div>
         </Modal>
       )}
 
