@@ -1887,13 +1887,15 @@ export default function TeamCRM() {
       )
       .join("");
     const refundRowsHtml = employeeDetailRefundEntries
-      .map(
-        (r) => `
+      .map((r) => {
+        const entryType = (buildRoleEntries(r.sale, employeeDetail.id)[0] || {}).type;
+        const nameColor = (SALE_TYPES.find((t) => t.id === entryType) || {}).color || "#A32D2D";
+        return `
           <tr>
-            <td style="padding:6px 10px;border-bottom:1px solid #E6E2D6;color:#A32D2D;">Refund — ${r.sale.name}</td>
+            <td style="padding:6px 10px;border-bottom:1px solid #E6E2D6;color:#A32D2D;">Refund — <span style="color:${nameColor};font-weight:600;">${r.sale.name}</span></td>
             <td style="padding:6px 10px;border-bottom:1px solid #E6E2D6;color:#A32D2D;text-align:right;" colspan="2">-${money(r.credit * (employeeDetailRate / 100))}</td>
-          </tr>`
-      )
+          </tr>`;
+      })
       .join("");
     const html = `
       <div style="font-family:Arial,sans-serif;color:#1B1E1A;max-width:600px;margin:0 auto;">
@@ -5064,14 +5066,20 @@ export default function TeamCRM() {
               </div>
               {employeeDetailRefundEntries.length > 0 && (
                 <>
-                  {employeeDetailRefundEntries.map(({ sale, credit }) => (
-                    <div key={sale.id} style={{ ...S.detailSummaryRow, color: "#A32D2D" }}>
-                      <span>Refund — {sale.name}</span>
-                      <span style={{ fontFamily: T.mono, fontSize: 14 }}>
-                        -{money(credit * (employeeDetailRate / 100))}
-                      </span>
-                    </div>
-                  ))}
+                  {employeeDetailRefundEntries.map(({ sale, credit }) => {
+                    const entryType = (buildRoleEntries(sale, employeeDetail.id)[0] || {}).type;
+                    const nameColor = (SALE_TYPES.find((t) => t.id === entryType) || {}).color || "#A32D2D";
+                    return (
+                      <div key={sale.id} style={{ ...S.detailSummaryRow, color: "#A32D2D" }}>
+                        <span>
+                          Refund — <span style={{ color: nameColor, fontWeight: 600 }}>{sale.name}</span>
+                        </span>
+                        <span style={{ fontFamily: T.mono, fontSize: 14 }}>
+                          -{money(credit * (employeeDetailRate / 100))}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </>
               )}
               <div style={S.detailSummaryRow}>
