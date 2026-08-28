@@ -3147,10 +3147,10 @@ export default function TeamCRM() {
                             <span style={S.leadName}>{s.name}</span>
                             {s.refunded && (
                               <>
-                                <span style={S.refundedBadge}>
+                                <span style={{ ...S.refundedBadge, fontSize: 14 }}>
                                   {s.refundType === "partial" ? `Partial refund ${money(s.refundAmount)}` : "Refunded"}
                                 </span>
-                                <span style={{ ...S.leadBadge, background: categoryColor("Chargeback").bg, color: categoryColor("Chargeback").color }}>
+                                <span style={{ ...S.leadBadge, fontSize: 14, background: categoryColor("Chargeback").bg, color: categoryColor("Chargeback").color }}>
                                   Chargeback
                                 </span>
                               </>
@@ -3159,6 +3159,7 @@ export default function TeamCRM() {
                               <span
                                 style={{
                                   ...S.leadBadge,
+                                  fontSize: 14,
                                   ...(st === "Declined"
                                     ? { background: "#FCEBEB", color: "#A32D2D" }
                                     : st === "Pending"
@@ -3170,11 +3171,11 @@ export default function TeamCRM() {
                               </span>
                             )}
                             {s.leadSubmittedTo && (
-                              <span style={{ ...S.leadBadge, ...(s.leadSubmittedTo === "Monster" ? S.leadBadgeMonster : S.leadBadgePGR) }}>
+                              <span style={{ ...S.leadBadge, fontSize: 14, ...(s.leadSubmittedTo === "Monster" ? S.leadBadgeMonster : S.leadBadgePGR) }}>
                                 {s.leadSubmittedTo}
                               </span>
                             )}
-                            {s.source && <span style={S.sourceBadge}>{s.source}</span>}
+                            {s.source && <span style={{ ...S.sourceBadge, fontSize: 14 }}>{s.source}</span>}
                           </div>
                           <div style={S.leadCardActions}>
                             <button style={S.ghostBtn} onClick={() => setSaleModal({ ...s })}>
@@ -7138,7 +7139,7 @@ const S = {
     display: "flex",
     flexDirection: "column",
     gap: 2,
-    fontSize: 12.5,
+    fontSize: 12,
     color: T.ink,
     minWidth: 0,
     overflowWrap: "anywhere",
@@ -7152,13 +7153,13 @@ const S = {
     paddingTop: 10,
     borderTop: `1px solid ${T.border}`,
   },
-  leadEmployeeItem: { display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: T.ink },
+  leadEmployeeItem: { display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.ink },
   refundImpactNote: { fontFamily: T.mono, fontSize: 12.5, fontWeight: 700, color: "#A32D2D" },
   leadNotes: {
     marginTop: 10,
     paddingTop: 10,
     borderTop: `1px solid ${T.border}`,
-    fontSize: 12.5,
+    fontSize: 12,
     color: T.textMuted,
     lineHeight: 1.5,
   },
