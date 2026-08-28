@@ -3674,15 +3674,15 @@ export default function TeamCRM() {
                 <table style={{ ...S.table, minWidth: 940 }}>
                   <thead>
                     <tr>
-                      <th style={S.th}>Employee</th>
-                      <th style={S.th}>Sales this week</th>
-                      <th style={S.th}>Sales total</th>
-                      <th style={S.th}>Commission %</th>
-                      <th style={S.th}>Commission owed</th>
-                      <th style={S.th}>Refund deduction</th>
-                      <th style={S.th}>Base pay</th>
-                      <th style={S.th}>Spiff</th>
-                      <th style={S.th}>Total pay</th>
+                      <th style={{ ...S.th, fontSize: 12 }}>Employee</th>
+                      <th style={{ ...S.th, fontSize: 12 }}>Sales this week</th>
+                      <th style={{ ...S.th, fontSize: 12 }}>Sales total</th>
+                      <th style={{ ...S.th, fontSize: 12 }}>Commission %</th>
+                      <th style={{ ...S.th, fontSize: 12 }}>Commission owed</th>
+                      <th style={{ ...S.th, fontSize: 12 }}>Refund deduction</th>
+                      <th style={{ ...S.th, fontSize: 12 }}>Base pay</th>
+                      <th style={{ ...S.th, fontSize: 12 }}>Spiff</th>
+                      <th style={{ ...S.th, fontSize: 12 }}>Total pay</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -3713,7 +3713,7 @@ export default function TeamCRM() {
                       const isOverridden = override !== null;
                       return (
                         <tr key={emp.id} className="crm-row" onClick={() => setEmployeeModal({ ...emp })}>
-                          <td style={{ ...S.td, fontWeight: 500, whiteSpace: "nowrap" }}>
+                          <td style={{ ...S.td, fontSize: 14, fontWeight: 500, whiteSpace: "nowrap" }}>
                             <div style={S.reorderCell}>
                               <div style={S.reorderBtns} onClick={(e) => e.stopPropagation()}>
                                 <button
@@ -3736,18 +3736,18 @@ export default function TeamCRM() {
                               {emp.name}
                             </div>
                           </td>
-                          <td style={S.td}>
+                          <td style={{ ...S.td, fontSize: 14 }}>
                             {empWeekSales.length} sale{empWeekSales.length === 1 ? "" : "s"} · {money(empWeekTotal)}
                           </td>
-                          <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14 }}>{money(empWeekTotal)}</td>
-                          <td style={S.td}>
+                          <td style={{ ...S.td, fontFamily: T.mono, fontSize: 15 }}>{money(empWeekTotal)}</td>
+                          <td style={{ ...S.td, fontSize: 14 }}>
                             {rate > 0 ? (
-                              <span style={S.commissionRateBadge}>{rate}%</span>
+                              <span style={{ ...S.commissionRateBadge, fontSize: 13 }}>{rate}%</span>
                             ) : (
                               <span style={{ color: T.borderStrong }}>Not set</span>
                             )}
                           </td>
-                          <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 500 }}>
+                          <td style={{ ...S.td, fontFamily: T.mono, fontSize: 15, fontWeight: 500 }}>
                             {rate > 0 ? money(commissionOwed) : "—"}
                           </td>
                           <td style={{ ...S.td, whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
@@ -3774,10 +3774,10 @@ export default function TeamCRM() {
                               )}
                             </div>
                           </td>
-                          <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 500 }}>
+                          <td style={{ ...S.td, fontFamily: T.mono, fontSize: 15, fontWeight: 500 }}>
                             {hasBasePay ? money(basePay) : "—"}
                           </td>
-                          <td style={{ ...S.td, fontFamily: T.mono, fontSize: 13, fontWeight: 600 }}>
+                          <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 600 }}>
                             {spiffPaidUnpaid.paid === 0 && spiffPaidUnpaid.unpaid === 0 ? (
                               <span style={{ color: T.borderStrong }}>—</span>
                             ) : (
@@ -3817,7 +3817,7 @@ export default function TeamCRM() {
                                 </button>
                               ) : (
                                 guaranteeApplied && (
-                                  <span style={S.minGuaranteeBadge}>
+                                  <span style={{ ...S.minGuaranteeBadge, fontSize: 11 }}>
                                     min guarantee{empAbsences > 0 ? ` (−${empAbsences}d)` : ""}
                                   </span>
                                 )
@@ -7328,16 +7328,16 @@ const S = {
     textTransform: "uppercase",
   },
   totalPayCell: { display: "flex", alignItems: "center", gap: 4 },
-  totalPayCurrency: { fontFamily: T.mono, fontSize: 15, fontWeight: 700, color: T.pineDark },
+  totalPayCurrency: { fontFamily: T.mono, fontSize: 17, fontWeight: 700, color: T.pineDark },
   totalPayInput: {
     fontFamily: T.mono,
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: 700,
     border: `1px solid transparent`,
     background: "transparent",
     borderRadius: 5,
     padding: "3px 4px",
-    width: 72,
+    width: 80,
     outline: "none",
   },
   totalPayResetBtn: {
@@ -7351,7 +7351,7 @@ const S = {
     borderRadius: 5,
     flexShrink: 0,
   },
-  customPayNote: { fontSize: 10, color: "#8A5A1E", marginTop: 2 },
+  customPayNote: { fontSize: 11, color: "#8A5A1E", marginTop: 2 },
   emptyState: { textAlign: "center", padding: "50px 0" },
   overlay: {
     position: "fixed",
