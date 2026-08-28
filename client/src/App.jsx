@@ -2176,14 +2176,56 @@ export default function TeamCRM() {
     setContactModal(null);
   }
   function saveSale(form) {
+    let savedSale;
+    let wasAlreadyApproved = false;
     if (form.id) {
-      updateSales(sales.map((s) => (s.id === form.id ? { ...s, ...form } : s)));
+      const existing = sales.find((s) => s.id === form.id);
+      wasAlreadyApproved = !!(existing && existing.status === "Approved");
+      savedSale = { ...existing, ...form };
+      updateSales(sales.map((s) => (s.id === form.id ? savedSale : s)));
     } else {
-      updateSales([...sales, { ...form, id: uid(), createdAt: Date.now() }]);
+      savedSale = { ...form, id: uid(), createdAt: Date.now() };
+      updateSales([...sales, savedSale]);
       setEntryJustSaved(true);
     }
     setSaleModal(null);
     setSaleModalMinimized(false);
+
+    // Push newly-Approved Monster deals to EPG in the background — this
+    // never blocks the save or the UI, and failures get recorded on the
+    // sale itself (see pushSaleToEpg) instead of silently vanishing.
+    const justBecameApproved = savedSale.status === "Approved" && !wasAlreadyApproved;
+    if (justBecameApproved && savedSale.leadSubmittedTo === "Monster") {
+      pushSaleToEpg(savedSale);
+    }
+  }
+  async function pushSaleToEpg(sale) {
+    try {
+      const res = await fetch("/api/epg/push-sale", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(sale),
+      });
+      const data = await res.json().catch(() => ({}));
+      const patch = res.ok
+        ? { epgPushStatus: "success", epgPushedAt: new Date().toISOString(), epgPushError: null }
+        : { epgPushStatus: "failed", epgPushError: data.error || `EPG rejected the request (status ${res.status}).` };
+      setSales((prev) => {
+        const next = prev.map((s) => (s.id === sale.id ? { ...s, ...patch } : s));
+        window.storage.set("crm:sales", JSON.stringify(next), true).catch((e) => console.error("EPG status save failed", e));
+        return next;
+      });
+    } catch (err) {
+      console.error("EPG push failed:", err);
+      setSales((prev) => {
+        const next = prev.map((s) =>
+          s.id === sale.id ? { ...s, epgPushStatus: "failed", epgPushError: "Network error reaching EPG" } : s
+        );
+        window.storage.set("crm:sales", JSON.stringify(next), true).catch((e) => console.error("EPG status save failed", e));
+        return next;
+      });
+    }
   }
   function deleteSale(id) {
     updateSales(sales.filter((s) => s.id !== id));
@@ -2801,7 +2843,21 @@ export default function TeamCRM() {
                           .map((s) => (
                             <tr key={s.id} className="crm-row" style={S.tr} onClick={() => setSaleModal({ ...s })}>
                               <td style={S.td}>{formatTimestamp(s.timestamp)}</td>
-                              <td style={{ ...S.td, fontWeight: 500 }}>{s.name}</td>
+                              <td style={{ ...S.td, fontWeight: 500 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                  {s.name}
+                                  {s.epgPushStatus === "success" && (
+                                    <span style={S.epgBadgeSuccess} title={`Sent to EPG${s.epgPushedAt ? " " + new Date(s.epgPushedAt).toLocaleString("en-US") : ""}`}>
+                                      EPG ✓
+                                    </span>
+                                  )}
+                                  {s.epgPushStatus === "failed" && (
+                                    <span style={S.epgBadgeFailed} title={s.epgPushError || "Failed to send to EPG"}>
+                                      EPG ✗
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
                               <td style={S.td}>{s.spouseName}</td>
                               <td style={S.td}>{s.phone}</td>
                               <td style={S.td}>{s.email}</td>
@@ -6556,6 +6612,29 @@ const S = {
     borderRadius: 10,
     textTransform: "uppercase",
     letterSpacing: "0.03em",
+  },
+  epgBadgeSuccess: {
+    fontSize: 9,
+    fontWeight: 700,
+    color: T.pineDark,
+    background: "#EAF3EC",
+    padding: "1px 6px",
+    borderRadius: 10,
+    letterSpacing: "0.02em",
+    whiteSpace: "nowrap",
+    flexShrink: 0,
+  },
+  epgBadgeFailed: {
+    fontSize: 9,
+    fontWeight: 700,
+    color: "#A32D2D",
+    background: "#FCEBEB",
+    padding: "1px 6px",
+    borderRadius: 10,
+    letterSpacing: "0.02em",
+    whiteSpace: "nowrap",
+    flexShrink: 0,
+    cursor: "help",
   },
   pnlTransactionList: {
     display: "flex",
