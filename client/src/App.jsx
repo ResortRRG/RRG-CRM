@@ -3709,7 +3709,7 @@ export default function TeamCRM() {
                       const guaranteeApplied = rawBasePay < empMinGuarantee;
                       const empAbsences = absentDaysInWeek(emp.id, payrollWeek.start);
                       const override = getPayrollOverride(emp.id, payrollWeek.start);
-                      const totalPay = override !== null ? override : computedTotalPay;
+                      const totalPay = Math.round(override !== null ? override : computedTotalPay);
                       const isOverridden = override !== null;
                       return (
                         <tr key={emp.id} className="crm-row" onClick={() => setEmployeeModal({ ...emp })}>
@@ -3843,7 +3843,7 @@ export default function TeamCRM() {
                         {money(
                           payrollEmployeesForWeek.reduce((sum, emp) => {
                             const override = getPayrollOverride(emp.id, payrollWeek.start);
-                            if (override !== null) return sum + override;
+                            if (override !== null) return sum + Math.round(override);
                             const empSales = salesForEmployee(emp.id).filter((s) => isSaleInRange(s, payrollWeek.start, payrollWeek.end));
                             const total = empSales.reduce((s, r) => s + saleCredit(r, emp.id), 0);
                             const rate = Number(emp.commissionRate) || 0;
@@ -3855,7 +3855,7 @@ export default function TeamCRM() {
                             const basePay = hasBasePay ? Number(emp.basePay) || 0 : 0;
                             const spiffTotal = spiffTotalInWeek(emp.id, payrollWeek.start);
                             const guaranteedBase = Math.max(commission + basePay, effectiveMinGuarantee(emp.id, payrollWeek.start));
-                            return sum + guaranteedBase + spiffTotal;
+                            return sum + Math.round(guaranteedBase + spiffTotal);
                           }, 0)
                         )}
                       </td>
