@@ -1269,7 +1269,12 @@ export default function TeamCRM() {
   });
   const declinedSales = dashboardSales.filter((s) => s.status === "Declined");
   const pendingSales = dashboardSales.filter((s) => s.status === "Pending");
-  const chargebackSales = dashboardSales.filter((s) => s.refunded);
+  // Uses the refund's own date (not the original sale's date) so this always
+  // matches Reports' "Refunds" figure — a refund belongs to whichever period
+  // it actually happened in, same as any other transaction.
+  const chargebackSales = dashboardRange
+    ? sales.filter((s) => s.refunded && dateInRange(s.refundedAt, dashboardRange.start, dashboardRange.end))
+    : sales.filter((s) => s.refunded);
   const dashboardChartSegments = [
     ...salesBySource.map((row) => ({
       label: row.source,
@@ -1486,7 +1491,25 @@ export default function TeamCRM() {
   const pnlOtherRevenue = pnlPeriodSales
     .filter((s) => s.leadSubmittedTo !== "Monster" && s.leadSubmittedTo !== "PGR")
     .reduce((sum, s) => sum + (Number(s.totalPrice) || 0), 0);
-  const pnlRevenue = pnlMonsterRevenue + pnlPgrRevenue + pnlOtherRevenue;
+  // Refunds count toward whichever period the refund itself happened in
+  // (not the original sale date) — same rule as Dashboard and Reports, so
+  // all three always agree with each other.
+  const pnlRefundedSales = sales.filter(
+    (s) => s.refunded && isSaleInRange({ timestamp: s.refundedAt }, pnlPeriodStart, pnlPeriodEnd)
+  );
+  const pnlMonsterRefunds =
+    pnlRefundedSales
+      .filter((s) => s.leadSubmittedTo === "Monster")
+      .reduce((sum, s) => sum + (Number(s.refundAmount) || 0), 0) * ((Number(settings.monsterCommissionRate) || 0) / 100);
+  const pnlPgrRefunds =
+    pnlRefundedSales
+      .filter((s) => s.leadSubmittedTo === "PGR")
+      .reduce((sum, s) => sum + (Number(s.refundAmount) || 0), 0) * ((Number(settings.pgrCommissionRate) || 0) / 100);
+  const pnlOtherRefunds = pnlRefundedSales
+    .filter((s) => s.leadSubmittedTo !== "Monster" && s.leadSubmittedTo !== "PGR")
+    .reduce((sum, s) => sum + (Number(s.refundAmount) || 0), 0);
+  const pnlTotalRefunds = pnlMonsterRefunds + pnlPgrRefunds + pnlOtherRefunds;
+  const pnlRevenue = pnlMonsterRevenue + pnlPgrRevenue + pnlOtherRevenue - pnlTotalRefunds;
   const pnlExpensesForMonth = expenses[pnlMonthKey] || {};
   const pnlAutoPayrollTotal = payrollTotalForRange(pnlPeriodStart, pnlPeriodEnd);
   const pnlExpenseRows = settings.expenseCategories.map((cat) => {
@@ -4377,8 +4400,9 @@ export default function TeamCRM() {
                 </div>
                 <div style={S.hint}>
                   Revenue is your actual commission for {pnlPeriodLabel} — {settings.monsterCommissionRate}% of Monster
-                  sales and {settings.pgrCommissionRate}% of PGR sales, not the customer's full package price. Payroll
-                  is calculated automatically from actual payroll data for this period. {pnlMode === "week"
+                  sales and {settings.pgrCommissionRate}% of PGR sales, not the customer's full package price, minus
+                  the commission-equivalent of any refunds recorded in this period. Payroll is calculated automatically
+                  from actual payroll data for this period. {pnlMode === "week"
                     ? `Other expenses are entered monthly (${pnlExpenseSourceMonthLabel}) and shown here as a 1/${pnlWeeksInSourceMonth.toFixed(1)} weekly share — edit them from Monthly view.`
                     : "Enter your actual monthly expenses below — these come from your books, not the CRM."}
                 </div>
@@ -4387,6 +4411,12 @@ export default function TeamCRM() {
                   <div style={S.sourceCard}>
                     <div style={S.reportsCardLabel}>Revenue</div>
                     <div style={{ ...S.sourceValue, color: T.pineDark }}>{money(pnlRevenue)}</div>
+                  </div>
+                  <div style={S.sourceCard}>
+                    <div style={S.reportsCardLabel}>
+                      Refunds{pnlRefundedSales.length > 0 ? ` (${pnlRefundedSales.length})` : ""}
+                    </div>
+                    <div style={{ ...S.sourceValue, color: "#A32D2D" }}>{money(pnlTotalRefunds)}</div>
                   </div>
                   <div style={S.sourceCard}>
                     <div style={S.reportsCardLabel}>Total expenses</div>
