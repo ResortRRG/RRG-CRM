@@ -6249,6 +6249,10 @@ function SaleForm({ initial, employees, settings, dncList, onCancel, onMinimize,
   }
 
   function submit() {
+    if (blacklistResult && blacklistResult.message && blacklistResult.message !== "Good") {
+      setError("This lead cannot be entered — it was flagged by litigation risk screening. See the warning above.");
+      return;
+    }
     const missing = SALE_REQUIRED_FIELDS.filter((f) => {
       const v = form[f.key];
       return v === undefined || v === null || (typeof v === "string" ? v.trim() === "" : false);
@@ -6298,18 +6302,26 @@ function SaleForm({ initial, employees, settings, dncList, onCancel, onMinimize,
           <div>
             <div style={{ fontWeight: 700 }}>
               {(() => {
-                const codes = blacklistResult.code || [];
-                if (codes.some((c) => c.startsWith("plaintiff"))) return "Flagged as a professional TCPA plaintiff";
-                if (codes.some((c) => c.startsWith("attorney"))) return "Flagged as a litigator attorney";
-                if (codes.some((c) => c.startsWith("prelitigation"))) return "Flagged as a pre-litigation complainer";
-                if (codes.includes("anti-telemarketing")) return "Flagged as anti-telemarketing";
-                if (codes.some((c) => c.endsWith("-dnc"))) return "This number is on a Do Not Call registry";
-                return "This number was flagged by litigation risk screening";
+                // The API's docs show the "code" example as a comma-separated
+                // string even though the schema says array — normalize
+                // either shape so this never crashes on a mismatch.
+                const raw = blacklistResult.code;
+                const codes = Array.isArray(raw) ? raw : typeof raw === "string" ? raw.split(",").map((c) => c.trim()) : [];
+                if (codes.some((c) => c.startsWith("plaintiff"))) return "This lead cannot be entered — flagged as a professional TCPA plaintiff";
+                if (codes.some((c) => c.startsWith("attorney"))) return "This lead cannot be entered — flagged as a litigator attorney";
+                if (codes.some((c) => c.startsWith("prelitigation"))) return "This lead cannot be entered — flagged as a pre-litigation complainer";
+                if (codes.includes("anti-telemarketing")) return "This lead cannot be entered — flagged as anti-telemarketing";
+                if (codes.some((c) => c.endsWith("-dnc"))) return "This lead cannot be entered — this number is on a Do Not Call registry";
+                return "This lead cannot be entered — flagged by litigation risk screening";
               })()}
             </div>
             <div style={{ fontSize: 11.5, marginTop: 2 }}>
               Blacklist Alliance: {blacklistResult.message}
-              {blacklistResult.code && blacklistResult.code.length > 0 ? ` (${blacklistResult.code.join(", ")})` : ""}
+              {(() => {
+                const raw = blacklistResult.code;
+                const codes = Array.isArray(raw) ? raw : typeof raw === "string" ? raw.split(",").map((c) => c.trim()) : [];
+                return codes.length > 0 ? ` (${codes.join(", ")})` : "";
+              })()}
             </div>
           </div>
         </div>
@@ -6543,7 +6555,16 @@ function SaleForm({ initial, employees, settings, dncList, onCancel, onMinimize,
           <button style={S.ghostBtn} onClick={onCancel}>
             Cancel
           </button>
-          <button style={S.primaryBtn} onClick={submit}>
+          <button
+            style={{
+              ...S.primaryBtn,
+              ...(blacklistResult && blacklistResult.message && blacklistResult.message !== "Good"
+                ? { opacity: 0.5, cursor: "not-allowed" }
+                : {}),
+            }}
+            disabled={!!(blacklistResult && blacklistResult.message && blacklistResult.message !== "Good")}
+            onClick={submit}
+          >
             Save sale
           </button>
         </div>
