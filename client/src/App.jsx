@@ -6134,6 +6134,9 @@ function SaleForm({ initial, employees, settings, dncList, onCancel, onMinimize,
   });
   const addressDebounceRef = useRef(null);
   const zipDebounceRef = useRef(null);
+  const blacklistDebounceRef = useRef(null);
+  const lastCheckedPhone = useRef("");
+  const [blacklistResult, setBlacklistResult] = useState(null); // null | { message, code } | { error }
   const lastLookedUpZip = useRef("");
 
   useEffect(() => {
@@ -6172,6 +6175,36 @@ function SaleForm({ initial, employees, settings, dncList, onCancel, onMinimize,
     return () => clearTimeout(zipDebounceRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.zip]);
+
+  // Litigation risk check via Blacklist Alliance — only fires once the phone
+  // number looks complete (10 digits) and only re-checks if it actually
+  // changes, since each lookup has a small real cost on their end.
+  useEffect(() => {
+    const cleanPhone = (form.phone || "").replace(/\D/g, "");
+    clearTimeout(blacklistDebounceRef.current);
+    if (cleanPhone.length !== 10 || cleanPhone === lastCheckedPhone.current) return;
+    blacklistDebounceRef.current = setTimeout(async () => {
+      try {
+        lastCheckedPhone.current = cleanPhone;
+        const res = await fetch("/api/blacklist/check", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ phone: cleanPhone }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setBlacklistResult({ error: data.error || "Couldn't check litigation risk." });
+          return;
+        }
+        setBlacklistResult(data);
+      } catch (e) {
+        setBlacklistResult({ error: "Network error checking litigation risk." });
+      }
+    }, 800);
+    return () => clearTimeout(blacklistDebounceRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.phone]);
 
   // Address suggestions as you type, via OpenStreetMap's free Nominatim search
   // (no API key needed). Debounced and limited to respect their usage policy.
@@ -6258,6 +6291,31 @@ function SaleForm({ initial, employees, settings, dncList, onCancel, onMinimize,
             </div>
           </div>
         </div>
+      )}
+      {blacklistResult && blacklistResult.message && blacklistResult.message !== "Good" && (
+        <div style={S.dncWarningBanner}>
+          <ShieldAlert size={16} color="#A32D2D" style={{ flexShrink: 0 }} />
+          <div>
+            <div style={{ fontWeight: 700 }}>
+              {(() => {
+                const codes = blacklistResult.code || [];
+                if (codes.some((c) => c.startsWith("plaintiff"))) return "Flagged as a professional TCPA plaintiff";
+                if (codes.some((c) => c.startsWith("attorney"))) return "Flagged as a litigator attorney";
+                if (codes.some((c) => c.startsWith("prelitigation"))) return "Flagged as a pre-litigation complainer";
+                if (codes.includes("anti-telemarketing")) return "Flagged as anti-telemarketing";
+                if (codes.some((c) => c.endsWith("-dnc"))) return "This number is on a Do Not Call registry";
+                return "This number was flagged by litigation risk screening";
+              })()}
+            </div>
+            <div style={{ fontSize: 11.5, marginTop: 2 }}>
+              Blacklist Alliance: {blacklistResult.message}
+              {blacklistResult.code && blacklistResult.code.length > 0 ? ` (${blacklistResult.code.join(", ")})` : ""}
+            </div>
+          </div>
+        </div>
+      )}
+      {blacklistResult && blacklistResult.error && (
+        <div style={{ ...S.hint, color: "#8A5A1E" }}>Litigation risk check: {blacklistResult.error}</div>
       )}
       <Field label="Timestamp">
         <input type="datetime-local" value={form.timestamp || ""} onChange={set("timestamp")} style={S.input} />

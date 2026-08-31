@@ -9,6 +9,7 @@ import { registerEmployeeFileRoutes } from "./employeeFiles.js";
 import { registerExpenseFileRoutes } from "./expenseFiles.js";
 import { registerPayslipRoutes } from "./payslipRoutes.js";
 import { registerEpgRoutes } from "./epgIntegration.js";
+import { registerBlacklistRoutes } from "./blacklistCheck.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -22,6 +23,7 @@ registerEmployeeFileRoutes(app);
 registerExpenseFileRoutes(app);
 registerPayslipRoutes(app);
 registerEpgRoutes(app);
+registerBlacklistRoutes(app);
 
 // Serve the built React app (client/dist) in production.
 const clientDist = path.join(__dirname, "..", "client", "dist");
