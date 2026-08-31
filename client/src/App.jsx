@@ -31,6 +31,7 @@ import {
   EyeOff,
   Minus,
   FileText,
+  ShieldAlert,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -615,6 +616,10 @@ export default function TeamCRM() {
   const [expenses, setExpenses] = useState({}); // { "YYYY-MM": { CategoryName: amount } } — legacy single-number entry
   const [expenseTransactions, setExpenseTransactions] = useState([]); // [{ id, date, category, amount, notes }] — itemized entries
   const [infoNotes, setInfoNotes] = useState([]); // [{ id, date, title, body }] — free-form notes
+  const [dncList, setDncList] = useState([]); // [{ id, name, phone, email, notes, addedAt }]
+  const [dncModal, setDncModal] = useState(null); // null | entry object
+  const [dncBulkOpen, setDncBulkOpen] = useState(false);
+  const [dncBulkText, setDncBulkText] = useState("");
   const [infoNoteModal, setInfoNoteModal] = useState(null); // null | note object
   const [infoNoteError, setInfoNoteError] = useState("");
   const [expenseModal, setExpenseModal] = useState(null); // null | transaction object (always has an id, even before first save)
@@ -648,6 +653,7 @@ export default function TeamCRM() {
   const [employeesView, setEmployeesView] = useState("active"); // 'active' | 'exemployees'
   const [employeeDetailWeekOffset, setEmployeeDetailWeekOffset] = useState(0);
   const [leadsSearch, setLeadsSearch] = useState("");
+  const [leadsSubTab, setLeadsSubTab] = useState("leads"); // 'leads' | 'dnc'
   const [showDuplicateCustomers, setShowDuplicateCustomers] = useState(false);
   const [leadsFilterMode, setLeadsFilterMode] = useState("all"); // 'day' | 'week' | 'month' | 'year' | 'all'
   const [leadsSelectedDate, setLeadsSelectedDate] = useState(todayDateStr());
@@ -753,6 +759,12 @@ export default function TeamCRM() {
       setInfoNotes(inf && inf.value ? JSON.parse(inf.value) : []);
     } catch (e) {
       setInfoNotes([]);
+    }
+    try {
+      const dnc = await window.storage.get("crm:dncList", true);
+      setDncList(dnc && dnc.value ? JSON.parse(dnc.value) : []);
+    } catch (e) {
+      setDncList([]);
     }
     try {
       const st = await window.storage.get("crm:settings", true);
@@ -1588,6 +1600,81 @@ export default function TeamCRM() {
     } catch (err) {
       console.error("Note delete failed:", err);
     }
+  }
+  async function saveDncEntry(form) {
+    const exists = dncList.some((d) => d.id === form.id);
+    const { isNew, ...cleanForm } = form;
+    const next = exists ? dncList.map((d) => (d.id === form.id ? { ...d, ...cleanForm } : d)) : [...dncList, cleanForm];
+    setDncList(next);
+    try {
+      await window.storage.set("crm:dncList", JSON.stringify(next), true);
+      setDncModal(null);
+    } catch (err) {
+      console.error("DNC save failed:", err);
+    }
+  }
+  async function deleteDncEntry(id) {
+    const next = dncList.filter((d) => d.id !== id);
+    setDncList(next);
+    try {
+      await window.storage.set("crm:dncList", JSON.stringify(next), true);
+    } catch (err) {
+      console.error("DNC delete failed:", err);
+    }
+  }
+  // Accepts one entry per line, either a bare phone number or
+  // "Name, Phone, Email" (email optional) — flexible for pasting in
+  // whatever format an existing DNC list happens to already be in.
+  async function bulkAddDncEntries(text) {
+    const lines = text
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    const newEntries = lines
+      .map((line) => {
+        const parts = line.split(",").map((p) => p.trim());
+        if (parts.length === 1) {
+          const val = parts[0];
+          // Guess what a bare single value is: an email has "@", a phone is
+          // mostly digits, otherwise treat it as a name.
+          if (val.includes("@")) {
+            return { id: uid(), name: "", phone: "", email: val, notes: "", addedAt: new Date().toISOString() };
+          }
+          const digitCount = (val.match(/\d/g) || []).length;
+          if (digitCount >= 7) {
+            return { id: uid(), name: "", phone: val, email: "", notes: "", addedAt: new Date().toISOString() };
+          }
+          return { id: uid(), name: val, phone: "", email: "", notes: "", addedAt: new Date().toISOString() };
+        }
+        return {
+          id: uid(),
+          name: parts[0] || "",
+          phone: parts[1] || "",
+          email: parts[2] || "",
+          notes: "",
+          addedAt: new Date().toISOString(),
+        };
+      })
+      .filter((e) => e.name || e.phone || e.email);
+    const next = [...dncList, ...newEntries];
+    setDncList(next);
+    try {
+      await window.storage.set("crm:dncList", JSON.stringify(next), true);
+      setDncBulkText("");
+      setDncBulkOpen(false);
+    } catch (err) {
+      console.error("DNC bulk add failed:", err);
+    }
+  }
+  // Normalizes a phone number to just digits, so formatting differences
+  // ("555-123-4567" vs "(555) 123-4567") don't cause false negatives.
+  function normalizePhone(p) {
+    return (p || "").replace(/\D/g, "");
+  }
+  function matchingDncEntry(phone) {
+    const normalized = normalizePhone(phone);
+    if (!normalized) return null;
+    return dncList.find((d) => normalizePhone(d.phone) === normalized) || null;
   }
 
   const reportsEmployeeRows = activeEmployees
@@ -2945,6 +3032,22 @@ export default function TeamCRM() {
 
         {section === "leads" && (
           <div style={S.contactsWrap}>
+            <div style={S.reportsSubTabs}>
+              <button
+                onClick={() => setLeadsSubTab("leads")}
+                style={{ ...S.reportsSubTabBtn, ...(leadsSubTab === "leads" ? S.reportsSubTabBtnActive : {}) }}
+              >
+                Leads
+              </button>
+              <button
+                onClick={() => setLeadsSubTab("dnc")}
+                style={{ ...S.reportsSubTabBtn, ...(leadsSubTab === "dnc" ? S.reportsSubTabBtnActive : {}) }}
+              >
+                DNC List{dncList.length > 0 ? ` (${dncList.length})` : ""}
+              </button>
+            </div>
+            {leadsSubTab === "leads" && (
+            <>
             {(() => {
               const filteredLeads = [...sales]
                 .filter((s) => {
@@ -3283,6 +3386,64 @@ export default function TeamCRM() {
                 </>
               );
             })()}
+            </>
+            )}
+
+            {leadsSubTab === "dnc" && (
+              <div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                  <div style={S.hint}>
+                    Numbers, emails, or names on this list will show a warning when a rep starts a new sale for them.
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                    <button onClick={() => setDncBulkOpen(true)} style={S.ghostBtn}>
+                      <Upload size={14} /> Bulk add
+                    </button>
+                    <button
+                      onClick={() => setDncModal({ id: uid(), name: "", phone: "", email: "", notes: "", isNew: true })}
+                      style={S.primaryBtn}
+                    >
+                      <Plus size={14} /> New DNC
+                    </button>
+                  </div>
+                </div>
+                {dncList.length === 0 ? (
+                  <div style={S.emptyState}>
+                    <ShieldAlert size={22} color={T.borderStrong} />
+                    <div style={{ marginTop: 8, fontSize: 13, color: T.textMuted }}>No DNC entries yet</div>
+                  </div>
+                ) : (
+                  <div className="crm-scroll" style={{ ...S.tableScroll, marginTop: 12 }}>
+                    <table style={S.table}>
+                      <thead>
+                        <tr>
+                          <th style={S.th}>Name</th>
+                          <th style={S.th}>Phone</th>
+                          <th style={S.th}>Email</th>
+                          <th style={S.th}>Notes</th>
+                          <th style={S.th}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dncList.map((d) => (
+                          <tr key={d.id} style={S.tr} onClick={() => setDncModal(d)}>
+                            <td style={S.td}>{d.name || "—"}</td>
+                            <td style={{ ...S.td, fontFamily: T.mono }}>{d.phone || "—"}</td>
+                            <td style={S.td}>{d.email || "—"}</td>
+                            <td style={S.td}>{d.notes || "—"}</td>
+                            <td style={S.td} onClick={(e) => e.stopPropagation()}>
+                              <button onClick={() => deleteDncEntry(d.id)} style={S.iconBtnGhost}>
+                                <Trash2 size={13} color={T.textMuted} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -4413,6 +4574,55 @@ export default function TeamCRM() {
           </Modal>
         )}
 
+        {/* Add/edit DNC entry */}
+        {dncModal && (
+          <Modal onClose={() => setDncModal(null)}>
+            <DncEntryForm
+              initial={dncModal}
+              onCancel={() => setDncModal(null)}
+              onSave={saveDncEntry}
+              onDelete={
+                !dncModal.isNew
+                  ? async () => {
+                      await deleteDncEntry(dncModal.id);
+                      setDncModal(null);
+                    }
+                  : null
+              }
+            />
+          </Modal>
+        )}
+
+        {/* Bulk add DNC entries */}
+        {dncBulkOpen && (
+          <Modal onClose={() => setDncBulkOpen(false)} narrow>
+            <div style={S.modalTitle}>Bulk add DNC entries</div>
+            <div style={{ ...S.hint, marginBottom: 10 }}>
+              One entry per line — a bare phone number, email, or name works fine on its own, or use "Name, Phone,
+              Email" (any of those can be left blank).
+            </div>
+            <textarea
+              value={dncBulkText}
+              onChange={(e) => setDncBulkText(e.target.value)}
+              style={{ ...S.input, minHeight: 160, resize: "vertical", fontFamily: T.mono, fontSize: 12.5 }}
+              placeholder={"555-123-4567\nJane Doe, 555-987-6543\nJohn Smith, 555-111-2222, john@example.com"}
+              autoFocus
+            />
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 10 }}>
+              <button onClick={() => setDncBulkOpen(false)} style={S.ghostBtn}>
+                Cancel
+              </button>
+              <button
+                onClick={() => bulkAddDncEntries(dncBulkText)}
+                disabled={!dncBulkText.trim()}
+                style={{ ...S.primaryBtn, ...(!dncBulkText.trim() ? { opacity: 0.5, cursor: "not-allowed" } : {}) }}
+              >
+                Add entries
+              </button>
+            </div>
+          </Modal>
+        )}
+
         {section === "admin" && (
           <div style={S.dashboardWrap}>
             <div style={S.dashboardSectionLabel}>Users & access</div>
@@ -4830,6 +5040,7 @@ export default function TeamCRM() {
             initial={saleModal}
             employees={employees}
             settings={settings}
+            dncList={dncList}
             onCancel={() => {
               setSaleModal(null);
               setSaleModalMinimized(false);
@@ -5426,6 +5637,55 @@ function NoteForm({ initial, error: saveError, onCancel, onSave, onDelete }) {
   );
 }
 
+function DncEntryForm({ initial, onCancel, onSave, onDelete }) {
+  const [form, setForm] = useState(initial);
+  const [error, setError] = useState("");
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+
+  function submit() {
+    if (!form.name?.trim() && !form.phone?.trim() && !form.email?.trim()) {
+      setError("Fill in at least one field first");
+      return;
+    }
+    setError("");
+    onSave(form);
+  }
+
+  return (
+    <div>
+      <div style={S.modalTitle}>{form.isNew ? "New DNC" : "Edit DNC entry"}</div>
+      <Field label="Phone">
+        <input value={form.phone || ""} onChange={set("phone")} style={S.input} placeholder="555-123-4567" autoFocus />
+      </Field>
+      <Field label="Name">
+        <input value={form.name || ""} onChange={set("name")} style={S.input} placeholder="Optional" />
+      </Field>
+      <Field label="Email">
+        <input value={form.email || ""} onChange={set("email")} style={S.input} placeholder="Optional" />
+      </Field>
+      <Field label="Notes">
+        <input value={form.notes || ""} onChange={set("notes")} style={S.input} placeholder="Why they're on the list, optional" />
+      </Field>
+      {error && <div style={S.errorText}>{error}</div>}
+      <div style={{ display: "flex", gap: 8, justifyContent: onDelete ? "space-between" : "flex-end", marginTop: 4 }}>
+        {onDelete && (
+          <button onClick={onDelete} style={S.dangerGhostBtn}>
+            <Trash2 size={13} /> Delete
+          </button>
+        )}
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={onCancel} style={S.ghostBtn}>
+            Cancel
+          </button>
+          <button onClick={submit} style={S.primaryBtn}>
+            {form.isNew ? "New DNC" : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ContactForm({ initial, onCancel, onSave, onDelete }) {
   const [form, setForm] = useState(initial);
   const [error, setError] = useState("");
@@ -5856,7 +6116,7 @@ function EmployeeForm({ initial, attendance, onCancel, onSave, onDelete, onToggl
   );
 }
 
-function SaleForm({ initial, employees, settings, onCancel, onMinimize, onSave, onDelete }) {
+function SaleForm({ initial, employees, settings, dncList, onCancel, onMinimize, onSave, onDelete }) {
   const [form, setForm] = useState(initial);
   const [error, setError] = useState("");
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -5864,6 +6124,14 @@ function SaleForm({ initial, employees, settings, onCancel, onMinimize, onSave, 
   const [showAddressSuggestions, setShowAddressSuggestions] = useState(false);
   const [addressLookupBusy, setAddressLookupBusy] = useState(false);
   const [zipLookupBusy, setZipLookupBusy] = useState(false);
+  const normalizedFormPhone = (form.phone || "").replace(/\D/g, "");
+  const dncMatch = (dncList || []).find((d) => {
+    const dPhone = (d.phone || "").replace(/\D/g, "");
+    if (normalizedFormPhone && dPhone && dPhone === normalizedFormPhone) return true;
+    if (form.email && d.email && form.email.trim().toLowerCase() === d.email.trim().toLowerCase()) return true;
+    if (form.name && d.name && form.name.trim().toLowerCase() === d.name.trim().toLowerCase()) return true;
+    return false;
+  });
   const addressDebounceRef = useRef(null);
   const zipDebounceRef = useRef(null);
   const lastLookedUpZip = useRef("");
@@ -5978,6 +6246,19 @@ function SaleForm({ initial, employees, settings, onCancel, onMinimize, onSave, 
         )}
       </div>
       <div style={{ ...S.hint, marginBottom: 10 }}>All fields marked * are required to save.</div>
+      {dncMatch && (
+        <div style={S.dncWarningBanner}>
+          <ShieldAlert size={16} color="#A32D2D" style={{ flexShrink: 0 }} />
+          <div>
+            <div style={{ fontWeight: 700 }}>This person is on your Do Not Call list</div>
+            <div style={{ fontSize: 11.5, marginTop: 2 }}>
+              {dncMatch.name ? `${dncMatch.name} — ` : ""}
+              {dncMatch.phone || dncMatch.email}
+              {dncMatch.notes ? ` — ${dncMatch.notes}` : ""}
+            </div>
+          </div>
+        </div>
+      )}
       <Field label="Timestamp">
         <input type="datetime-local" value={form.timestamp || ""} onChange={set("timestamp")} style={S.input} />
       </Field>
@@ -7502,6 +7783,18 @@ const S = {
   },
   selectChevron: { position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" },
   errorText: { fontSize: 11.5, color: T.red, marginTop: -8, marginBottom: 10 },
+  dncWarningBanner: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 8,
+    background: "#FCEBEB",
+    border: "1px solid #E8B4B4",
+    borderRadius: 8,
+    padding: "10px 12px",
+    marginBottom: 12,
+    fontSize: 13,
+    color: "#A32D2D",
+  },
   passwordEyeBtn: {
     position: "absolute",
     right: 8,
