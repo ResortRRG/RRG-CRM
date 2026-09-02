@@ -4653,6 +4653,117 @@ export default function TeamCRM() {
           </Modal>
         )}
 
+        {/* Merge duplicate employees */}
+        {mergeBuilderOpen && (
+          <Modal onClose={() => setMergeBuilderOpen(false)}>
+            <div style={S.modalTitle}>Merge duplicate employees</div>
+            <div style={{ ...S.hint, marginBottom: 12 }}>
+              Pick the placeholder record ("From") and the real employee it should merge into ("To"). Every sale
+              credited to "From" gets reassigned to "To", and the "From" record is removed. This can't be undone.
+            </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 12 }}>
+              <div style={{ flex: 1 }}>
+                <div style={S.fieldLabel}>From (placeholder to remove)</div>
+                <div style={{ position: "relative" }}>
+                  <select value={mergeBuilderFromId} onChange={(e) => setMergeBuilderFromId(e.target.value)} style={S.select}>
+                    <option value="">Choose employee</option>
+                    {employees.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+                </div>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={S.fieldLabel}>To (real employee to keep)</div>
+                <div style={{ position: "relative" }}>
+                  <select value={mergeBuilderToId} onChange={(e) => setMergeBuilderToId(e.target.value)} style={S.select}>
+                    <option value="">Choose employee</option>
+                    {employees.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  if (!mergeBuilderFromId || !mergeBuilderToId || mergeBuilderFromId === mergeBuilderToId) return;
+                  const fromEmp = employees.find((e) => e.id === mergeBuilderFromId);
+                  const toEmp = employees.find((e) => e.id === mergeBuilderToId);
+                  if (!fromEmp || !toEmp) return;
+                  setMergeBuilderPairs((prev) => [
+                    ...prev,
+                    { fromId: fromEmp.id, toId: toEmp.id, fromName: fromEmp.name, toName: toEmp.name },
+                  ]);
+                  setMergeBuilderFromId("");
+                  setMergeBuilderToId("");
+                }}
+                disabled={!mergeBuilderFromId || !mergeBuilderToId || mergeBuilderFromId === mergeBuilderToId}
+                style={{
+                  ...S.ghostBtn,
+                  ...(!mergeBuilderFromId || !mergeBuilderToId || mergeBuilderFromId === mergeBuilderToId
+                    ? { opacity: 0.5, cursor: "not-allowed" }
+                    : {}),
+                }}
+              >
+                <Plus size={14} /> Add
+              </button>
+            </div>
+            {mergeBuilderPairs.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
+                {mergeBuilderPairs.map((p, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      background: T.paper,
+                      border: `1px solid ${T.border}`,
+                      borderRadius: 7,
+                      padding: "8px 10px",
+                      fontSize: 12.5,
+                    }}
+                  >
+                    <span>
+                      <strong>{p.fromName}</strong> → <strong>{p.toName}</strong>
+                    </span>
+                    <button
+                      onClick={() => setMergeBuilderPairs((prev) => prev.filter((_, i) => i !== idx))}
+                      style={S.iconBtnGhost}
+                    >
+                      <X size={13} color={T.textMuted} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button onClick={() => setMergeBuilderOpen(false)} style={S.ghostBtn}>
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  await mergeEmployees(mergeBuilderPairs);
+                  setMergeBuilderOpen(false);
+                }}
+                disabled={mergeBuilderPairs.length === 0}
+                style={{
+                  ...S.primaryBtn,
+                  ...(mergeBuilderPairs.length === 0 ? { opacity: 0.5, cursor: "not-allowed" } : {}),
+                }}
+              >
+                Merge {mergeBuilderPairs.length || ""} {mergeBuilderPairs.length === 1 ? "pair" : "pairs"}
+              </button>
+            </div>
+          </Modal>
+        )}
+
         {section === "admin" && (
           <div style={S.dashboardWrap}>
             <div style={S.dashboardSectionLabel}>Users & access</div>
@@ -4884,6 +4995,17 @@ export default function TeamCRM() {
                 <Upload size={14} /> Import historical leads
                 <input type="file" accept=".json" onChange={handleImportFileSelected} style={{ display: "none" }} />
               </label>
+              <button
+                onClick={() => {
+                  setMergeBuilderPairs([]);
+                  setMergeBuilderFromId("");
+                  setMergeBuilderToId("");
+                  setMergeBuilderOpen(true);
+                }}
+                style={S.ghostBtn}
+              >
+                <Users size={14} /> Merge duplicate employees
+              </button>
             </div>
             {backupStatus && typeof backupStatus === "object" && (
               <div style={S.payslipErrorNote}>{backupStatus.error}</div>
@@ -4940,8 +5062,6 @@ export default function TeamCRM() {
           </div>
         </Modal>
       )}
-
-      {/* Merge employees builder */}
 
       {/* Add/edit expense transaction */}
       {expenseModal && (
