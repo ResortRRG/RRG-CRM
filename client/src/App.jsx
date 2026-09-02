@@ -600,6 +600,7 @@ export default function TeamCRM() {
   const [myItemsOnly, setMyItemsOnly] = useState(false);
   const [weekOffset, setWeekOffset] = useState(0);
   const [dashboardFilterMode, setDashboardFilterMode] = useState("week"); // 'day' | 'week' | 'month' | 'year' | 'custom' | 'all'
+  const [dashboardSalesListMode, setDashboardSalesListMode] = useState("approved"); // 'approved' | 'pending'
   const [dashboardSelectedDate, setDashboardSelectedDate] = useState(todayDateStr());
   const [dashboardCustomStart, setDashboardCustomStart] = useState(shiftDateStr(todayDateStr(), -7));
   const [dashboardCustomEnd, setDashboardCustomEnd] = useState(todayDateStr());
@@ -2678,7 +2679,9 @@ export default function TeamCRM() {
                     }}
                     style={{ ...S.select, width: 140, paddingRight: 28 }}
                   >
-                    {currentUser && currentUser.role === "admin" && <option value="day">Today</option>}
+                    {currentUser && (currentUser.role === "admin" || currentUser.role === "manager") && (
+                      <option value="day">Today</option>
+                    )}
                     <option value="week">This week</option>
                     <option value="prevweek">Previous week</option>
                     <option value="month">This month</option>
@@ -2805,19 +2808,45 @@ export default function TeamCRM() {
               />
             </div>
 
-            <div style={{ ...S.dashboardSectionLabel, marginTop: 20 }}>
-              Approved sales {dashboardFilterMode === "all" ? "(all time)" : `(${dashboardRangeLabel})`} ({dashboardApprovedSales.length})
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginTop: 20,
+                flexWrap: "wrap",
+                gap: 8,
+              }}
+            >
+              <div style={S.dashboardSectionLabel}>
+                {dashboardSalesListMode === "pending" ? "Pending sales" : "Approved sales"}{" "}
+                {dashboardFilterMode === "all" ? "(all time)" : `(${dashboardRangeLabel})`} (
+                {dashboardSalesListMode === "pending" ? pendingSales.length : dashboardApprovedSales.length})
+              </div>
+              <div style={{ position: "relative" }}>
+                <select
+                  value={dashboardSalesListMode}
+                  onChange={(e) => setDashboardSalesListMode(e.target.value)}
+                  style={{ ...S.select, width: 120, paddingRight: 28 }}
+                >
+                  <option value="approved">Approved</option>
+                  <option value="pending">Pending</option>
+                </select>
+                <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+              </div>
             </div>
-            {dashboardApprovedSales.length === 0 ? (
+            {(dashboardSalesListMode === "pending" ? pendingSales : dashboardApprovedSales).length === 0 ? (
               <div style={S.emptyState}>
                 <TrendingUp size={22} color={T.borderStrong} />
                 <div style={{ marginTop: 8, fontSize: 13, color: T.textMuted }}>
-                  {dashboardFilterMode === "all" ? "No approved sales yet" : `No approved sales for ${dashboardRangeLabel} yet`}
+                  {dashboardFilterMode === "all"
+                    ? `No ${dashboardSalesListMode} sales yet`
+                    : `No ${dashboardSalesListMode} sales for ${dashboardRangeLabel} yet`}
                 </div>
               </div>
             ) : (
               <div style={S.recentList}>
-                {[...dashboardApprovedSales]
+                {[...(dashboardSalesListMode === "pending" ? pendingSales : dashboardApprovedSales)]
                   .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0))
                   .map((s) => {
                     const isManager = currentUser && currentUser.role === "manager";
@@ -2839,6 +2868,9 @@ export default function TeamCRM() {
                           <div style={S.recentTitle}>{s.name}</div>
                           {!isManager && (
                             <div style={S.recentSub}>{s.city ? `${s.city}${s.state ? `, ${s.state}` : ""}` : formatTimestamp(s.timestamp)}</div>
+                          )}
+                          {isManager && dashboardSalesListMode === "pending" && s.phone && (
+                            <div style={S.recentSub}>{s.phone}</div>
                           )}
                         </div>
                         <div style={S.dealValue}>{s.totalPrice ? money(s.totalPrice) : ""}</div>
