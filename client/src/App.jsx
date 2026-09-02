@@ -2228,51 +2228,41 @@ export default function TeamCRM() {
   // on both sides — if either isn't found, that specific pair is skipped and
   // reported, so nothing gets silently mismatched.
   async function mergeEmployees(mergePairs) {
-    try {
-      const notFound = [];
-      let nextEmployees = [...employees];
-      const idRedirect = {}; // placeholder employee id -> real employee id
-      mergePairs.forEach((pair) => {
-        const fromEmp = pair.fromId
-          ? nextEmployees.find((e) => e.id === pair.fromId)
-          : nextEmployees.find((e) => (e.name || "").trim().toLowerCase() === (pair.from || "").trim().toLowerCase());
-        const toEmp = pair.toId
-          ? nextEmployees.find((e) => e.id === pair.toId)
-          : nextEmployees.find((e) => (e.name || "").trim().toLowerCase() === (pair.to || "").trim().toLowerCase());
-        if (!fromEmp) {
-          notFound.push(`"${pair.from || pair.fromId}" (not found)`);
-          return;
-        }
-        if (!toEmp) {
-          notFound.push(`"${pair.to || pair.toId}" (not found)`);
-          return;
-        }
-        if (fromEmp.id === toEmp.id) return; // already the same record
-        idRedirect[fromEmp.id] = toEmp.id;
-      });
-      const placeholderIds = new Set(Object.keys(idRedirect));
-      nextEmployees = nextEmployees.filter((e) => !placeholderIds.has(e.id));
-      const nextSales = sales.map((s) => ({
-        ...s,
-        openerId: idRedirect[s.openerId] || s.openerId,
-        closerId: idRedirect[s.closerId] || s.closerId,
-        verificationId: idRedirect[s.verificationId] || s.verificationId,
-      }));
-      setEmployees(nextEmployees);
-      setSales(nextSales);
-      await window.storage.set("crm:sales", JSON.stringify(nextSales), true);
-      await window.storage.set("crm:employees", JSON.stringify(nextEmployees), true);
-      setConfirmMergeEmployees(null);
-      if (notFound.length > 0) {
-        setBackupStatus({ error: "Some merges couldn't be matched and were skipped: " + notFound.join(", ") });
-      } else {
-        setBackupStatus("restored");
+    const notFound = [];
+    let nextEmployees = [...employees];
+    const idRedirect = {}; // placeholder employee id -> real employee id
+    mergePairs.forEach((pair) => {
+      const fromEmp = pair.fromId
+        ? nextEmployees.find((e) => e.id === pair.fromId)
+        : nextEmployees.find((e) => (e.name || "").trim().toLowerCase() === (pair.from || "").trim().toLowerCase());
+      const toEmp = pair.toId
+        ? nextEmployees.find((e) => e.id === pair.toId)
+        : nextEmployees.find((e) => (e.name || "").trim().toLowerCase() === (pair.to || "").trim().toLowerCase());
+      if (!fromEmp) {
+        notFound.push(`"${pair.from || pair.fromId}" (not found)`);
+        return;
       }
-      setTimeout(() => window.location.reload(), notFound.length > 0 ? 4000 : 500);
-    } catch (err) {
-      console.error("Merge failed:", err);
-      setConfirmMergeEmployees(null);
-      setBackupStatus({ error: "Merge failed: " + (err.message || "unknown error") + " — nothing was changed." });
+      if (!toEmp) {
+        notFound.push(`"${pair.to || pair.toId}" (not found)`);
+        return;
+      }
+      if (fromEmp.id === toEmp.id) return; // already the same record
+      idRedirect[fromEmp.id] = toEmp.id;
+    });
+    const placeholderIds = new Set(Object.keys(idRedirect));
+    nextEmployees = nextEmployees.filter((e) => !placeholderIds.has(e.id));
+    const nextSales = sales.map((s) => ({
+      ...s,
+      openerId: idRedirect[s.openerId] || s.openerId,
+      closerId: idRedirect[s.closerId] || s.closerId,
+      verificationId: idRedirect[s.verificationId] || s.verificationId,
+    }));
+    await window.storage.set("crm:sales", JSON.stringify(nextSales), true);
+    await window.storage.set("crm:employees", JSON.stringify(nextEmployees), true);
+    setEmployees(nextEmployees);
+    setSales(nextSales);
+    if (notFound.length > 0) {
+      throw new Error("Some pairs couldn't be matched and were skipped: " + notFound.join(", "));
     }
   }
 
