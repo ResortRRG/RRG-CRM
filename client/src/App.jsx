@@ -1082,6 +1082,7 @@ export default function TeamCRM() {
   }
   function effectiveMinGuarantee(employeeId, weekStart) {
     const absences = absentDaysInWeek(employeeId, weekStart);
+    if (absences >= 6) return 0; // absent every scheduled day — no partial guarantee
     return Math.max(0, settings.minWeeklyPay - absences * ABSENCE_GUARANTEE_DEDUCTION);
   }
 
