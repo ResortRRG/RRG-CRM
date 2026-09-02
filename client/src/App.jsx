@@ -642,6 +642,7 @@ export default function TeamCRM() {
   const [mergeBuilderPairs, setMergeBuilderPairs] = useState([]); // [{ fromId, toId, fromName, toName }]
   const [mergeBuilderFromId, setMergeBuilderFromId] = useState("");
   const [mergeBuilderToId, setMergeBuilderToId] = useState("");
+  const [mergeStatus, setMergeStatus] = useState(null); // null | 'merging' | 'success' | { error }
   const [confirmDeactivateEmployee, setConfirmDeactivateEmployee] = useState(null); // { id, name, date } | null
   useEffect(() => {
     if (employeeDetailId) {
@@ -4743,22 +4744,46 @@ export default function TeamCRM() {
                 ))}
               </div>
             )}
+            {mergeStatus === "success" && (
+              <div style={{ ...S.hint, color: T.pineDark, fontWeight: 600, marginBottom: 10 }}>
+                ✓ Merged successfully — closing…
+              </div>
+            )}
+            {mergeStatus && typeof mergeStatus === "object" && (
+              <div style={{ ...S.errorText, marginTop: 0, marginBottom: 10 }}>{mergeStatus.error}</div>
+            )}
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button onClick={() => setMergeBuilderOpen(false)} style={S.ghostBtn}>
+              <button onClick={() => setMergeBuilderOpen(false)} style={S.ghostBtn} disabled={mergeStatus === "merging"}>
                 Cancel
               </button>
               <button
                 onClick={async () => {
-                  await mergeEmployees(mergeBuilderPairs);
-                  setMergeBuilderOpen(false);
+                  setMergeStatus("merging");
+                  try {
+                    await mergeEmployees(mergeBuilderPairs);
+                    setMergeStatus("success");
+                    setTimeout(() => {
+                      setMergeBuilderOpen(false);
+                      setMergeStatus(null);
+                    }, 1200);
+                  } catch (err) {
+                    console.error("Merge failed:", err);
+                    setMergeStatus({ error: "Couldn't merge — " + (err.message || "unknown error") });
+                  }
                 }}
-                disabled={mergeBuilderPairs.length === 0}
+                disabled={mergeBuilderPairs.length === 0 || mergeStatus === "merging" || mergeStatus === "success"}
                 style={{
                   ...S.primaryBtn,
-                  ...(mergeBuilderPairs.length === 0 ? { opacity: 0.5, cursor: "not-allowed" } : {}),
+                  ...(mergeBuilderPairs.length === 0 || mergeStatus === "merging" || mergeStatus === "success"
+                    ? { opacity: 0.5, cursor: "not-allowed" }
+                    : {}),
                 }}
               >
-                Merge {mergeBuilderPairs.length || ""} {mergeBuilderPairs.length === 1 ? "pair" : "pairs"}
+                {mergeStatus === "merging"
+                  ? "Merging…"
+                  : mergeStatus === "success"
+                  ? "Merged ✓"
+                  : `Merge ${mergeBuilderPairs.length || ""} ${mergeBuilderPairs.length === 1 ? "pair" : "pairs"}`}
               </button>
             </div>
           </Modal>
@@ -5000,6 +5025,7 @@ export default function TeamCRM() {
                   setMergeBuilderPairs([]);
                   setMergeBuilderFromId("");
                   setMergeBuilderToId("");
+                  setMergeStatus(null);
                   setMergeBuilderOpen(true);
                 }}
                 style={S.ghostBtn}
