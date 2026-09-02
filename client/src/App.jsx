@@ -5277,6 +5277,7 @@ export default function TeamCRM() {
             employees={employees}
             settings={settings}
             dncList={dncList}
+            sales={sales}
             onCancel={() => {
               setSaleModal(null);
               setSaleModalMinimized(false);
@@ -6352,7 +6353,7 @@ function EmployeeForm({ initial, attendance, onCancel, onSave, onDelete, onToggl
   );
 }
 
-function SaleForm({ initial, employees, settings, dncList, onCancel, onMinimize, onSave, onDelete }) {
+function SaleForm({ initial, employees, settings, dncList, sales, onCancel, onMinimize, onSave, onDelete }) {
   const [form, setForm] = useState(initial);
   const [error, setError] = useState("");
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -6368,6 +6369,18 @@ function SaleForm({ initial, employees, settings, dncList, onCancel, onMinimize,
     if (form.name && d.name && form.name.trim().toLowerCase() === d.name.trim().toLowerCase()) return true;
     return false;
   });
+  // Surfaces the most recent prior sale for this same customer, so a rep
+  // filling out a new sale can see right away that this person has bought
+  // before — matched by phone first (more reliable), falling back to name.
+  const repeatCustomerSale = (sales || [])
+    .filter((s) => s.id !== form.id)
+    .filter((s) => {
+      const sPhone = (s.phone || "").replace(/\D/g, "");
+      if (normalizedFormPhone && sPhone && sPhone === normalizedFormPhone) return true;
+      if (form.name && s.name && form.name.trim().toLowerCase() === s.name.trim().toLowerCase()) return true;
+      return false;
+    })
+    .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0))[0];
   const addressDebounceRef = useRef(null);
   const zipDebounceRef = useRef(null);
   const blacklistDebounceRef = useRef(null);
@@ -6519,6 +6532,18 @@ function SaleForm({ initial, employees, settings, dncList, onCancel, onMinimize,
         )}
       </div>
       <div style={{ ...S.hint, marginBottom: 10 }}>All fields marked * are required to save.</div>
+      {repeatCustomerSale && (
+        <div style={S.repeatCustomerBanner}>
+          <RotateCcw size={16} color={T.pineDark} style={{ flexShrink: 0 }} />
+          <div>
+            Last sold{" "}
+            {repeatCustomerSale.timestamp
+              ? new Date(repeatCustomerSale.timestamp).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+              : "an earlier date"}
+            {repeatCustomerSale.leadSubmittedTo ? ` — submitted to ${repeatCustomerSale.leadSubmittedTo}` : ""}
+          </div>
+        </div>
+      )}
       {dncMatch && (
         <div style={S.dncWarningBanner}>
           <ShieldAlert size={16} color="#A32D2D" style={{ flexShrink: 0 }} />
@@ -8109,6 +8134,19 @@ const S = {
     marginBottom: 12,
     fontSize: 13,
     color: "#A32D2D",
+  },
+  repeatCustomerBanner: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    background: "#EAF3EC",
+    border: `1px solid ${T.border}`,
+    borderRadius: 8,
+    padding: "10px 12px",
+    marginBottom: 12,
+    fontSize: 13,
+    fontWeight: 600,
+    color: T.pineDark,
   },
   passwordEyeBtn: {
     position: "absolute",
