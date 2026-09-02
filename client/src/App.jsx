@@ -2429,11 +2429,11 @@ export default function TeamCRM() {
     updateEmployees(next);
   }
 
-  // "Today" on the Dashboard is Admin-only — if a Manager account somehow
+  // "Today" on the Dashboard is Admin/Manager-only — if a Rep account somehow
   // ends up with it selected (e.g. a role change mid-session), fall back to
   // This week instead of silently showing them a filter they shouldn't have.
   useEffect(() => {
-    if (dashboardFilterMode === "day" && !(currentUser && currentUser.role === "admin")) {
+    if (dashboardFilterMode === "day" && !(currentUser && (currentUser.role === "admin" || currentUser.role === "manager"))) {
       setDashboardFilterMode("week");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
