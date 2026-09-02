@@ -1960,7 +1960,13 @@ export default function TeamCRM() {
   const employeeDetailRefundedCredit = employeeDetail
     ? refundedCreditForEmployee(employeeDetail.id, employeeDetailWeek.start, employeeDetailWeek.end)
     : 0;
-  const employeeDetailRefundDeduction = employeeDetailRefundedCredit * (employeeDetailRate / 100);
+  const employeeDetailRefundOverride = employeeDetail
+    ? getRefundDeductionOverride(employeeDetail.id, employeeDetailWeek.start)
+    : null;
+  const employeeDetailRefundDeduction =
+    employeeDetailRefundOverride !== null
+      ? employeeDetailRefundOverride
+      : employeeDetailRefundedCredit * (employeeDetailRate / 100);
   const employeeDetailRefundEntries = employeeDetail
     ? pendingRefundEntriesForEmployee(employeeDetail.id, employeeDetailWeek.start)
     : [];
@@ -2012,6 +2018,10 @@ export default function TeamCRM() {
           </tr>`;
       })
       .join("");
+    const refundOverrideRowHtml =
+      employeeDetailRefundOverride !== null
+        ? `<tr><td style="padding:8px 10px;color:#A32D2D;">Refund deduction (custom)</td><td style="padding:8px 10px;text-align:right;color:#A32D2D;" colspan="2">-${money(employeeDetailRefundOverride)}</td></tr>`
+        : "";
     const html = `
       <div style="font-family:Arial,sans-serif;color:#1B1E1A;max-width:600px;margin:0 auto;">
         <h2 style="margin-bottom:4px;">${settings.companyName}</h2>
@@ -2035,6 +2045,7 @@ export default function TeamCRM() {
               <td style="padding:8px 10px;text-align:right;" colspan="2">${money(employeeDetailTotalSales * (employeeDetailRate / 100))}</td>
             </tr>
             ${refundRowsHtml}
+            ${refundOverrideRowHtml}
             ${employeeDetailSpiff > 0 ? `<tr><td style="padding:8px 10px;color:#8A5A1E;">Spiff</td><td style="padding:8px 10px;text-align:right;" colspan="2">${money(employeeDetailSpiff)}</td></tr>` : ""}
             <tr style="font-weight:700;border-top:1px solid #E6E2D6;">
               <td style="padding:10px;">Total pay</td>
@@ -5529,6 +5540,12 @@ export default function TeamCRM() {
                     );
                   })}
                 </>
+              )}
+              {employeeDetailRefundOverride !== null && (
+                <div style={{ ...S.detailSummaryRow, color: "#A32D2D" }}>
+                  <span>Refund deduction (custom)</span>
+                  <span style={{ fontFamily: T.mono, fontSize: 14 }}>-{money(employeeDetailRefundOverride)}</span>
+                </div>
               )}
               <div style={S.detailSummaryRow}>
                 <span>Base pay</span>
