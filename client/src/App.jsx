@@ -652,6 +652,9 @@ export default function TeamCRM() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employeeDetailId]);
   const [employeesView, setEmployeesView] = useState("active"); // 'active' | 'exemployees'
+  const [employeeStatsMode, setEmployeeStatsMode] = useState("all"); // 'all' | 'year' | 'month'
+  const [employeeStatsMonthOffset, setEmployeeStatsMonthOffset] = useState(0);
+  const [employeeStatsYearOffset, setEmployeeStatsYearOffset] = useState(0);
   const [employeeDetailWeekOffset, setEmployeeDetailWeekOffset] = useState(0);
   const [leadsSearch, setLeadsSearch] = useState("");
   const [leadsSubTab, setLeadsSubTab] = useState("leads"); // 'leads' | 'dnc'
@@ -3464,6 +3467,23 @@ export default function TeamCRM() {
 
         {section === "employees" && (
           <div style={S.contactsWrap}>
+            {(() => {
+              const employeeStatsMonth = getMonthRange(employeeStatsMonthOffset);
+              const employeeStatsYear = getYearRange(employeeStatsYearOffset);
+              const employeeStatsRange =
+                employeeStatsMode === "month"
+                  ? employeeStatsMonth
+                  : employeeStatsMode === "year"
+                  ? employeeStatsYear
+                  : null;
+              const employeeStatsLabel =
+                employeeStatsMode === "month"
+                  ? formatMonthLabel(employeeStatsMonth.start)
+                  : employeeStatsMode === "year"
+                  ? formatYearLabel(employeeStatsYear.start)
+                  : "all-time";
+              return (
+                <>
             <div style={S.contactsToolbar}>
               <div style={S.tabs}>
                 <button
@@ -3478,6 +3498,46 @@ export default function TeamCRM() {
                 >
                   Ex Employees ({exEmployees.length})
                 </button>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ position: "relative" }}>
+                  <select
+                    value={employeeStatsMode}
+                    onChange={(e) => setEmployeeStatsMode(e.target.value)}
+                    style={{ ...S.select, width: 110, paddingRight: 28 }}
+                  >
+                    <option value="all">All time</option>
+                    <option value="year">This year</option>
+                    <option value="month">This month</option>
+                  </select>
+                  <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+                </div>
+                {employeeStatsMode === "month" && (
+                  <>
+                    <button onClick={() => setEmployeeStatsMonthOffset((m) => m - 1)} style={S.weekNavBtn} aria-label="Previous month">
+                      ‹
+                    </button>
+                    <span style={{ fontSize: 12, color: T.textMuted, minWidth: 90, textAlign: "center" }}>
+                      {employeeStatsLabel}
+                    </span>
+                    <button onClick={() => setEmployeeStatsMonthOffset((m) => m + 1)} style={S.weekNavBtn} aria-label="Next month">
+                      ›
+                    </button>
+                  </>
+                )}
+                {employeeStatsMode === "year" && (
+                  <>
+                    <button onClick={() => setEmployeeStatsYearOffset((y) => y - 1)} style={S.weekNavBtn} aria-label="Previous year">
+                      ‹
+                    </button>
+                    <span style={{ fontSize: 12, color: T.textMuted, minWidth: 60, textAlign: "center" }}>
+                      {employeeStatsLabel}
+                    </span>
+                    <button onClick={() => setEmployeeStatsYearOffset((y) => y + 1)} style={S.weekNavBtn} aria-label="Next year">
+                      ›
+                    </button>
+                  </>
+                )}
               </div>
               {employeesView === "active" && (
                 <button
@@ -3500,7 +3560,10 @@ export default function TeamCRM() {
               ) : (
                 <div style={S.contactGrid}>
                   {activeEmployees.map((emp) => {
-                    const empSales = salesForEmployee(emp.id);
+                    const empSalesAll = salesForEmployee(emp.id);
+                    const empSales = employeeStatsRange
+                      ? empSalesAll.filter((s) => isSaleInRange(s, employeeStatsRange.start, employeeStatsRange.end))
+                      : empSalesAll;
                     const empAllTimeTotal = empSales.reduce((s, r) => s + saleCredit(r, emp.id), 0);
                     const weekEntries = weeklySaleEntries(emp.id);
                     const empPendingRefunds = pendingRefundEntriesForEmployee(emp.id, currentWeek.start);
@@ -3537,7 +3600,7 @@ export default function TeamCRM() {
                           )}
                         </div>
                         <div style={S.employeeStats}>
-                          {empSales.length} sale{empSales.length === 1 ? "" : "s"} all-time · {money(empAllTimeTotal)}
+                          {empSales.length} sale{empSales.length === 1 ? "" : "s"} {employeeStatsLabel} · {money(empAllTimeTotal)}
                         </div>
                         {empPendingRefunds.length > 0 && (
                           <div style={S.pendingRefundList}>
@@ -3600,7 +3663,10 @@ export default function TeamCRM() {
             ) : (
               <div style={S.contactGrid}>
                 {exEmployees.map((emp) => {
-                  const empSales = salesForEmployee(emp.id);
+                  const empSalesAll = salesForEmployee(emp.id);
+                  const empSales = employeeStatsRange
+                    ? empSalesAll.filter((s) => isSaleInRange(s, employeeStatsRange.start, employeeStatsRange.end))
+                    : empSalesAll;
                   const empAllTimeTotal = empSales.reduce((s, r) => s + saleCredit(r, emp.id), 0);
                   return (
                     <div
@@ -3628,7 +3694,7 @@ export default function TeamCRM() {
                         )}
                       </div>
                       <div style={S.employeeStats}>
-                        {empSales.length} sale{empSales.length === 1 ? "" : "s"} all-time · {money(empAllTimeTotal)}
+                        {empSales.length} sale{empSales.length === 1 ? "" : "s"} {employeeStatsLabel} · {money(empAllTimeTotal)}
                       </div>
                       <div style={S.exEmployeeNote}>Deactivated — open to reactivate</div>
                     </div>
@@ -3636,6 +3702,9 @@ export default function TeamCRM() {
                 })}
               </div>
             )}
+                </>
+              );
+            })()}
           </div>
         )}
 
