@@ -553,6 +553,7 @@ export default function TeamCRM() {
   const [employees, setEmployees] = useState([]);
   const [payrollOverrides, setPayrollOverrides] = useState({});
   const [refundDeductionOverrides, setRefundDeductionOverrides] = useState({});
+  const [workedSaturdays, setWorkedSaturdays] = useState({}); // { "employeeId__weekStartDate": true }
   const [attendance, setAttendance] = useState({});
   const [spiffs, setSpiffs] = useState({});
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
@@ -734,6 +735,12 @@ export default function TeamCRM() {
       setRefundDeductionOverrides(rdo && rdo.value ? JSON.parse(rdo.value) : {});
     } catch (e) {
       setRefundDeductionOverrides({});
+    }
+    try {
+      const ws = await window.storage.get("crm:workedSaturdays", true);
+      setWorkedSaturdays(ws && ws.value ? JSON.parse(ws.value) : {});
+    } catch (e) {
+      setWorkedSaturdays({});
     }
     try {
       const att = await window.storage.get("crm:attendance", true);
@@ -1074,7 +1081,7 @@ export default function TeamCRM() {
       updateAttendance({ ...attendance, [key]: status });
     }
   }
-  const ABSENCE_GUARANTEE_DEDUCTION = 40;
+  const ABSENCE_GUARANTEE_DEDUCTION = 80;
   function absentDaysInWeek(employeeId, weekStart) {
     let count = 0;
     for (let i = 0; i < 6; i++) {
@@ -1084,10 +1091,31 @@ export default function TeamCRM() {
     }
     return count;
   }
+  function workedSaturdayKey(employeeId, weekStart) {
+    return employeeId + "__" + weekStart.toISOString().slice(0, 10);
+  }
+  function getWorkedSaturday(employeeId, weekStart) {
+    return !!workedSaturdays[workedSaturdayKey(employeeId, weekStart)];
+  }
+  async function setWorkedSaturdayValue(employeeId, weekStart, value) {
+    const key = workedSaturdayKey(employeeId, weekStart);
+    const next = { ...workedSaturdays };
+    if (value) next[key] = true;
+    else delete next[key];
+    setWorkedSaturdays(next);
+    try {
+      await window.storage.set("crm:workedSaturdays", JSON.stringify(next), true);
+    } catch (err) {
+      console.error("Worked Saturday save failed:", err);
+    }
+  }
   function effectiveMinGuarantee(employeeId, weekStart) {
     const absences = absentDaysInWeek(employeeId, weekStart);
     if (absences >= 6) return 0; // absent every scheduled day — no partial guarantee
-    return Math.max(0, settings.minWeeklyPay - absences * ABSENCE_GUARANTEE_DEDUCTION);
+    // Working Saturday to make up a missed day during the week cancels out
+    // that one day's deduction, capped so it can only offset one absence.
+    const effectiveAbsences = getWorkedSaturday(employeeId, weekStart) ? Math.max(0, absences - 1) : absences;
+    return Math.max(0, settings.minWeeklyPay - effectiveAbsences * ABSENCE_GUARANTEE_DEDUCTION);
   }
 
   function spiffKey(employeeId, date) {
@@ -2094,6 +2122,7 @@ export default function TeamCRM() {
       expenses,
       expenseTransactions,
       infoNotes,
+      workedSaturdays,
     };
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -2141,6 +2170,7 @@ export default function TeamCRM() {
       if (backup.expenses) setExpenses(backup.expenses);
       if (backup.expenseTransactions) setExpenseTransactions(backup.expenseTransactions);
       if (backup.infoNotes) setInfoNotes(backup.infoNotes);
+      if (backup.workedSaturdays) setWorkedSaturdays(backup.workedSaturdays);
       if (backup.contacts) await window.storage.set("crm:contacts", JSON.stringify(backup.contacts), true);
       if (backup.sales) await window.storage.set("crm:sales", JSON.stringify(backup.sales), true);
       if (backup.employees) await window.storage.set("crm:employees", JSON.stringify(backup.employees), true);
@@ -2154,6 +2184,8 @@ export default function TeamCRM() {
       if (backup.expenseTransactions)
         await window.storage.set("crm:expenseTransactions", JSON.stringify(backup.expenseTransactions), true);
       if (backup.infoNotes) await window.storage.set("crm:infoNotes", JSON.stringify(backup.infoNotes), true);
+      if (backup.workedSaturdays)
+        await window.storage.set("crm:workedSaturdays", JSON.stringify(backup.workedSaturdays), true);
       setConfirmRestoreBackup(null);
       setBackupStatus("restored");
       window.location.reload();
@@ -4114,6 +4146,17 @@ export default function TeamCRM() {
                               )}
                             </div>
                             {isOverridden && <div style={S.customPayNote}>Custom · calculated {money(computedTotalPay)}</div>}
+                            {!isOverridden && empAbsences > 0 && (
+                              <label style={S.workedSaturdayLabel} onClick={(e) => e.stopPropagation()}>
+                                <input
+                                  type="checkbox"
+                                  checked={getWorkedSaturday(emp.id, payrollWeek.start)}
+                                  onChange={(e) => setWorkedSaturdayValue(emp.id, payrollWeek.start, e.target.checked)}
+                                  style={{ margin: 0 }}
+                                />
+                                Worked Saturday (makes up 1 day)
+                              </label>
+                            )}
                           </td>
                         </tr>
                       );
@@ -8030,6 +8073,16 @@ const S = {
     flexShrink: 0,
   },
   customPayNote: { fontSize: 11, color: "#8A5A1E", marginTop: 2 },
+  workedSaturdayLabel: {
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+    fontSize: 10.5,
+    color: T.textMuted,
+    marginTop: 4,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
   emptyState: { textAlign: "center", padding: "50px 0" },
   overlay: {
     position: "fixed",
