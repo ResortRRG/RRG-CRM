@@ -4588,9 +4588,18 @@ export default function TeamCRM() {
                   <button
                     onClick={() => {
                       setExpenseModalError("");
+                      const today = new Date();
+                      const isCurrentMonth =
+                        today.getFullYear() === pnlExpenseSourceMonthDate.getFullYear() &&
+                        today.getMonth() === pnlExpenseSourceMonthDate.getMonth();
+                      const defaultDate = isCurrentMonth
+                        ? todayDateStr()
+                        : new Date(pnlExpenseSourceMonthDate.getFullYear(), pnlExpenseSourceMonthDate.getMonth() + 1, 0)
+                            .toISOString()
+                            .slice(0, 10); // last day of the month currently being viewed
                       setExpenseModal({
                         id: uid(),
-                        date: todayDateStr(),
+                        date: defaultDate,
                         category: settings.expenseCategories.find((c) => c !== "Payroll") || "",
                         amount: "",
                         notes: "",
