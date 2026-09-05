@@ -56,3 +56,15 @@ CREATE TABLE IF NOT EXISTS expense_files (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_expense_files_expense_key ON expense_files(expense_key);
+
+-- Business scripts (call scripts, talking points, etc.) uploaded under
+-- Information → Scripts. A flat list, not tied to any other record — same
+-- direct-in-database storage approach as employee_files and expense_files.
+CREATE TABLE IF NOT EXISTS script_files (
+  id TEXT PRIMARY KEY,
+  filename TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  file_data BYTEA NOT NULL,
+  uploaded_by TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

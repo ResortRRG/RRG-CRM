@@ -623,6 +623,11 @@ export default function TeamCRM() {
   const [dncBulkOpen, setDncBulkOpen] = useState(false);
   const [dncBulkText, setDncBulkText] = useState("");
   const [infoNoteModal, setInfoNoteModal] = useState(null); // null | note object
+  const [informationSubTab, setInformationSubTab] = useState("notes"); // 'notes' | 'scripts'
+  const [scriptFiles, setScriptFiles] = useState([]);
+  const [scriptFilesLoading, setScriptFilesLoading] = useState(false);
+  const [scriptUploadBusy, setScriptUploadBusy] = useState(false);
+  const [scriptFilesError, setScriptFilesError] = useState("");
   const [infoNoteError, setInfoNoteError] = useState("");
   const [expenseModal, setExpenseModal] = useState(null); // null | transaction object (always has an id, even before first save)
   const [expenseModalError, setExpenseModalError] = useState("");
@@ -1658,6 +1663,50 @@ export default function TeamCRM() {
       console.error("Note delete failed:", err);
     }
   }
+  async function loadScriptFiles() {
+    setScriptFilesLoading(true);
+    setScriptFilesError("");
+    try {
+      const res = await fetch("/api/scripts/files", { credentials: "include" });
+      if (!res.ok) throw new Error("status " + res.status);
+      const data = await res.json();
+      setScriptFiles(data.files || []);
+    } catch (err) {
+      console.error("Loading scripts failed:", err);
+      setScriptFilesError("Couldn't load scripts: " + (err.message || "unknown error"));
+    } finally {
+      setScriptFilesLoading(false);
+    }
+  }
+  async function uploadScriptFile(file) {
+    if (!file) return;
+    setScriptUploadBusy(true);
+    setScriptFilesError("");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/scripts/files", { method: "POST", credentials: "include", body: formData });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "status " + res.status);
+      }
+      await loadScriptFiles();
+    } catch (err) {
+      console.error("Script upload failed:", err);
+      setScriptFilesError("Upload failed: " + (err.message || "unknown error"));
+    } finally {
+      setScriptUploadBusy(false);
+    }
+  }
+  async function deleteScriptFile(id) {
+    try {
+      await fetch(`/api/scripts/files/${id}`, { method: "DELETE", credentials: "include" });
+      setScriptFiles((prev) => prev.filter((f) => f.id !== id));
+    } catch (err) {
+      console.error("Script delete failed:", err);
+      setScriptFilesError("Couldn't delete that file");
+    }
+  }
   async function saveDncEntry(form) {
     const exists = dncList.some((d) => d.id === form.id);
     const { isNew, ...cleanForm } = form;
@@ -2470,6 +2519,11 @@ export default function TeamCRM() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dashboardFilterMode, currentUser && currentUser.role]);
+
+  useEffect(() => {
+    if (section === "information" && informationSubTab === "scripts") loadScriptFiles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [section, informationSubTab]);
 
   if (!loaded || !authChecked) {
     return (
@@ -4690,7 +4744,24 @@ export default function TeamCRM() {
 
         {section === "information" && (
           <div style={S.dashboardWrap}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={S.reportsSubTabs}>
+              <button
+                onClick={() => setInformationSubTab("notes")}
+                style={{ ...S.reportsSubTabBtn, ...(informationSubTab === "notes" ? S.reportsSubTabBtnActive : {}) }}
+              >
+                Notes
+              </button>
+              <button
+                onClick={() => setInformationSubTab("scripts")}
+                style={{ ...S.reportsSubTabBtn, ...(informationSubTab === "scripts" ? S.reportsSubTabBtnActive : {}) }}
+              >
+                Scripts
+              </button>
+            </div>
+
+            {informationSubTab === "notes" && (
+              <>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 16 }}>
               <div style={S.dashboardSectionLabel}>Information</div>
               <button
                 onClick={() => {
@@ -4736,6 +4807,60 @@ export default function TeamCRM() {
                     </div>
                   ))}
               </div>
+            )}
+              </>
+            )}
+
+            {informationSubTab === "scripts" && (
+              <>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 16 }}>
+              <div style={S.dashboardSectionLabel}>Scripts</div>
+              <label style={{ ...S.primaryBtn, cursor: scriptUploadBusy ? "not-allowed" : "pointer", opacity: scriptUploadBusy ? 0.6 : 1 }}>
+                <Upload size={14} /> {scriptUploadBusy ? "Uploading…" : "Upload script"}
+                <input
+                  type="file"
+                  onChange={(e) => uploadScriptFile(e.target.files && e.target.files[0])}
+                  disabled={scriptUploadBusy}
+                  style={{ display: "none" }}
+                />
+              </label>
+            </div>
+            <div style={S.hint}>Keep a copy of your call scripts and talking points here so the whole team can pull them up.</div>
+            {scriptFilesError && <div style={{ ...S.hint, color: "#A32D2D" }}>{scriptFilesError}</div>}
+
+            {scriptFilesLoading ? (
+              <div style={{ fontSize: 12.5, color: T.textMuted, marginTop: 12 }}>Loading…</div>
+            ) : scriptFiles.length === 0 ? (
+              <div style={S.emptyState}>
+                <FileText size={22} color={T.borderStrong} />
+                <div style={{ marginTop: 8, fontSize: 13, color: T.textMuted }}>
+                  No scripts uploaded yet
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
+                {scriptFiles.map((f) => (
+                  <div key={f.id} style={S.scriptFileRow}>
+                    <FileText size={16} color={T.pineDark} style={{ flexShrink: 0 }} />
+                    <a
+                      href={`/api/scripts/files/${f.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={S.scriptFileLink}
+                    >
+                      {f.filename}
+                    </a>
+                    <span style={S.scriptFileMeta}>
+                      {f.created_at ? new Date(f.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""}
+                    </span>
+                    <button onClick={() => deleteScriptFile(f.id)} style={S.iconBtnGhost}>
+                      <Trash2 size={13} color={T.textMuted} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+              </>
             )}
           </div>
         )}
@@ -7313,6 +7438,27 @@ const S = {
     WebkitLineClamp: 5,
     WebkitBoxOrient: "vertical",
   },
+  scriptFileRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    background: T.paperRaised,
+    border: `1px solid ${T.border}`,
+    borderRadius: 8,
+    padding: "10px 12px",
+  },
+  scriptFileLink: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 13,
+    fontWeight: 500,
+    color: T.ink,
+    textDecoration: "underline",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  scriptFileMeta: { fontSize: 11, color: T.textMuted, flexShrink: 0, whiteSpace: "nowrap" },
   entryScreenWrap: {
     maxWidth: 360,
     margin: "60px auto",
