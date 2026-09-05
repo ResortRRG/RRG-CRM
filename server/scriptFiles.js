@@ -36,7 +36,7 @@ export function registerScriptFileRoutes(app) {
     ]);
     if (!rows[0]) return res.status(404).send("File not found");
     res.set("Content-Type", rows[0].mime_type || "application/octet-stream");
-    res.set("Content-Disposition", `inline; filename="${encodeURIComponent(rows[0].filename)}"`);
+    res.set("Content-Disposition", `attachment; filename="${encodeURIComponent(rows[0].filename)}"`);
     res.send(rows[0].file_data);
   });
 
