@@ -114,7 +114,7 @@ const DEFAULT_SETTINGS = {
 // accidentally lock an admin or existing user out of everything.
 const ROLE_PERMISSIONS = {
   rep: ["sales"],
-  manager: ["dashboard", "sales"],
+  manager: ["dashboard", "sales", "employees"],
 };
 function getAllowedSections(role) {
   if (ROLE_PERMISSIONS[role]) return ROLE_PERMISSIONS[role];
@@ -2588,6 +2588,17 @@ export default function TeamCRM() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [section, informationSubTab]);
 
+  // Manager only sees the Hiring tab under Employees — if they somehow end
+  // up on Active or Ex Employees (e.g. the default state, or a role change
+  // mid-session), fall back to Hiring instead of silently showing them a
+  // view they shouldn't have.
+  useEffect(() => {
+    if (currentUser && currentUser.role === "manager" && employeesView !== "hiring") {
+      setEmployeesView("hiring");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employeesView, currentUser && currentUser.role]);
+
   if (!loaded || !authChecked) {
     return (
       <div style={{ ...S.app, minHeight: 400 }}>
@@ -3678,18 +3689,22 @@ export default function TeamCRM() {
                 <>
             <div style={S.contactsToolbar}>
               <div style={S.tabs}>
-                <button
-                  onClick={() => setEmployeesView("active")}
-                  style={{ ...S.tab, ...(employeesView === "active" ? S.tabActive : {}) }}
-                >
-                  Active ({activeEmployees.length})
-                </button>
-                <button
-                  onClick={() => setEmployeesView("exemployees")}
-                  style={{ ...S.tab, ...(employeesView === "exemployees" ? S.tabActive : {}) }}
-                >
-                  Ex Employees ({exEmployees.length})
-                </button>
+                {!(currentUser && currentUser.role === "manager") && (
+                  <>
+                    <button
+                      onClick={() => setEmployeesView("active")}
+                      style={{ ...S.tab, ...(employeesView === "active" ? S.tabActive : {}) }}
+                    >
+                      Active ({activeEmployees.length})
+                    </button>
+                    <button
+                      onClick={() => setEmployeesView("exemployees")}
+                      style={{ ...S.tab, ...(employeesView === "exemployees" ? S.tabActive : {}) }}
+                    >
+                      Ex Employees ({exEmployees.length})
+                    </button>
+                  </>
+                )}
                 <button
                   onClick={() => setEmployeesView("hiring")}
                   style={{ ...S.tab, ...(employeesView === "hiring" ? S.tabActive : {}) }}
