@@ -658,7 +658,9 @@ export default function TeamCRM() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employeeDetailId]);
-  const [employeesView, setEmployeesView] = useState("active"); // 'active' | 'exemployees'
+  const [employeesView, setEmployeesView] = useState("active"); // 'active' | 'exemployees' | 'hiring'
+  const [candidates, setCandidates] = useState([]);
+  const [candidateModal, setCandidateModal] = useState(null); // null | candidate object
   const [employeeStatsMode, setEmployeeStatsMode] = useState("all"); // 'all' | 'year' | 'month'
   const [employeeStatsMonthOffset, setEmployeeStatsMonthOffset] = useState(0);
   const [employeeStatsYearOffset, setEmployeeStatsYearOffset] = useState(0);
@@ -746,6 +748,12 @@ export default function TeamCRM() {
       setWorkedSaturdays(ws && ws.value ? JSON.parse(ws.value) : {});
     } catch (e) {
       setWorkedSaturdays({});
+    }
+    try {
+      const cand = await window.storage.get("crm:candidates", true);
+      setCandidates(cand && cand.value ? JSON.parse(cand.value) : []);
+    } catch (e) {
+      setCandidates([]);
     }
     try {
       const att = await window.storage.get("crm:attendance", true);
@@ -1707,6 +1715,58 @@ export default function TeamCRM() {
       setScriptFilesError("Couldn't delete that file");
     }
   }
+  async function saveCandidate(form) {
+    const exists = candidates.some((c) => c.id === form.id);
+    const { isNew, ...cleanForm } = form;
+    const next = exists ? candidates.map((c) => (c.id === form.id ? { ...c, ...cleanForm } : c)) : [...candidates, cleanForm];
+    setCandidates(next);
+    try {
+      await window.storage.set("crm:candidates", JSON.stringify(next), true);
+      setCandidateModal(null);
+    } catch (err) {
+      console.error("Candidate save failed:", err);
+    }
+  }
+  async function deleteCandidate(id) {
+    const next = candidates.filter((c) => c.id !== id);
+    setCandidates(next);
+    try {
+      await window.storage.set("crm:candidates", JSON.stringify(next), true);
+    } catch (err) {
+      console.error("Candidate delete failed:", err);
+    }
+  }
+  // Converts a hired candidate into a real employee record — the admin
+  // still needs to fill in commission rate, base pay, etc. afterward, since
+  // an interview intake doesn't cover those details.
+  async function convertCandidateToEmployee(candidate) {
+    const newEmployee = {
+      id: uid(),
+      name: candidate.name || "",
+      role: "rep",
+      phone: candidate.phone || "",
+      email: candidate.email || "",
+      commissionRate: "",
+      basePay: "",
+      active: true,
+      startDate: todayDateStr(),
+      notes: [candidate.position ? `Hired as ${candidate.position === "closer" ? "Closer" : "Opener"}` : "", candidate.notes || ""]
+        .filter(Boolean)
+        .join(" — "),
+    };
+    const nextEmployees = [...employees, newEmployee];
+    const nextCandidates = candidates.filter((c) => c.id !== candidate.id);
+    setEmployees(nextEmployees);
+    setCandidates(nextCandidates);
+    try {
+      await window.storage.set("crm:employees", JSON.stringify(nextEmployees), true);
+      await window.storage.set("crm:candidates", JSON.stringify(nextCandidates), true);
+      setCandidateModal(null);
+      setEmployeesView("active");
+    } catch (err) {
+      console.error("Convert to employee failed:", err);
+    }
+  }
   async function saveDncEntry(form) {
     const exists = dncList.some((d) => d.id === form.id);
     const { isNew, ...cleanForm } = form;
@@ -2172,6 +2232,7 @@ export default function TeamCRM() {
       expenseTransactions,
       infoNotes,
       workedSaturdays,
+      candidates,
     };
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -2220,6 +2281,7 @@ export default function TeamCRM() {
       if (backup.expenseTransactions) setExpenseTransactions(backup.expenseTransactions);
       if (backup.infoNotes) setInfoNotes(backup.infoNotes);
       if (backup.workedSaturdays) setWorkedSaturdays(backup.workedSaturdays);
+      if (backup.candidates) setCandidates(backup.candidates);
       if (backup.contacts) await window.storage.set("crm:contacts", JSON.stringify(backup.contacts), true);
       if (backup.sales) await window.storage.set("crm:sales", JSON.stringify(backup.sales), true);
       if (backup.employees) await window.storage.set("crm:employees", JSON.stringify(backup.employees), true);
@@ -2235,6 +2297,7 @@ export default function TeamCRM() {
       if (backup.infoNotes) await window.storage.set("crm:infoNotes", JSON.stringify(backup.infoNotes), true);
       if (backup.workedSaturdays)
         await window.storage.set("crm:workedSaturdays", JSON.stringify(backup.workedSaturdays), true);
+      if (backup.candidates) await window.storage.set("crm:candidates", JSON.stringify(backup.candidates), true);
       setConfirmRestoreBackup(null);
       setBackupStatus("restored");
       window.location.reload();
@@ -3627,6 +3690,12 @@ export default function TeamCRM() {
                 >
                   Ex Employees ({exEmployees.length})
                 </button>
+                <button
+                  onClick={() => setEmployeesView("hiring")}
+                  style={{ ...S.tab, ...(employeesView === "hiring" ? S.tabActive : {}) }}
+                >
+                  Hiring ({candidates.length})
+                </button>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <div style={{ position: "relative" }}>
@@ -3676,9 +3745,80 @@ export default function TeamCRM() {
                   <Plus size={14} /> Employee
                 </button>
               )}
+              {employeesView === "hiring" && (
+                <button
+                  onClick={() =>
+                    setCandidateModal({
+                      id: uid(),
+                      name: "",
+                      phone: "",
+                      email: "",
+                      interviewDate: "",
+                      experience: "",
+                      notes: "",
+                      position: "",
+                      leadSource: "",
+                      status: "pending",
+                      isNew: true,
+                    })
+                  }
+                  style={S.primaryBtn}
+                >
+                  <Plus size={14} /> Candidate
+                </button>
+              )}
             </div>
 
-            {employeesView === "active" ? (
+            {employeesView === "hiring" ? (
+              candidates.length === 0 ? (
+                <div style={S.emptyState}>
+                  <Users size={22} color={T.borderStrong} />
+                  <div style={{ marginTop: 8, fontSize: 13, color: T.textMuted }}>
+                    No candidates yet — add your first one
+                  </div>
+                </div>
+              ) : (
+                <div style={S.contactGrid}>
+                  {[...candidates]
+                    .sort((a, b) => new Date(b.interviewDate || 0) - new Date(a.interviewDate || 0))
+                    .map((c) => {
+                      const statusColors = {
+                        hired: { bg: "#EAF3EC", color: T.pineDark },
+                        noshow: { bg: "#FBF3E6", color: "#8A5A1E" },
+                        rejected: { bg: "#FCEBEB", color: "#A32D2D" },
+                        pending: { bg: "#F0EFE9", color: T.textMuted },
+                      };
+                      const sc = statusColors[c.status] || statusColors.pending;
+                      const statusLabel = { hired: "Hired", noshow: "No Show", rejected: "Rejected", pending: "Pending" }[c.status] || "Pending";
+                      return (
+                        <div key={c.id} style={S.contactCard} onClick={() => setCandidateModal(c)}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                            <div style={S.contactName}>{c.name}</div>
+                            <span style={{ ...S.leadBadge, background: sc.bg, color: sc.color, flexShrink: 0 }}>{statusLabel}</span>
+                          </div>
+                          {c.position && (
+                            <div style={S.contactMetaRow}>
+                              <Users size={12} /> {c.position === "closer" ? "Closer" : "Opener"}
+                            </div>
+                          )}
+                          {c.phone && (
+                            <div style={S.contactMetaRow}>
+                              <Phone size={12} /> {c.phone}
+                            </div>
+                          )}
+                          {c.interviewDate && (
+                            <div style={S.contactMetaRow}>
+                              <CalendarDays size={12} />{" "}
+                              {new Date(c.interviewDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                            </div>
+                          )}
+                          {c.leadSource && <div style={S.contactOwner}>Source: {c.leadSource}</div>}
+                        </div>
+                      );
+                    })}
+                </div>
+              )
+            ) : employeesView === "active" ? (
               activeEmployees.length === 0 ? (
                 <div style={S.emptyState}>
                   <Users size={22} color={T.borderStrong} />
@@ -5585,6 +5725,30 @@ export default function TeamCRM() {
         </Modal>
       )}
 
+      {/* Add/edit hiring candidate */}
+      {candidateModal && (
+        <Modal onClose={() => setCandidateModal(null)}>
+          <CandidateForm
+            initial={candidateModal}
+            onCancel={() => setCandidateModal(null)}
+            onSave={saveCandidate}
+            onDelete={
+              !candidateModal.isNew
+                ? async () => {
+                    await deleteCandidate(candidateModal.id);
+                    setCandidateModal(null);
+                  }
+                : null
+            }
+            onConvert={
+              !candidateModal.isNew
+                ? () => convertCandidateToEmployee(candidateModal)
+                : null
+            }
+          />
+        </Modal>
+      )}
+
       {/* Employee weekly template modal */}
       {employeeDetail && !employeeDetailMinimized && (
         <Modal
@@ -6142,6 +6306,106 @@ function DncEntryForm({ initial, onCancel, onSave, onDelete }) {
           </button>
           <button onClick={submit} style={S.primaryBtn}>
             {form.isNew ? "New DNC" : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CandidateForm({ initial, onCancel, onSave, onDelete, onConvert }) {
+  const [form, setForm] = useState(initial);
+  const [error, setError] = useState("");
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+
+  function submit() {
+    if (!form.name || !form.name.trim()) {
+      setError("Enter the candidate's name first");
+      return;
+    }
+    setError("");
+    onSave(form);
+  }
+
+  return (
+    <div>
+      <div style={S.modalTitle}>{form.isNew ? "New Candidate" : "Edit candidate"}</div>
+      <Field label="Candidate Name *">
+        <input value={form.name || ""} onChange={set("name")} style={S.input} autoFocus />
+      </Field>
+      <Field label="Phone">
+        <input value={form.phone || ""} onChange={set("phone")} style={S.input} />
+      </Field>
+      <Field label="Email">
+        <input value={form.email || ""} onChange={set("email")} style={S.input} />
+      </Field>
+      <Field label="Interview Date">
+        <input type="date" value={form.interviewDate || ""} onChange={set("interviewDate")} style={S.input} />
+      </Field>
+      <Field label="Position">
+        <div style={{ position: "relative" }}>
+          <select value={form.position || ""} onChange={set("position")} style={S.select}>
+            <option value="">Choose position</option>
+            <option value="opener">Opener</option>
+            <option value="closer">Closer</option>
+          </select>
+          <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+        </div>
+      </Field>
+      <Field label="Lead Source">
+        <input
+          value={form.leadSource || ""}
+          onChange={set("leadSource")}
+          style={S.input}
+          placeholder="e.g. Indeed, referral, walk-in"
+        />
+      </Field>
+      <Field label="Experience">
+        <textarea
+          value={form.experience || ""}
+          onChange={set("experience")}
+          style={{ ...S.input, minHeight: 70, resize: "vertical" }}
+          placeholder="Relevant background, prior sales experience, etc."
+        />
+      </Field>
+      <Field label="Status">
+        <div style={{ position: "relative" }}>
+          <select value={form.status || "pending"} onChange={set("status")} style={S.select}>
+            <option value="pending">Pending</option>
+            <option value="hired">Hired</option>
+            <option value="noshow">No Show</option>
+            <option value="rejected">Rejected</option>
+          </select>
+          <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+        </div>
+      </Field>
+      <Field label="Notes">
+        <textarea
+          value={form.notes || ""}
+          onChange={set("notes")}
+          style={{ ...S.input, minHeight: 70, resize: "vertical" }}
+        />
+      </Field>
+      {error && <div style={S.errorText}>{error}</div>}
+      <div style={{ display: "flex", gap: 8, justifyContent: "space-between", marginTop: 4, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 8 }}>
+          {onDelete && (
+            <button onClick={onDelete} style={S.dangerGhostBtn}>
+              <Trash2 size={13} /> Delete
+            </button>
+          )}
+          {onConvert && form.status === "hired" && (
+            <button onClick={onConvert} style={{ ...S.ghostBtn, color: T.pineDark, borderColor: T.pineDark }}>
+              <Users size={13} /> Convert to Employee
+            </button>
+          )}
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={onCancel} style={S.ghostBtn}>
+            Cancel
+          </button>
+          <button onClick={submit} style={S.primaryBtn}>
+            {form.isNew ? "New Candidate" : "Save"}
           </button>
         </div>
       </div>
