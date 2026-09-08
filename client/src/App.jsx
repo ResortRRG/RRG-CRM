@@ -127,8 +127,10 @@ function isSalesEntryRole(role) {
 
 const ATTENDANCE_STATUSES = [
   { id: "late", label: "Late", color: "#B8763E" },
+  { id: "unexcused_late", label: "Unexcused Late", color: "#A3521E" },
   { id: "left_early", label: "Left early", color: "#8A5A1E" },
   { id: "absent", label: "Absent", color: "#A32D2D" },
+  { id: "unexcused_absent", label: "Unexcused Absent", color: "#7A1F1F" },
 ];
 
 const SALE_TYPES = [
@@ -1095,12 +1097,23 @@ export default function TeamCRM() {
     }
   }
   const ABSENCE_GUARANTEE_DEDUCTION = 80;
+  const UNEXCUSED_LATE_HALF_DAY_DEDUCTION = 40;
   function absentDaysInWeek(employeeId, weekStart) {
     let count = 0;
     for (let i = 0; i < 6; i++) {
       const date = new Date(weekStart);
       date.setDate(weekStart.getDate() + i);
-      if (getAttendance(employeeId, date) === "absent") count++;
+      const status = getAttendance(employeeId, date);
+      if (status === "absent" || status === "unexcused_absent") count++;
+    }
+    return count;
+  }
+  function unexcusedLateDaysInWeek(employeeId, weekStart) {
+    let count = 0;
+    for (let i = 0; i < 6; i++) {
+      const date = new Date(weekStart);
+      date.setDate(weekStart.getDate() + i);
+      if (getAttendance(employeeId, date) === "unexcused_late") count++;
     }
     return count;
   }
@@ -1128,7 +1141,15 @@ export default function TeamCRM() {
     // Working Saturday to make up a missed day during the week cancels out
     // that one day's deduction, capped so it can only offset one absence.
     const effectiveAbsences = getWorkedSaturday(employeeId, weekStart) ? Math.max(0, absences - 1) : absences;
-    return Math.max(0, settings.minWeeklyPay - effectiveAbsences * ABSENCE_GUARANTEE_DEDUCTION);
+    let guarantee = Math.max(0, settings.minWeeklyPay - effectiveAbsences * ABSENCE_GUARANTEE_DEDUCTION);
+    // 3+ unexcused lates in a week costs a half day's guarantee — but only
+    // for employees who actually draw a base pay, not commission-only reps.
+    const emp = employees.find((e) => e.id === employeeId);
+    const hasBasePay = emp && emp.basePay !== "" && emp.basePay !== undefined && emp.basePay !== null;
+    if (hasBasePay && unexcusedLateDaysInWeek(employeeId, weekStart) >= 3) {
+      guarantee = Math.max(0, guarantee - UNEXCUSED_LATE_HALF_DAY_DEDUCTION);
+    }
+    return guarantee;
   }
 
   function spiffKey(employeeId, date) {
