@@ -352,6 +352,16 @@ function getWeekdayIndex(dateObj) {
 }
 
 // Package price splits 50/50 between opener and closer; date flex price goes entirely to verification.
+// Cristina Rossi and Nicholas Pelloni keep the "Base pay" label on their
+// profile (their pay structure is a genuine standing base) — everyone else
+// sees "Draw" instead, since for them it's really an advance against
+// commission that the $400 guarantee tops up if commission alone falls short.
+const BASE_PAY_LABEL_EXCEPTIONS = ["cristina rossi", "nicholas pelloni"];
+function basePayLabel(name) {
+  const normalized = (name || "").trim().toLowerCase();
+  return BASE_PAY_LABEL_EXCEPTIONS.includes(normalized) ? "Base pay" : "Draw";
+}
+
 function saleCredit(sale, employeeId) {
   const pkg = Number(sale.packagePrice) || 0;
   const flex = Number(sale.dateFlex) || 0;
@@ -4232,7 +4242,7 @@ export default function TeamCRM() {
                       <th style={{ ...S.th, fontSize: 12 }}>Commission %</th>
                       <th style={{ ...S.th, fontSize: 12 }}>Commission owed</th>
                       <th style={{ ...S.th, fontSize: 12 }}>Refund deduction</th>
-                      <th style={{ ...S.th, fontSize: 12 }}>Base pay</th>
+                      <th style={{ ...S.th, fontSize: 12 }}>Draw</th>
                       <th style={{ ...S.th, fontSize: 12 }}>Spiff</th>
                       <th style={{ ...S.th, fontSize: 12 }}>Total pay</th>
                     </tr>
@@ -5957,7 +5967,7 @@ export default function TeamCRM() {
                 </div>
               )}
               <div style={S.detailSummaryRow}>
-                <span>Base pay</span>
+                <span>{basePayLabel(employeeDetail && employeeDetail.name)}</span>
                 <span style={{ fontFamily: T.mono, fontSize: 14 }}>{employeeDetailHasBasePay ? money(employeeDetailBasePay) : "—"}</span>
               </div>
               {employeeDetailSpiff > 0 && (
@@ -6749,7 +6759,7 @@ function EmployeeForm({ initial, attendance, onCancel, onSave, onDelete, onToggl
           </Field>
         </div>
         <div style={{ flex: 1 }}>
-          <Field label="Base pay / week">
+          <Field label={`${basePayLabel(form.name)} / week`}>
             <input
               value={form.basePay}
               onChange={set("basePay")}
