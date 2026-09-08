@@ -32,6 +32,7 @@ import {
   Minus,
   FileText,
   ShieldAlert,
+  Printer,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -2780,6 +2781,19 @@ export default function TeamCRM() {
         .crm-scroll select:hover { border-color: #D3CEBD !important; }
         button { font-family: inherit; cursor: pointer; }
         input, textarea, select { font-family: inherit; }
+        @media print {
+          body * { visibility: hidden; }
+          #print-area, #print-area * { visibility: visible; }
+          #print-area {
+            position: absolute; top: 0; left: 0; width: 100%;
+            max-width: 100%; max-height: none; box-shadow: none; border: none;
+          }
+          #print-area input, #print-area select, #print-area textarea {
+            border: none !important; background: transparent !important; padding: 2px 0 !important;
+            -webkit-print-color-adjust: exact; print-color-adjust: exact;
+          }
+          #print-area button, #print-area .no-print { display: none !important; }
+        }
       `}</style>
 
       {/* Sidebar */}
@@ -5688,6 +5702,8 @@ export default function TeamCRM() {
             setSaleModalMinimized(false);
           }}
           disableBackdropClose
+          wide
+          printable
         >
           <SaleForm
             initial={saleModal}
@@ -6166,13 +6182,14 @@ export default function TeamCRM() {
   );
 }
 
-function Modal({ children, onClose, narrow, wide, disableBackdropClose, fullScreen }) {
+function Modal({ children, onClose, narrow, wide, disableBackdropClose, fullScreen, printable }) {
   return (
     <div
       style={{ ...S.overlay, ...(fullScreen ? S.overlayFullScreen : {}) }}
       onClick={disableBackdropClose ? undefined : onClose}
     >
       <div
+        id={printable ? "print-area" : undefined}
         style={{
           ...S.modal,
           ...(narrow ? { maxWidth: 360 } : {}),
@@ -7072,11 +7089,16 @@ function SaleForm({ initial, employees, settings, dncList, sales, onCancel, onMi
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
         <div style={S.modalTitle}>{form.id ? "Edit sale" : "New sale"}</div>
-        {onMinimize && (
-          <button type="button" onClick={onMinimize} style={S.minimizeBtn} title="Minimize — come back to this later">
-            <Minus size={14} /> Minimize
+        <div style={{ display: "flex", gap: 8 }}>
+          <button type="button" onClick={() => window.print()} style={S.minimizeBtn} title="Print this lead">
+            <Printer size={14} /> Print
           </button>
-        )}
+          {onMinimize && (
+            <button type="button" onClick={onMinimize} style={S.minimizeBtn} title="Minimize — come back to this later">
+              <Minus size={14} /> Minimize
+            </button>
+          )}
+        </div>
       </div>
       <div style={{ ...S.hint, marginBottom: 10 }}>All fields marked * are required to save.</div>
       {repeatCustomerSale && (
