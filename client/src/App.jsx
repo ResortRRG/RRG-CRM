@@ -362,6 +362,17 @@ function basePayLabel(name) {
   return BASE_PAY_LABEL_EXCEPTIONS.includes(normalized) ? "Base pay" : "Draw";
 }
 
+// Capitalizes the first letter of each word in a name, e.g. "john doe" or
+// "JOHN DOE" both become "John Doe" — applied on blur so it doesn't fight
+// with someone still typing.
+function toTitleCase(str) {
+  return (str || "")
+    .toLowerCase()
+    .split(" ")
+    .map((word) => (word ? word.charAt(0).toUpperCase() + word.slice(1) : word))
+    .join(" ");
+}
+
 function saleCredit(sale, employeeId) {
   const pkg = Number(sale.packagePrice) || 0;
   const flex = Number(sale.dateFlex) || 0;
@@ -7130,10 +7141,23 @@ function SaleForm({ initial, employees, settings, dncList, sales, onCancel, onMi
         <input type="datetime-local" value={form.timestamp || ""} onChange={set("timestamp")} style={S.input} />
       </Field>
       <Field label="Name *">
-        <input autoFocus value={form.name} onChange={set("name")} style={S.input} placeholder="Customer name" />
+        <input
+          autoFocus
+          value={form.name}
+          onChange={set("name")}
+          onBlur={() => form.name && setForm((f) => ({ ...f, name: toTitleCase(f.name) }))}
+          style={S.input}
+          placeholder="Customer name"
+        />
       </Field>
       <Field label="Spouse name">
-        <input value={form.spouseName || ""} onChange={set("spouseName")} style={S.input} placeholder="Optional" />
+        <input
+          value={form.spouseName || ""}
+          onChange={set("spouseName")}
+          onBlur={() => form.spouseName && setForm((f) => ({ ...f, spouseName: toTitleCase(f.spouseName) }))}
+          style={S.input}
+          placeholder="Optional"
+        />
       </Field>
       {error && <div style={S.errorText}>{error}</div>}
       <div style={{ display: "flex", gap: 10 }}>
