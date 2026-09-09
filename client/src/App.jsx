@@ -2491,7 +2491,7 @@ export default function TeamCRM() {
       savedSale = { ...existing, ...form };
       updateSales(sales.map((s) => (s.id === form.id ? savedSale : s)));
     } else {
-      savedSale = { ...form, id: uid(), createdAt: Date.now() };
+      savedSale = { ...form, id: uid(), createdAt: Date.now(), submittedBy: currentUser ? currentUser.name : "" };
       updateSales([...sales, savedSale]);
       setEntryJustSaved(true);
     }
@@ -3590,6 +3590,12 @@ export default function TeamCRM() {
                             <span style={S.leadInfoLabel}>Timestamp</span>
                             <span>{formatTimestamp(s.timestamp)}</span>
                           </div>
+                          {s.submittedBy && (
+                            <div style={S.leadInfoItem}>
+                              <span style={S.leadInfoLabel}>Submitted by</span>
+                              <span>{s.submittedBy}</span>
+                            </div>
+                          )}
                           <div style={S.leadInfoItem}>
                             <span style={S.leadInfoLabel}>Spouse name</span>
                             <span>{s.spouseName || "—"}</span>
@@ -7162,6 +7168,9 @@ function SaleForm({ initial, employees, settings, dncList, sales, onCancel, onMi
       <Field label="Timestamp">
         <input type="datetime-local" value={form.timestamp || ""} onChange={set("timestamp")} style={S.input} />
       </Field>
+      {form.submittedBy && (
+        <div style={{ ...S.hint, marginTop: -8, marginBottom: 12 }}>Submitted by {form.submittedBy}</div>
+      )}
       <Field label="Name *">
         <input
           autoFocus
