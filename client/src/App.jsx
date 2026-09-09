@@ -33,6 +33,7 @@ import {
   FileText,
   ShieldAlert,
   Printer,
+  CheckCircle,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -6289,6 +6290,17 @@ const DFS_PIPELINE_STAGES = [
   "Lost/Cancelled",
 ];
 
+const DFS_EVENT_TYPES = [
+  { id: "appointment", label: "Appointment", color: "#1F4536", icon: "📅" },
+  { id: "callback", label: "Callback", color: "#B8763E", icon: "📞", showCallbackFields: true },
+  { id: "settlement_deadline", label: "Settlement Deadline", color: "#A32D2D", icon: "🔴", showMcaFields: true },
+  { id: "payment_date", label: "Payment Date", color: "#3D6B96", icon: "💳", showMcaFields: true },
+  { id: "court_date", label: "Court Date", color: "#7A1F1F", icon: "⚖️", showMcaFields: true },
+  { id: "other", label: "Other", color: "#767468", icon: "📌" },
+];
+const DFS_PRIORITIES = ["Low", "Normal", "High", "Urgent"];
+const DFS_REMINDER_OPTIONS = ["None", "15 minutes before", "1 hour before", "2 hours before", "1 day before"];
+
 function dfsUid() {
   return "dfs_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
 }
@@ -6299,6 +6311,32 @@ function dfsUid() {
 function dfsClientDisplayName(c) {
   const full = `${c.firstName || ""} ${c.lastName || ""}`.trim();
   return full || c.name || "Unnamed";
+}
+
+function dfsNewEventDefaults(dateStr) {
+  return {
+    id: dfsUid(),
+    title: "",
+    type: "appointment",
+    date: dateStr || "",
+    time: "",
+    clientId: "",
+    relatedDebtId: "",
+    assignedTo: "",
+    department: "",
+    priority: "Normal",
+    status: "Scheduled",
+    settlementAmount: "",
+    originalBalance: "",
+    requiredPayment: "",
+    offerExpiration: "",
+    paymentStatus: "",
+    reason: "",
+    reminder: "None",
+    secondReminder: "None",
+    notes: "",
+    isNew: true,
+  };
 }
 
 function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
@@ -6318,6 +6356,10 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
   const [dfsPipelineStages, setDfsPipelineStages] = useState(DFS_PIPELINE_STAGES);
   const [dfsNewStageInput, setDfsNewStageInput] = useState("");
   const [dfsSettings, setDfsSettings] = useState({ companyName: "DFS" });
+  const [dfsEvents, setDfsEvents] = useState([]);
+  const [dfsEventModal, setDfsEventModal] = useState(null); // null | event object
+  const [dfsCalendarMonthOffset, setDfsCalendarMonthOffset] = useState(0);
+  const [dfsEventDetailModal, setDfsEventDetailModal] = useState(null); // null | event object (read-only view)
 
   useEffect(() => {
     (async () => {
@@ -6351,6 +6393,12 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
         setDfsSettings(res && res.value ? JSON.parse(res.value) : { companyName: "DFS" });
       } catch (e) {
         setDfsSettings({ companyName: "DFS" });
+      }
+      try {
+        const res = await window.storage.get("dfs:events", true);
+        setDfsEvents(res && res.value ? JSON.parse(res.value) : []);
+      } catch (e) {
+        setDfsEvents([]);
       }
       setDfsLoaded(true);
     })();
@@ -6427,6 +6475,27 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
       console.error("DFS settings save failed:", err);
     }
   }
+  async function saveDfsEvent(form) {
+    const exists = dfsEvents.some((e) => e.id === form.id);
+    const { isNew, ...cleanForm } = form;
+    const next = exists ? dfsEvents.map((e) => (e.id === form.id ? { ...e, ...cleanForm } : e)) : [...dfsEvents, cleanForm];
+    setDfsEvents(next);
+    try {
+      await window.storage.set("dfs:events", JSON.stringify(next), true);
+      setDfsEventModal(null);
+    } catch (err) {
+      console.error("DFS event save failed:", err);
+    }
+  }
+  async function deleteDfsEvent(id) {
+    const next = dfsEvents.filter((e) => e.id !== id);
+    setDfsEvents(next);
+    try {
+      await window.storage.set("dfs:events", JSON.stringify(next), true);
+    } catch (err) {
+      console.error("DFS event delete failed:", err);
+    }
+  }
 
   const dfsFilteredClients = dfsClients.filter((c) => {
     const q = dfsClientsSearch.trim().toLowerCase();
@@ -6449,6 +6518,29 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
       (c.email || "").toLowerCase().includes(q)
     );
   });
+
+  // Calendar month grid
+  const dfsCalendarBase = new Date();
+  dfsCalendarBase.setDate(1);
+  dfsCalendarBase.setMonth(dfsCalendarBase.getMonth() + dfsCalendarMonthOffset);
+  const dfsCalendarYear = dfsCalendarBase.getFullYear();
+  const dfsCalendarMonthIndex = dfsCalendarBase.getMonth();
+  const dfsCalendarDaysInMonth = new Date(dfsCalendarYear, dfsCalendarMonthIndex + 1, 0).getDate();
+  const dfsCalendarFirstDayOfWeek = new Date(dfsCalendarYear, dfsCalendarMonthIndex, 1).getDay();
+  const dfsCalendarMonthLabel = dfsCalendarBase.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const dfsTodayStr = todayDateStr();
+  const dfsEventsByDate = {};
+  dfsEvents.forEach((ev) => {
+    if (!ev.date) return;
+    if (!dfsEventsByDate[ev.date]) dfsEventsByDate[ev.date] = [];
+    dfsEventsByDate[ev.date].push(ev);
+  });
+  const dfsCalendarCells = [];
+  for (let i = 0; i < dfsCalendarFirstDayOfWeek; i++) dfsCalendarCells.push(null);
+  for (let d = 1; d <= dfsCalendarDaysInMonth; d++) {
+    const dateStr = `${dfsCalendarYear}-${String(dfsCalendarMonthIndex + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    dfsCalendarCells.push({ day: d, dateStr, events: dfsEventsByDate[dateStr] || [] });
+  }
 
   // Dashboard metrics computed directly from client + debt records
   const dfsAllDebts = dfsClients.flatMap((c) => (c.debts || []).map((d) => ({ ...d, clientId: c.id, clientName: dfsClientDisplayName(c) })));
@@ -6886,7 +6978,101 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
             </div>
           )}
 
-          {!["dashboard", "clients", "creditors", "admin"].includes(dfsSection) && (
+          {dfsSection === "calendar" && (
+            <div style={S.dashboardWrap}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <button onClick={() => setDfsCalendarMonthOffset((m) => m - 1)} style={S.weekNavBtn} aria-label="Previous month">
+                    ‹
+                  </button>
+                  <div style={{ fontFamily: T.display, fontSize: 16, fontWeight: 600, color: T.ink, minWidth: 170, textAlign: "center" }}>
+                    {dfsCalendarMonthLabel}
+                  </div>
+                  <button onClick={() => setDfsCalendarMonthOffset((m) => m + 1)} style={S.weekNavBtn} aria-label="Next month">
+                    ›
+                  </button>
+                  {dfsCalendarMonthOffset !== 0 && (
+                    <button onClick={() => setDfsCalendarMonthOffset(0)} style={S.ghostBtn}>
+                      Today
+                    </button>
+                  )}
+                </div>
+                <button onClick={() => setDfsEventModal(dfsNewEventDefaults(dfsTodayStr))} style={S.primaryBtn}>
+                  <Plus size={14} /> Event
+                </button>
+              </div>
+
+              <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 12, fontSize: 11.5 }}>
+                {DFS_EVENT_TYPES.map((t) => (
+                  <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <span>{t.icon}</span>
+                    <span style={{ color: T.textMuted }}>{t.label}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 1, background: T.border, border: `1px solid ${T.border}`, borderRadius: 8, overflow: "hidden" }}>
+                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
+                  <div key={d} style={{ background: T.paperRaised, padding: "8px 6px", fontSize: 10.5, fontWeight: 600, color: T.textMuted, textAlign: "center" }}>
+                    {d}
+                  </div>
+                ))}
+                {dfsCalendarCells.map((cell, idx) =>
+                  cell === null ? (
+                    <div key={idx} style={{ background: T.paper, minHeight: 90 }} />
+                  ) : (
+                    <div
+                      key={idx}
+                      style={{
+                        background: cell.dateStr === dfsTodayStr ? "#EAF3EC" : T.paper,
+                        minHeight: 90,
+                        padding: 6,
+                        cursor: "pointer",
+                      }}
+                      onClick={() => setDfsEventModal(dfsNewEventDefaults(cell.dateStr))}
+                    >
+                      <div style={{ fontSize: 11, color: cell.dateStr === dfsTodayStr ? T.pineDark : T.textMuted, fontWeight: cell.dateStr === dfsTodayStr ? 700 : 500, marginBottom: 4 }}>
+                        {cell.day}
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                        {cell.events.slice(0, 3).map((ev) => {
+                          const typeInfo = DFS_EVENT_TYPES.find((t) => t.id === ev.type) || DFS_EVENT_TYPES[DFS_EVENT_TYPES.length - 1];
+                          return (
+                            <div
+                              key={ev.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDfsEventDetailModal(ev);
+                              }}
+                              style={{
+                                fontSize: 10,
+                                padding: "2px 4px",
+                                borderRadius: 4,
+                                background: typeInfo.color,
+                                color: "#fff",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                              title={ev.title}
+                            >
+                              {typeInfo.icon} {ev.time ? `${ev.time} ` : ""}
+                              {ev.title}
+                            </div>
+                          );
+                        })}
+                        {cell.events.length > 3 && (
+                          <div style={{ fontSize: 10, color: T.textMuted }}>+{cell.events.length - 3} more</div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                )}
+              </div>
+            </div>
+          )}
+
+          {!["dashboard", "clients", "creditors", "admin", "calendar"].includes(dfsSection) && (
             <div style={S.dashboardWrap}>
               <div style={S.emptyState}>
                 <ClipboardList size={22} color={T.borderStrong} />
@@ -7002,6 +7188,49 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
                   }
                 : null
             }
+          />
+        </Modal>
+      )}
+      {dfsEventModal && (
+        <Modal onClose={() => setDfsEventModal(null)}>
+          <DfsEventForm
+            initial={dfsEventModal}
+            clients={dfsClients}
+            onCancel={() => setDfsEventModal(null)}
+            onSave={saveDfsEvent}
+            onDelete={
+              !dfsEventModal.isNew
+                ? async () => {
+                    await deleteDfsEvent(dfsEventModal.id);
+                    setDfsEventModal(null);
+                  }
+                : null
+            }
+          />
+        </Modal>
+      )}
+      {dfsEventDetailModal && (
+        <Modal onClose={() => setDfsEventDetailModal(null)} narrow>
+          <DfsEventDetail
+            event={dfsEventDetailModal}
+            clients={dfsClients}
+            onClose={() => setDfsEventDetailModal(null)}
+            onEdit={() => {
+              setDfsEventModal({ ...dfsEventDetailModal, isNew: false });
+              setDfsEventDetailModal(null);
+            }}
+            onMarkComplete={async () => {
+              await saveDfsEvent({ ...dfsEventDetailModal, status: "Completed" });
+              setDfsEventDetailModal(null);
+            }}
+            onOpenClient={() => {
+              const client = dfsClients.find((c) => c.id === dfsEventDetailModal.clientId);
+              if (client) {
+                setDfsEventDetailModal(null);
+                setDfsSection("clients");
+                setDfsClientModal({ ...client, isNew: false });
+              }
+            }}
           />
         </Modal>
       )}
@@ -7701,6 +7930,310 @@ function DfsCreditorForm({ initial, error: saveError, onCancel, onSave, onDelete
             {form.isNew ? "New Creditor" : "Save"}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function DfsEventForm({ initial, clients, onCancel, onSave, onDelete }) {
+  const [form, setForm] = useState(initial);
+  const [error, setError] = useState("");
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const typeInfo = DFS_EVENT_TYPES.find((t) => t.id === form.type) || DFS_EVENT_TYPES[0];
+  const linkedClient = (clients || []).find((c) => c.id === form.clientId);
+  const linkedClientDebts = linkedClient ? linkedClient.debts || [] : [];
+
+  function submit() {
+    if (!form.title || !form.title.trim()) {
+      setError("Enter a title first");
+      return;
+    }
+    if (!form.date) {
+      setError("Pick a date first");
+      return;
+    }
+    setError("");
+    onSave(form);
+  }
+
+  return (
+    <div>
+      <div style={S.modalTitle}>{form.isNew ? "New Event" : "Edit event"}</div>
+      <Field label="Title *">
+        <input value={form.title || ""} onChange={set("title")} style={S.input} autoFocus />
+      </Field>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Field label="Type">
+          <div style={{ position: "relative" }}>
+            <select value={form.type || "appointment"} onChange={set("type")} style={S.select}>
+              {DFS_EVENT_TYPES.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.icon} {t.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+          </div>
+        </Field>
+        <Field label="Date *">
+          <input type="date" value={form.date || ""} onChange={set("date")} style={S.input} />
+        </Field>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Field label="Time">
+          <input type="time" value={form.time || ""} onChange={set("time")} style={S.input} />
+        </Field>
+        <Field label="Related Client">
+          <div style={{ position: "relative" }}>
+            <select
+              value={form.clientId || ""}
+              onChange={(e) => setForm({ ...form, clientId: e.target.value, relatedDebtId: "" })}
+              style={S.select}
+            >
+              <option value="">— None —</option>
+              {(clients || []).map((c) => (
+                <option key={c.id} value={c.id}>
+                  {dfsClientDisplayName(c)}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+          </div>
+        </Field>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Field label="Assigned To">
+          <input value={form.assignedTo || ""} onChange={set("assignedTo")} style={S.input} />
+        </Field>
+        <Field label="Department">
+          <input value={form.department || ""} onChange={set("department")} style={S.input} placeholder="e.g. Negotiations" />
+        </Field>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Field label="Priority">
+          <div style={{ position: "relative" }}>
+            <select value={form.priority || "Normal"} onChange={set("priority")} style={S.select}>
+              {DFS_PRIORITIES.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+          </div>
+        </Field>
+        <Field label="Status">
+          <div style={{ position: "relative" }}>
+            <select value={form.status || "Scheduled"} onChange={set("status")} style={S.select}>
+              {["Scheduled", "Completed", "Rescheduled", "Cancelled"].map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+          </div>
+        </Field>
+      </div>
+
+      {typeInfo.showMcaFields && (
+        <>
+          <div style={{ ...S.dfsSubHeader, marginTop: 16 }}>MCA / Settlement Details</div>
+          <Field label="Related MCA">
+            <div style={{ position: "relative" }}>
+              <select value={form.relatedDebtId || ""} onChange={set("relatedDebtId")} style={S.select}>
+                <option value="">— None —</option>
+                {linkedClientDebts.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.creditorName || "Unnamed creditor"}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+            </div>
+          </Field>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+            <Field label="Settlement Amount">
+              <input
+                type="number"
+                value={form.settlementAmount || ""}
+                onChange={set("settlementAmount")}
+                style={{ ...S.input, fontFamily: T.mono }}
+              />
+            </Field>
+            <Field label="Original Balance">
+              <input
+                type="number"
+                value={form.originalBalance || ""}
+                onChange={set("originalBalance")}
+                style={{ ...S.input, fontFamily: T.mono }}
+              />
+            </Field>
+            <Field label="Required Payment">
+              <input
+                type="number"
+                value={form.requiredPayment || ""}
+                onChange={set("requiredPayment")}
+                style={{ ...S.input, fontFamily: T.mono }}
+              />
+            </Field>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Field label="Offer Expiration">
+              <input type="date" value={form.offerExpiration || ""} onChange={set("offerExpiration")} style={S.input} />
+            </Field>
+            <Field label="Payment Status">
+              <div style={{ position: "relative" }}>
+                <select value={form.paymentStatus || ""} onChange={set("paymentStatus")} style={S.select}>
+                  <option value="">—</option>
+                  {["Pending", "Received", "Failed"].map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+              </div>
+            </Field>
+          </div>
+        </>
+      )}
+
+      {typeInfo.showCallbackFields && (
+        <Field label="Reason for callback">
+          <input value={form.reason || ""} onChange={set("reason")} style={S.input} placeholder="e.g. Follow up on enrollment" />
+        </Field>
+      )}
+
+      <div style={{ ...S.dfsSubHeader, marginTop: 16 }}>Reminders</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Field label="Reminder">
+          <div style={{ position: "relative" }}>
+            <select value={form.reminder || "None"} onChange={set("reminder")} style={S.select}>
+              {DFS_REMINDER_OPTIONS.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+          </div>
+        </Field>
+        <Field label="Second Reminder">
+          <div style={{ position: "relative" }}>
+            <select value={form.secondReminder || "None"} onChange={set("secondReminder")} style={S.select}>
+              {DFS_REMINDER_OPTIONS.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+          </div>
+        </Field>
+      </div>
+
+      <Field label="Notes">
+        <textarea value={form.notes || ""} onChange={set("notes")} style={{ ...S.input, minHeight: 60, resize: "vertical" }} />
+      </Field>
+      {error && <div style={S.errorText}>{error}</div>}
+      <div style={{ display: "flex", gap: 8, justifyContent: onDelete ? "space-between" : "flex-end", marginTop: 16 }}>
+        {onDelete && (
+          <button onClick={onDelete} style={S.dangerGhostBtn}>
+            <Trash2 size={13} /> Delete
+          </button>
+        )}
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={onCancel} style={S.ghostBtn}>
+            Cancel
+          </button>
+          <button onClick={submit} style={S.primaryBtn}>
+            {form.isNew ? "New Event" : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Read-only summary shown when clicking an existing event, matching a
+// lightweight "what does an employee actually need to see" view — not
+// every field, just what's relevant for that event's type, plus quick
+// actions instead of forcing a full edit every time.
+function DfsEventDetail({ event, clients, onClose, onEdit, onMarkComplete, onOpenClient }) {
+  const typeInfo = DFS_EVENT_TYPES.find((t) => t.id === event.type) || DFS_EVENT_TYPES[0];
+  const client = (clients || []).find((c) => c.id === event.clientId);
+  const debt = client ? (client.debts || []).find((d) => d.id === event.relatedDebtId) : null;
+  const timeLabel = event.time
+    ? new Date(`2000-01-01T${event.time}`).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+    : "";
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+        <div>
+          <div style={{ fontSize: 12.5, color: T.textMuted }}>
+            {timeLabel && `${timeLabel} — `}
+            {typeInfo.icon} {typeInfo.label}
+            {event.priority === "Urgent" && <span style={{ color: "#A32D2D", fontWeight: 700 }}> · Urgent</span>}
+          </div>
+          <div style={{ fontFamily: T.display, fontSize: 17, fontWeight: 600, color: T.ink, marginTop: 2 }}>{event.title}</div>
+        </div>
+        <button onClick={onClose} style={S.iconBtnGhost}>
+          <X size={16} color={T.textMuted} />
+        </button>
+      </div>
+
+      <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 6, fontSize: 13 }}>
+        {client && (
+          <div>
+            {client.businessName || dfsClientDisplayName(client)}
+            {client.businessName ? ` — ${dfsClientDisplayName(client)}` : ""}
+          </div>
+        )}
+        {debt && (
+          <div>
+            {debt.creditorName}
+            {event.settlementAmount ? ` — ${money(Number(event.settlementAmount))} Settlement` : ""}
+          </div>
+        )}
+        {event.assignedTo && <div style={{ color: T.textMuted }}>Assigned: {event.assignedTo}</div>}
+        {typeInfo.showCallbackFields && event.reason && <div style={{ color: T.textMuted }}>Reason: {event.reason}</div>}
+        {typeInfo.showCallbackFields && client && (
+          <div style={{ color: T.textMuted }}>
+            MCA Debt: {money((client.debts || []).reduce((s, d) => s + (Number(d.currentBalance) || 0), 0))}
+          </div>
+        )}
+        {typeInfo.showMcaFields && event.paymentStatus && (
+          <div style={{ color: T.textMuted }}>Payment: {event.paymentStatus}</div>
+        )}
+        {event.status && event.status !== "Scheduled" && (
+          <div>
+            <span style={{ ...S.leadBadge, background: "#F0EFE9", color: T.textMuted }}>{event.status}</span>
+          </div>
+        )}
+        {event.notes && <div style={{ color: T.textMuted, marginTop: 4 }}>{event.notes}</div>}
+      </div>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 18 }}>
+        {client && client.phone && (
+          <a href={`tel:${client.phone}`} style={{ ...S.ghostBtn, textDecoration: "none" }}>
+            <Phone size={13} /> Call Client
+          </a>
+        )}
+        {client && (
+          <button onClick={onOpenClient} style={S.ghostBtn}>
+            <Users size={13} /> Open Client
+          </button>
+        )}
+        {event.status !== "Completed" && (
+          <button onClick={onMarkComplete} style={S.ghostBtn}>
+            <CheckCircle size={13} /> Mark Complete
+          </button>
+        )}
+        <button onClick={onEdit} style={S.ghostBtn}>
+          <CalendarDays size={13} /> Reschedule
+        </button>
       </div>
     </div>
   );
