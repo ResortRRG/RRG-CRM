@@ -34,6 +34,7 @@ import {
   ShieldAlert,
   Printer,
   CheckCircle,
+  AlertTriangle,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -6301,6 +6302,35 @@ const DFS_EVENT_TYPES = [
 const DFS_PRIORITIES = ["Low", "Normal", "High", "Urgent"];
 const DFS_REMINDER_OPTIONS = ["None", "15 minutes before", "1 hour before", "2 hours before", "1 day before"];
 
+const DFS_LEAD_STAGES = [
+  "New Lead",
+  "Attempting Contact",
+  "Contacted",
+  "Qualified",
+  "Docs Requested",
+  "Docs Pending",
+  "Ready for Closer",
+  "Closing",
+  "Agreement Sent",
+  "Agreement Signed",
+  "Ready to Convert",
+  "Follow-Up",
+  "Not Interested",
+  "Unqualified",
+  "Bad Lead",
+  "Lost",
+  "Do Not Contact",
+];
+const DFS_LEAD_TERMINAL_STAGES = ["Not Interested", "Unqualified", "Bad Lead", "Lost", "Do Not Contact"];
+const DFS_DOCUMENT_CHECKLIST_ITEMS = [
+  "MCA Statements/Contracts",
+  "Bank Statements",
+  "Driver's License",
+  "Voided Check",
+  "Signed Enrollment Agreement",
+];
+const DFS_LEAD_NOT_WORKED_HOURS = 24;
+
 function dfsUid() {
   return "dfs_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
 }
@@ -6339,6 +6369,44 @@ function dfsNewEventDefaults(dateStr) {
   };
 }
 
+// Every important lead action gets a permanent, timestamped entry — this
+// log is never edited or deleted once written, only appended to.
+function dfsLogActivity(activityLog, description) {
+  return [
+    ...(activityLog || []),
+    { id: dfsUid(), timestamp: Date.now(), description },
+  ];
+}
+
+function dfsNewLeadDefaults() {
+  return {
+    id: dfsUid(),
+    firstName: "",
+    lastName: "",
+    businessName: "",
+    phone: "",
+    email: "",
+    businessAddress: "",
+    city: "",
+    state: "",
+    zip: "",
+    leadSource: "",
+    assignedRep: "",
+    assignedCloser: "",
+    leadStage: "New Lead",
+    leadTemperature: "",
+    requestedAmount: "",
+    notesForCloser: "",
+    callbackDate: "",
+    documentChecklist: {},
+    debts: [],
+    notes: "",
+    activityLog: [{ id: dfsUid(), timestamp: Date.now(), description: "Lead created" }],
+    createdAt: Date.now(),
+    isNew: true,
+  };
+}
+
 function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
   const [dfsSection, setDfsSection] = useState("dashboard");
   const [dfsLoaded, setDfsLoaded] = useState(false);
@@ -6360,6 +6428,11 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
   const [dfsEventModal, setDfsEventModal] = useState(null); // null | event object
   const [dfsCalendarMonthOffset, setDfsCalendarMonthOffset] = useState(0);
   const [dfsEventDetailModal, setDfsEventDetailModal] = useState(null); // null | event object (read-only view)
+  const [dfsLeads, setDfsLeads] = useState([]);
+  const [dfsLeadModal, setDfsLeadModal] = useState(null); // null | lead object
+  const [dfsLeadsSearch, setDfsLeadsSearch] = useState("");
+  const [dfsSendToCloserModal, setDfsSendToCloserModal] = useState(null); // null | lead object
+  const [dfsConvertError, setDfsConvertError] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -6399,6 +6472,12 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
         setDfsEvents(res && res.value ? JSON.parse(res.value) : []);
       } catch (e) {
         setDfsEvents([]);
+      }
+      try {
+        const res = await window.storage.get("dfs:leads", true);
+        setDfsLeads(res && res.value ? JSON.parse(res.value) : []);
+      } catch (e) {
+        setDfsLeads([]);
       }
       setDfsLoaded(true);
     })();
@@ -6496,6 +6575,96 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
       console.error("DFS event delete failed:", err);
     }
   }
+  async function saveDfsLead(form) {
+    const exists = dfsLeads.some((l) => l.id === form.id);
+    const { isNew, ...cleanForm } = form;
+    const next = exists ? dfsLeads.map((l) => (l.id === form.id ? { ...l, ...cleanForm } : l)) : [...dfsLeads, cleanForm];
+    setDfsLeads(next);
+    try {
+      await window.storage.set("dfs:leads", JSON.stringify(next), true);
+      setDfsLeadModal(null);
+    } catch (err) {
+      console.error("DFS lead save failed:", err);
+    }
+  }
+  async function deleteDfsLead(id) {
+    const next = dfsLeads.filter((l) => l.id !== id);
+    setDfsLeads(next);
+    try {
+      await window.storage.set("dfs:leads", JSON.stringify(next), true);
+    } catch (err) {
+      console.error("DFS lead delete failed:", err);
+    }
+  }
+  async function sendDfsLeadToCloser(lead, closerData) {
+    const updated = {
+      ...lead,
+      assignedCloser: closerData.assignedCloser,
+      leadTemperature: closerData.leadTemperature,
+      requestedAmount: closerData.requestedAmount,
+      notesForCloser: closerData.notesForCloser,
+      leadStage: "Ready for Closer",
+      activityLog: dfsLogActivity(
+        lead.activityLog,
+        `Sent to ${closerData.assignedCloser || "closer"} (Closer)${closerData.leadTemperature ? ` — ${closerData.leadTemperature}` : ""}`
+      ),
+    };
+    await saveDfsLead(updated);
+    setDfsSendToCloserModal(null);
+  }
+  // Converting is a deliberate, manual action — never automatic just because
+  // documents got uploaded. Carries the entire lead history over so nothing
+  // gets lost: contact info, MCA positions, notes, and the full activity log.
+  async function convertDfsLeadToClient(lead) {
+    const missing = [];
+    const requiredDocs = DFS_DOCUMENT_CHECKLIST_ITEMS.filter((d) => d !== "Signed Enrollment Agreement");
+    const docs = lead.documentChecklist || {};
+    if (!requiredDocs.every((d) => docs[d])) missing.push("Required documents received");
+    if (!docs["Signed Enrollment Agreement"]) missing.push("Agreement signed");
+    if (!lead.debts || lead.debts.length === 0) missing.push("MCA accounts entered");
+    if (!lead.requestedAmount) missing.push("Program/enrollment information complete");
+    if (!lead.assignedCloser) missing.push("Assigned closer");
+    if (missing.length > 0) {
+      setDfsConvertError("Can't convert yet — missing: " + missing.join(", "));
+      return;
+    }
+    setDfsConvertError("");
+    const newClient = {
+      id: dfsUid(),
+      firstName: lead.firstName,
+      lastName: lead.lastName,
+      businessName: lead.businessName,
+      phone: lead.phone,
+      email: lead.email,
+      businessAddress: lead.businessAddress,
+      city: lead.city,
+      state: lead.state,
+      zip: lead.zip,
+      leadSource: lead.leadSource,
+      assignedRep: lead.assignedRep,
+      assignedCloser: lead.assignedCloser,
+      pipelineStage: "Enrolled",
+      debts: lead.debts || [],
+      notes: lead.notes,
+      activityLog: dfsLogActivity(lead.activityLog, "Converted to Client"),
+      documentChecklist: lead.documentChecklist,
+      convertedFromLeadId: lead.id,
+      createdAt: Date.now(),
+    };
+    const nextClients = [...dfsClients, newClient];
+    const nextLeads = dfsLeads.filter((l) => l.id !== lead.id);
+    setDfsClients(nextClients);
+    setDfsLeads(nextLeads);
+    try {
+      await window.storage.set("dfs:clients", JSON.stringify(nextClients), true);
+      await window.storage.set("dfs:leads", JSON.stringify(nextLeads), true);
+      setDfsLeadModal(null);
+      setDfsSection("clients");
+      setDfsClientModal({ ...newClient, isNew: false });
+    } catch (err) {
+      console.error("Lead conversion failed:", err);
+    }
+  }
 
   const dfsFilteredClients = dfsClients.filter((c) => {
     const q = dfsClientsSearch.trim().toLowerCase();
@@ -6518,6 +6687,29 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
       (c.email || "").toLowerCase().includes(q)
     );
   });
+
+  const dfsFilteredLeads = dfsLeads.filter((l) => {
+    const q = dfsLeadsSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      dfsClientDisplayName(l).toLowerCase().includes(q) ||
+      (l.businessName || "").toLowerCase().includes(q) ||
+      (l.phone || "").toLowerCase().includes(q) ||
+      (l.email || "").toLowerCase().includes(q)
+    );
+  });
+  // Flags a lead if it's had no activity logged (beyond its initial
+  // creation entry) within the configured window, so it doesn't silently
+  // go cold before anyone notices.
+  function dfsIsLeadNotWorked(lead) {
+    if (DFS_LEAD_TERMINAL_STAGES.includes(lead.leadStage)) return false;
+    const log = lead.activityLog || [];
+    const lastEntry = log[log.length - 1];
+    const lastTimestamp = lastEntry ? lastEntry.timestamp : lead.createdAt;
+    if (!lastTimestamp) return false;
+    const hoursSince = (Date.now() - lastTimestamp) / (1000 * 60 * 60);
+    return hoursSince >= DFS_LEAD_NOT_WORKED_HOURS && log.length <= 1;
+  }
 
   // Calendar month grid
   const dfsCalendarBase = new Date();
@@ -7072,7 +7264,72 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
             </div>
           )}
 
-          {!["dashboard", "clients", "creditors", "admin", "calendar"].includes(dfsSection) && (
+          {dfsSection === "leads" && (
+            <div style={S.dashboardWrap}>
+              <div style={S.contactsToolbar}>
+                <div style={{ position: "relative", flex: 1, maxWidth: 320 }}>
+                  <Search size={14} color={T.textMuted} style={S.searchIcon} />
+                  <input
+                    value={dfsLeadsSearch}
+                    onChange={(e) => setDfsLeadsSearch(e.target.value)}
+                    placeholder="Search leads"
+                    style={S.searchInput}
+                  />
+                </div>
+                <button onClick={() => setDfsLeadModal(dfsNewLeadDefaults())} style={S.primaryBtn}>
+                  <Plus size={14} /> Lead
+                </button>
+              </div>
+              {dfsFilteredLeads.length === 0 ? (
+                <div style={S.emptyState}>
+                  <ClipboardList size={22} color={T.borderStrong} />
+                  <div style={{ marginTop: 8, fontSize: 13, color: T.textMuted }}>No leads yet — add your first one</div>
+                </div>
+              ) : (
+                <div style={S.contactGrid}>
+                  {dfsFilteredLeads.map((l) => {
+                    const totalDebt = (l.debts || []).reduce((s, d) => s + (Number(d.currentBalance) || 0), 0);
+                    const notWorked = dfsIsLeadNotWorked(l);
+                    return (
+                      <div key={l.id} style={S.contactCard} onClick={() => setDfsLeadModal({ ...l, isNew: false })}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                          <div style={S.contactName}>{dfsClientDisplayName(l)}</div>
+                          <span style={{ ...S.leadBadge, background: "#F0EFE9", color: T.textMuted, flexShrink: 0 }}>
+                            {l.leadStage || "New Lead"}
+                          </span>
+                        </div>
+                        {notWorked && (
+                          <div style={{ ...S.contactMetaRow, color: "#A32D2D", fontWeight: 600 }}>
+                            <AlertTriangle size={12} /> Not worked in {DFS_LEAD_NOT_WORKED_HOURS}+ hours
+                          </div>
+                        )}
+                        {l.businessName && (
+                          <div style={S.contactMetaRow}>
+                            <Building2 size={12} /> {l.businessName}
+                          </div>
+                        )}
+                        {l.phone && (
+                          <div style={S.contactMetaRow}>
+                            <Phone size={12} /> {l.phone}
+                          </div>
+                        )}
+                        {l.callbackDate && (
+                          <div style={S.contactMetaRow}>
+                            <CalendarDays size={12} /> Callback: {l.callbackDate}
+                          </div>
+                        )}
+                        <div style={S.contactMetaRow}>
+                          <Wallet size={12} /> {(l.debts || []).length} position{(l.debts || []).length === 1 ? "" : "s"} · {money(totalDebt)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {!["dashboard", "clients", "creditors", "admin", "calendar", "leads"].includes(dfsSection) && (
             <div style={S.dashboardWrap}>
               <div style={S.emptyState}>
                 <ClipboardList size={22} color={T.borderStrong} />
@@ -7231,6 +7488,38 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
                 setDfsClientModal({ ...client, isNew: false });
               }
             }}
+          />
+        </Modal>
+      )}
+      {dfsLeadModal && (
+        <Modal onClose={() => setDfsLeadModal(null)} fullScreen>
+          <DfsLeadForm
+            initial={dfsLeadModal}
+            error={dfsConvertError}
+            onCancel={() => {
+              setDfsLeadModal(null);
+              setDfsConvertError("");
+            }}
+            onSave={saveDfsLead}
+            onDelete={
+              !dfsLeadModal.isNew
+                ? async () => {
+                    await deleteDfsLead(dfsLeadModal.id);
+                    setDfsLeadModal(null);
+                  }
+                : null
+            }
+            onSendToCloser={(lead) => setDfsSendToCloserModal(lead)}
+            onConvert={(lead) => convertDfsLeadToClient(lead)}
+          />
+        </Modal>
+      )}
+      {dfsSendToCloserModal && (
+        <Modal onClose={() => setDfsSendToCloserModal(null)}>
+          <DfsSendToCloserForm
+            lead={dfsSendToCloserModal}
+            onCancel={() => setDfsSendToCloserModal(null)}
+            onSend={(closerData) => sendDfsLeadToCloser(dfsSendToCloserModal, closerData)}
           />
         </Modal>
       )}
@@ -7826,6 +8115,474 @@ function DfsClientForm({ initial, error: saveError, pipelineStages, currentUser,
             {form.isNew ? "New Client" : "Save"}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function DfsLeadForm({ initial, error: saveError, onCancel, onSave, onDelete, onSendToCloser, onConvert }) {
+  const [form, setForm] = useState(initial);
+  const [error, setError] = useState("");
+  const [tab, setTab] = useState("overview");
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+
+  function updateDebt(id, patch) {
+    setForm({ ...form, debts: (form.debts || []).map((d) => (d.id === id ? { ...d, ...patch } : d)) });
+  }
+  function addDebt() {
+    setForm({
+      ...form,
+      debts: [
+        ...(form.debts || []),
+        { id: dfsUid(), creditorName: "", originalBalance: "", currentBalance: "", paymentAmount: "", status: "Active" },
+      ],
+    });
+  }
+  function removeDebt(id) {
+    setForm({ ...form, debts: (form.debts || []).filter((d) => d.id !== id) });
+  }
+  function toggleDoc(item) {
+    const nextChecklist = { ...(form.documentChecklist || {}), [item]: !((form.documentChecklist || {})[item]) };
+    const action = nextChecklist[item] ? "received" : "removed";
+    setForm({
+      ...form,
+      documentChecklist: nextChecklist,
+      activityLog: dfsLogActivity(form.activityLog, `${item} marked ${action}`),
+    });
+  }
+
+  function submit() {
+    const displayName = `${form.firstName || ""} ${form.lastName || ""}`.trim();
+    if (!displayName) {
+      setError("Enter the lead's first and last name first");
+      return;
+    }
+    setError("");
+    onSave(form);
+  }
+
+  const debts = form.debts || [];
+  const totalDebt = debts.reduce((s, d) => s + (Number(d.currentBalance) || 0), 0);
+  const displayName = `${form.firstName || ""} ${form.lastName || ""}`.trim() || "New Lead";
+  const docsChecked = DFS_DOCUMENT_CHECKLIST_ITEMS.filter((d) => (form.documentChecklist || {})[d]);
+  const requiredDocs = DFS_DOCUMENT_CHECKLIST_ITEMS.filter((d) => d !== "Signed Enrollment Agreement");
+  const readyToConvert =
+    requiredDocs.every((d) => (form.documentChecklist || {})[d]) &&
+    (form.documentChecklist || {})["Signed Enrollment Agreement"] &&
+    debts.length > 0 &&
+    form.requestedAmount &&
+    form.assignedCloser;
+
+  const LEAD_TABS = [
+    { id: "overview", label: "Overview" },
+    { id: "mca", label: "MCA Accounts" },
+    { id: "documents", label: "Documents" },
+    { id: "activity", label: "Activity" },
+    { id: "notes", label: "Notes" },
+  ];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <div style={{ borderBottom: `1px solid ${T.border}`, paddingBottom: 14, marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <div style={{ fontFamily: T.display, fontSize: 20, fontWeight: 600, color: T.ink }}>
+              {form.businessName || displayName}
+              <span style={{ ...S.leadBadge, marginLeft: 10, background: "#F0EFE9", color: T.textMuted }}>
+                {form.leadStage || "New Lead"}
+              </span>
+            </div>
+            <div style={{ fontSize: 13, color: T.textMuted, marginTop: 2 }}>
+              {displayName}
+              {form.phone ? ` · ${form.phone}` : ""}
+              {form.assignedRep ? ` · Opener: ${form.assignedRep}` : ""}
+              {form.assignedCloser ? ` · Closer: ${form.assignedCloser}` : ""}
+            </div>
+          </div>
+          <button onClick={onCancel} style={S.iconBtnGhost}>
+            <X size={16} color={T.textMuted} />
+          </button>
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 18, marginTop: 12, fontSize: 12.5 }}>
+          <div>
+            <span style={{ color: T.textMuted }}>MCA Debt: </span>
+            <strong>{money(totalDebt)}</strong>
+          </div>
+          <div>
+            <span style={{ color: T.textMuted }}>Positions: </span>
+            <strong>{debts.length}</strong>
+          </div>
+          <div>
+            <span style={{ color: T.textMuted }}>Documents: </span>
+            <strong>
+              {docsChecked.length}/{DFS_DOCUMENT_CHECKLIST_ITEMS.length}
+            </strong>
+          </div>
+          {form.callbackDate && (
+            <div>
+              <span style={{ color: T.textMuted }}>Callback: </span>
+              <strong>{form.callbackDate}</strong>
+            </div>
+          )}
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+          {!form.isNew && (
+            <button onClick={() => onSendToCloser(form)} style={S.ghostBtn}>
+              <Users size={13} /> Send to Closer
+            </button>
+          )}
+          {!form.isNew && readyToConvert && (
+            <button onClick={() => onConvert(form)} style={{ ...S.primaryBtn, background: T.pineDark }}>
+              <CheckCircle size={13} /> 🟢 Convert to Client
+            </button>
+          )}
+          {!form.isNew && !readyToConvert && (
+            <div style={{ ...S.hint, display: "flex", alignItems: "center" }}>Not ready to convert yet</div>
+          )}
+        </div>
+        {saveError && <div style={{ ...S.errorText, marginTop: 8 }}>{saveError}</div>}
+      </div>
+
+      <div style={{ display: "flex", gap: 4, borderBottom: `1px solid ${T.border}`, marginBottom: 16, flexWrap: "wrap" }}>
+        {LEAD_TABS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            style={{
+              padding: "8px 12px",
+              fontSize: 12.5,
+              fontWeight: 500,
+              background: "none",
+              border: "none",
+              borderBottom: tab === t.id ? `2px solid ${T.pineDark}` : "2px solid transparent",
+              color: tab === t.id ? T.pineDark : T.textMuted,
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ flex: 1, overflowY: "auto", paddingRight: 4 }} className="crm-scroll">
+        {tab === "overview" && (
+          <>
+            <div style={S.dfsFieldGrid3}>
+              <Field label="First Name *">
+                <input value={form.firstName || ""} onChange={set("firstName")} style={S.input} autoFocus />
+              </Field>
+              <Field label="Last Name *">
+                <input value={form.lastName || ""} onChange={set("lastName")} style={S.input} />
+              </Field>
+              <Field label="Business Name / DBA">
+                <input value={form.businessName || ""} onChange={set("businessName")} style={S.input} />
+              </Field>
+              <Field label="Phone">
+                <input value={form.phone || ""} onChange={set("phone")} style={S.input} />
+              </Field>
+              <Field label="Email">
+                <input value={form.email || ""} onChange={set("email")} style={S.input} />
+              </Field>
+              <Field label="Lead Source">
+                <input value={form.leadSource || ""} onChange={set("leadSource")} style={S.input} />
+              </Field>
+            </div>
+            <Field label="Business Address">
+              <input value={form.businessAddress || ""} onChange={set("businessAddress")} style={S.input} />
+            </Field>
+            <div style={S.dfsFieldGrid3}>
+              <Field label="City">
+                <input value={form.city || ""} onChange={set("city")} style={S.input} />
+              </Field>
+              <Field label="State">
+                <input value={form.state || ""} onChange={set("state")} style={S.input} />
+              </Field>
+              <Field label="ZIP">
+                <input value={form.zip || ""} onChange={set("zip")} style={S.input} />
+              </Field>
+            </div>
+
+            <div style={{ ...S.dfsSubHeader, marginTop: 20 }}>Pipeline & Assignment</div>
+            <div style={S.dfsFieldGrid3}>
+              <Field label="Assigned Rep (Opener)">
+                <input value={form.assignedRep || ""} onChange={set("assignedRep")} style={S.input} />
+              </Field>
+              <Field label="Assigned Closer">
+                <input value={form.assignedCloser || ""} onChange={set("assignedCloser")} style={S.input} placeholder="Set via Send to Closer" />
+              </Field>
+              <Field label="Lead Stage">
+                <div style={{ position: "relative" }}>
+                  <select value={form.leadStage || "New Lead"} onChange={set("leadStage")} style={S.select}>
+                    {DFS_LEAD_STAGES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+                </div>
+              </Field>
+              <Field label="Lead Temperature">
+                <div style={{ position: "relative" }}>
+                  <select value={form.leadTemperature || ""} onChange={set("leadTemperature")} style={S.select}>
+                    <option value="">—</option>
+                    <option value="🔥 Hot">🔥 Hot</option>
+                    <option value="🌤️ Warm">🌤️ Warm</option>
+                    <option value="❄️ Cold">❄️ Cold</option>
+                  </select>
+                  <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+                </div>
+              </Field>
+              <Field label="Requested Amount">
+                <input
+                  type="number"
+                  value={form.requestedAmount || ""}
+                  onChange={set("requestedAmount")}
+                  style={{ ...S.input, fontFamily: T.mono }}
+                />
+              </Field>
+              <Field label="Callback Date">
+                <input type="date" value={form.callbackDate || ""} onChange={set("callbackDate")} style={S.input} />
+              </Field>
+            </div>
+            {form.notesForCloser && (
+              <Field label="Notes for Closer">
+                <div style={{ ...S.input, minHeight: 50, color: T.textMuted }}>{form.notesForCloser}</div>
+              </Field>
+            )}
+          </>
+        )}
+
+        {tab === "mca" && (
+          <>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <div style={S.dfsSubHeader}>MCA Debts / Positions</div>
+              <button onClick={addDebt} style={S.ghostBtn}>
+                <Plus size={13} /> Add debt
+              </button>
+            </div>
+            {debts.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: T.textMuted }}>No debts added yet.</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {debts.map((d) => (
+                  <div key={d.id} style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: 12, background: T.paper }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
+                      <input
+                        value={d.creditorName}
+                        onChange={(e) => updateDebt(d.id, { creditorName: e.target.value })}
+                        style={S.input}
+                        placeholder="Creditor / funder name"
+                      />
+                      <input
+                        type="number"
+                        value={d.originalBalance}
+                        onChange={(e) => updateDebt(d.id, { originalBalance: e.target.value })}
+                        style={{ ...S.input, fontFamily: T.mono }}
+                        placeholder="Original balance"
+                      />
+                      <input
+                        type="number"
+                        value={d.currentBalance}
+                        onChange={(e) => updateDebt(d.id, { currentBalance: e.target.value })}
+                        style={{ ...S.input, fontFamily: T.mono }}
+                        placeholder="Current balance"
+                      />
+                    </div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <input
+                        type="number"
+                        value={d.paymentAmount}
+                        onChange={(e) => updateDebt(d.id, { paymentAmount: e.target.value })}
+                        style={{ ...S.input, fontFamily: T.mono, flex: 1 }}
+                        placeholder="Payment amount"
+                      />
+                      <button onClick={() => removeDebt(d.id)} style={S.iconBtnGhost}>
+                        <Trash2 size={13} color={T.textMuted} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {tab === "documents" && (
+          <>
+            <div style={S.dfsSubHeader}>
+              Document Status — {docsChecked.length}/{DFS_DOCUMENT_CHECKLIST_ITEMS.length} Received
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+              {DFS_DOCUMENT_CHECKLIST_ITEMS.map((item) => {
+                const checked = !!(form.documentChecklist || {})[item];
+                return (
+                  <label
+                    key={item}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      toggleDoc(item);
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      padding: "10px 12px",
+                      background: T.paperRaised,
+                      border: `1px solid ${T.border}`,
+                      borderRadius: 8,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <span style={{ fontSize: 16 }}>{checked ? "✅" : "❌"}</span>
+                    <span style={{ fontSize: 13, color: T.ink }}>{item}</span>
+                  </label>
+                );
+              })}
+            </div>
+            {readyToConvert ? (
+              <div style={{ background: "#EAF3EC", border: `1px solid ${T.pineDark}`, borderRadius: 8, padding: 12, fontSize: 13, fontWeight: 600, color: T.pineDark }}>
+                🟢 READY TO CONVERT
+              </div>
+            ) : (
+              <div style={{ ...S.hint }}>
+                Once all documents are received, the agreement is signed, MCA accounts are entered, a requested
+                amount is set, and a closer is assigned, this lead becomes eligible to convert.
+              </div>
+            )}
+          </>
+        )}
+
+        {tab === "activity" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {(form.activityLog || []).length === 0 ? (
+              <div style={{ fontSize: 12.5, color: T.textMuted }}>No activity recorded yet.</div>
+            ) : (
+              [...(form.activityLog || [])]
+                .sort((a, b) => a.timestamp - b.timestamp)
+                .map((entry) => (
+                  <div key={entry.id} style={{ fontSize: 12.5, display: "flex", gap: 10 }}>
+                    <span style={{ color: T.textMuted, fontFamily: T.mono, flexShrink: 0 }}>
+                      {new Date(entry.timestamp).toLocaleDateString("en-US", { month: "numeric", day: "numeric" })}{" "}
+                      {new Date(entry.timestamp).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                    </span>
+                    <span style={{ color: T.ink }}>{entry.description}</span>
+                  </div>
+                ))
+            )}
+          </div>
+        )}
+
+        {tab === "notes" && (
+          <Field label="Notes">
+            <textarea value={form.notes || ""} onChange={set("notes")} style={{ ...S.input, minHeight: 200, resize: "vertical" }} />
+          </Field>
+        )}
+      </div>
+
+      {error && <div style={{ ...S.errorText, marginTop: 12 }}>{error}</div>}
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          justifyContent: onDelete ? "space-between" : "flex-end",
+          marginTop: 16,
+          paddingTop: 12,
+          borderTop: `1px solid ${T.border}`,
+        }}
+      >
+        {onDelete && (
+          <button onClick={onDelete} style={S.dangerGhostBtn}>
+            <Trash2 size={13} /> Delete
+          </button>
+        )}
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={onCancel} style={S.ghostBtn}>
+            Cancel
+          </button>
+          <button onClick={submit} style={S.primaryBtn}>
+            {form.isNew ? "New Lead" : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DfsSendToCloserForm({ lead, onCancel, onSend }) {
+  const [assignedCloser, setAssignedCloser] = useState(lead.assignedCloser || "");
+  const [leadTemperature, setLeadTemperature] = useState(lead.leadTemperature || "");
+  const [requestedAmount, setRequestedAmount] = useState(lead.requestedAmount || "");
+  const [notesForCloser, setNotesForCloser] = useState(lead.notesForCloser || "");
+  const [error, setError] = useState("");
+
+  const totalDebt = (lead.debts || []).reduce((s, d) => s + (Number(d.currentBalance) || 0), 0);
+  const docsChecked = DFS_DOCUMENT_CHECKLIST_ITEMS.filter((d) => (lead.documentChecklist || {})[d]);
+
+  function submit() {
+    if (!assignedCloser.trim()) {
+      setError("Enter who this lead is going to first");
+      return;
+    }
+    setError("");
+    onSend({ assignedCloser, leadTemperature, requestedAmount, notesForCloser });
+  }
+
+  return (
+    <div>
+      <div style={S.modalTitle}>Send to Closer</div>
+      <div style={{ ...S.hint, marginBottom: 12 }}>
+        {dfsClientDisplayName(lead)} stays credited as the opener — this only assigns who takes it from here.
+      </div>
+      <Field label="Assign Closer *">
+        <input value={assignedCloser} onChange={(e) => setAssignedCloser(e.target.value)} style={S.input} autoFocus />
+      </Field>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Field label="Lead Temperature">
+          <div style={{ position: "relative" }}>
+            <select value={leadTemperature} onChange={(e) => setLeadTemperature(e.target.value)} style={S.select}>
+              <option value="">—</option>
+              <option value="🔥 Hot">🔥 Hot</option>
+              <option value="🌤️ Warm">🌤️ Warm</option>
+              <option value="❄️ Cold">❄️ Cold</option>
+            </select>
+            <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+          </div>
+        </Field>
+        <Field label="Requested Amount">
+          <input
+            type="number"
+            value={requestedAmount}
+            onChange={(e) => setRequestedAmount(e.target.value)}
+            style={{ ...S.input, fontFamily: T.mono }}
+          />
+        </Field>
+      </div>
+      <div style={{ display: "flex", gap: 18, fontSize: 12.5, color: T.textMuted, margin: "4px 0 12px" }}>
+        <div>
+          Total MCA Debt: <strong style={{ color: T.ink }}>{money(totalDebt)}</strong>
+        </div>
+        <div>
+          Documents Received:{" "}
+          <strong style={{ color: T.ink }}>
+            {docsChecked.length}/{DFS_DOCUMENT_CHECKLIST_ITEMS.length}
+          </strong>
+        </div>
+      </div>
+      <Field label="Notes for Closer">
+        <textarea
+          value={notesForCloser}
+          onChange={(e) => setNotesForCloser(e.target.value)}
+          style={{ ...S.input, minHeight: 70, resize: "vertical" }}
+        />
+      </Field>
+      {error && <div style={S.errorText}>{error}</div>}
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+        <button onClick={onCancel} style={S.ghostBtn}>
+          Cancel
+        </button>
+        <button onClick={submit} style={S.primaryBtn}>
+          Send to Closer
+        </button>
       </div>
     </div>
   );
