@@ -6293,6 +6293,14 @@ function dfsUid() {
   return "dfs_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
 }
 
+// Handles both the old single "name" field (from before the form split it
+// into first/last) and the new firstName/lastName fields, so existing
+// client records don't break.
+function dfsClientDisplayName(c) {
+  const full = `${c.firstName || ""} ${c.lastName || ""}`.trim();
+  return full || c.name || "Unnamed";
+}
+
 function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
   const [dfsSection, setDfsSection] = useState("dashboard");
   const [dfsLoaded, setDfsLoaded] = useState(false);
@@ -6424,7 +6432,7 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
     const q = dfsClientsSearch.trim().toLowerCase();
     if (!q) return true;
     return (
-      (c.name || "").toLowerCase().includes(q) ||
+      dfsClientDisplayName(c).toLowerCase().includes(q) ||
       (c.businessName || "").toLowerCase().includes(q) ||
       (c.phone || "").toLowerCase().includes(q) ||
       (c.email || "").toLowerCase().includes(q)
@@ -6443,7 +6451,7 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
   });
 
   // Dashboard metrics computed directly from client + debt records
-  const dfsAllDebts = dfsClients.flatMap((c) => (c.debts || []).map((d) => ({ ...d, clientId: c.id, clientName: c.name })));
+  const dfsAllDebts = dfsClients.flatMap((c) => (c.debts || []).map((d) => ({ ...d, clientId: c.id, clientName: dfsClientDisplayName(c) })));
   const dfsActiveClients = dfsClients.filter((c) => c.pipelineStage && !["Completed", "Lost/Cancelled"].includes(c.pipelineStage));
   const dfsNewLeadsThisWeek = dfsClients.filter((c) => {
     if (!c.createdAt) return false;
@@ -6572,14 +6580,46 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
                   onClick={() =>
                     setDfsClientModal({
                       id: dfsUid(),
-                      name: "",
+                      // Section 1 — Contact Information
+                      firstName: "",
+                      lastName: "",
                       businessName: "",
                       phone: "",
+                      altPhone: "",
                       email: "",
-                      address: "",
+                      businessAddress: "",
+                      city: "",
+                      state: "",
+                      zip: "",
+                      preferredContactMethod: "",
+                      timeZone: "",
+                      // Section 2 — Business Information
+                      legalBusinessName: "",
+                      entityType: "",
+                      industry: "",
+                      yearsInBusiness: "",
+                      ein: "",
+                      monthlyGrossRevenue: "",
+                      avgMonthlyBankDeposits: "",
+                      stateOfIncorporation: "",
+                      businessStatus: "",
+                      // Section 4 — Sales / Enrollment
                       leadSource: "",
+                      dfsCampaign: "",
                       assignedRep: "",
+                      assignedCloser: "",
+                      leadStatus: "",
                       pipelineStage: "New Lead",
+                      dateLeadReceived: "",
+                      dateContacted: "",
+                      enrollmentDate: "",
+                      totalDebtEnrolled: "",
+                      programLength: "",
+                      clientDepositAmount: "",
+                      depositFrequency: "",
+                      companyFee: "",
+                      estimatedSettlementAmount: "",
+                      estimatedClientSavings: "",
                       notes: "",
                       debts: [],
                       isNew: true,
@@ -6603,7 +6643,7 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
                     return (
                       <div key={c.id} style={S.contactCard} onClick={() => setDfsClientModal({ ...c, isNew: false })}>
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                          <div style={S.contactName}>{c.name || "Unnamed"}</div>
+                          <div style={S.contactName}>{dfsClientDisplayName(c)}</div>
                           <span style={{ ...S.leadBadge, background: "#F0EFE9", color: T.textMuted, flexShrink: 0 }}>
                             {c.pipelineStage || "New Lead"}
                           </span>
@@ -6862,11 +6902,12 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
       </div>
 
       {dfsClientModal && (
-        <Modal onClose={() => setDfsClientModal(null)} wide>
+        <Modal onClose={() => setDfsClientModal(null)} fullScreen>
           <DfsClientForm
             initial={dfsClientModal}
             error={dfsSaveError}
             pipelineStages={dfsPipelineStages}
+            currentUser={currentUser}
             onCancel={() => setDfsClientModal(null)}
             onSave={saveDfsClient}
             onDelete={
@@ -6968,10 +7009,12 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
   );
 }
 
-function DfsClientForm({ initial, error: saveError, pipelineStages, onCancel, onSave, onDelete }) {
+function DfsClientForm({ initial, error: saveError, pipelineStages, currentUser, onCancel, onSave, onDelete }) {
   const [form, setForm] = useState(initial);
   const [error, setError] = useState("");
+  const [tab, setTab] = useState("overview");
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const isAdmin = currentUser && currentUser.role === "admin";
 
   function updateDebt(id, patch) {
     setForm({ ...form, debts: (form.debts || []).map((d) => (d.id === id ? { ...d, ...patch } : d)) });
@@ -6987,7 +7030,15 @@ function DfsClientForm({ initial, error: saveError, pipelineStages, onCancel, on
           originalBalance: "",
           currentBalance: "",
           paymentAmount: "",
+          paymentFrequency: "",
+          dateFunded: "",
+          position: "",
           status: "Active",
+          amountPastDue: "",
+          collectionsCompany: "",
+          attorneyLawFirm: "",
+          lawsuitJudgmentStatus: "",
+          lastPaymentDate: "",
           settlementOffer: "",
           negotiatedAmount: "",
           settlementPercent: "",
@@ -7000,126 +7051,233 @@ function DfsClientForm({ initial, error: saveError, pipelineStages, onCancel, on
   }
 
   function submit() {
-    if (!form.name || !form.name.trim()) {
-      setError("Enter the client's name first");
+    const displayName = `${form.firstName || ""} ${form.lastName || ""}`.trim() || form.name;
+    if (!displayName || !displayName.trim()) {
+      setError("Enter the client's first and last name first");
       return;
     }
     setError("");
     onSave(form);
   }
 
-  return (
-    <div>
-      <div style={S.modalTitle}>{form.isNew ? "New Client" : "Edit client"}</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Field label="Client Name *">
-          <input value={form.name || ""} onChange={set("name")} style={S.input} autoFocus />
-        </Field>
-        <Field label="Business Name">
-          <input value={form.businessName || ""} onChange={set("businessName")} style={S.input} />
-        </Field>
-        <Field label="Phone">
-          <input value={form.phone || ""} onChange={set("phone")} style={S.input} />
-        </Field>
-        <Field label="Email">
-          <input value={form.email || ""} onChange={set("email")} style={S.input} />
-        </Field>
-      </div>
-      <Field label="Address">
-        <input value={form.address || ""} onChange={set("address")} style={S.input} />
-      </Field>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-        <Field label="Lead Source">
-          <input value={form.leadSource || ""} onChange={set("leadSource")} style={S.input} />
-        </Field>
-        <Field label="Assigned Rep">
-          <input value={form.assignedRep || ""} onChange={set("assignedRep")} style={S.input} />
-        </Field>
-        <Field label="Pipeline Stage">
-          <div style={{ position: "relative" }}>
-            <select value={form.pipelineStage || "New Lead"} onChange={set("pipelineStage")} style={S.select}>
-              {(pipelineStages || DFS_PIPELINE_STAGES).map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
-          </div>
-        </Field>
-      </div>
-      <Field label="Notes">
-        <textarea value={form.notes || ""} onChange={set("notes")} style={{ ...S.input, minHeight: 70, resize: "vertical" }} />
-      </Field>
+  const debts = form.debts || [];
+  const snapMcaDebt = debts.reduce((s, d) => s + (Number(d.currentBalance) || 0), 0);
+  const snapEnrolled = debts.reduce((s, d) => s + (Number(d.originalBalance) || 0), 0);
+  const snapSettledDebts = debts.filter((d) => d.status === "Settled");
+  const snapSettled = snapSettledDebts.reduce((s, d) => s + (Number(d.originalBalance) || 0), 0);
+  const snapSavings = snapSettledDebts.reduce(
+    (s, d) => s + Math.max(0, (Number(d.originalBalance) || 0) - (Number(d.negotiatedAmount) || 0)),
+    0
+  );
+  const snapWeeklyPayments = debts.reduce((s, d) => s + (Number(d.paymentAmount) || 0), 0);
+  const displayName = `${form.firstName || ""} ${form.lastName || ""}`.trim() || form.name || "New Client";
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 16, marginBottom: 8 }}>
-        <div style={{ fontFamily: T.display, fontSize: 14, fontWeight: 600, color: T.ink }}>MCA Debts / Positions</div>
-        <button onClick={addDebt} style={S.ghostBtn}>
-          <Plus size={13} /> Add debt
-        </button>
+  const DFS_TABS = [
+    { id: "overview", label: "Overview" },
+    { id: "mca", label: "MCA Accounts" },
+    { id: "documents", label: "Documents" },
+    { id: "negotiations", label: "Negotiations" },
+    { id: "payments", label: "Payments" },
+    { id: "communications", label: "Communications" },
+    { id: "tasks", label: "Tasks" },
+    { id: "notes", label: "Notes" },
+    { id: "activity", label: "Activity" },
+  ];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* Client Snapshot */}
+      <div style={{ borderBottom: `1px solid ${T.border}`, paddingBottom: 14, marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <div style={{ fontFamily: T.display, fontSize: 20, fontWeight: 600, color: T.ink }}>
+              {form.businessName || displayName}
+              {form.businessStatus && (
+                <span style={{ ...S.leadBadge, marginLeft: 10, background: "#EAF3EC", color: T.pineDark }}>
+                  {form.businessStatus}
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: 13, color: T.textMuted, marginTop: 2 }}>
+              {displayName}
+              {form.phone ? ` · ${form.phone}` : ""}
+            </div>
+          </div>
+          <button onClick={onCancel} style={S.iconBtnGhost}>
+            <X size={16} color={T.textMuted} />
+          </button>
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 18, marginTop: 12, fontSize: 12.5 }}>
+          <div>
+            <span style={{ color: T.textMuted }}>MCA Debt: </span>
+            <strong>{money(snapMcaDebt)}</strong>
+          </div>
+          <div>
+            <span style={{ color: T.textMuted }}>Positions: </span>
+            <strong>{debts.length}</strong>
+          </div>
+          <div>
+            <span style={{ color: T.textMuted }}>Payments: </span>
+            <strong>{money(snapWeeklyPayments)}</strong>
+          </div>
+          <div>
+            <span style={{ color: T.textMuted }}>Enrolled: </span>
+            <strong>{money(snapEnrolled)}</strong>
+          </div>
+          <div>
+            <span style={{ color: T.textMuted }}>Settled: </span>
+            <strong>{money(snapSettled)}</strong>
+          </div>
+          <div>
+            <span style={{ color: T.textMuted }}>Savings: </span>
+            <strong>{money(snapSavings)}</strong>
+          </div>
+          <div>
+            <span style={{ color: T.textMuted }}>Stage: </span>
+            <strong>{form.pipelineStage || "New Lead"}</strong>
+          </div>
+          {form.assignedRep && (
+            <div>
+              <span style={{ color: T.textMuted }}>Assigned: </span>
+              <strong>{form.assignedRep}</strong>
+            </div>
+          )}
+        </div>
       </div>
-      {(form.debts || []).length === 0 ? (
-        <div style={{ fontSize: 12.5, color: T.textMuted }}>No debts added yet.</div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {(form.debts || []).map((d) => (
-            <div key={d.id} style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: 12, background: T.paper }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
-                <input
-                  value={d.creditorName}
-                  onChange={(e) => updateDebt(d.id, { creditorName: e.target.value })}
-                  style={S.input}
-                  placeholder="Creditor / funder name"
-                />
+
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: 4, borderBottom: `1px solid ${T.border}`, marginBottom: 16, flexWrap: "wrap" }}>
+        {DFS_TABS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            style={{
+              padding: "8px 12px",
+              fontSize: 12.5,
+              fontWeight: 500,
+              background: "none",
+              border: "none",
+              borderBottom: tab === t.id ? `2px solid ${T.pineDark}` : "2px solid transparent",
+              color: tab === t.id ? T.pineDark : T.textMuted,
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ flex: 1, overflowY: "auto", paddingRight: 4 }} className="crm-scroll">
+        {tab === "overview" && (
+          <>
+            <div style={S.dfsSubHeader}>Contact Information</div>
+            <div style={S.dfsFieldGrid3}>
+              <Field label="First Name *">
+                <input value={form.firstName || ""} onChange={set("firstName")} style={S.input} autoFocus />
+              </Field>
+              <Field label="Last Name *">
+                <input value={form.lastName || ""} onChange={set("lastName")} style={S.input} />
+              </Field>
+              <Field label="Business Name / DBA">
+                <input value={form.businessName || ""} onChange={set("businessName")} style={S.input} />
+              </Field>
+              <Field label="Phone">
+                <input value={form.phone || ""} onChange={set("phone")} style={S.input} />
+              </Field>
+              <Field label="Alternate Phone">
+                <input value={form.altPhone || ""} onChange={set("altPhone")} style={S.input} />
+              </Field>
+              <Field label="Email">
+                <input value={form.email || ""} onChange={set("email")} style={S.input} />
+              </Field>
+              <Field label="Preferred Contact Method">
+                <div style={{ position: "relative" }}>
+                  <select value={form.preferredContactMethod || ""} onChange={set("preferredContactMethod")} style={S.select}>
+                    <option value="">—</option>
+                    {["Phone", "Text", "Email"].map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+                </div>
+              </Field>
+              <Field label="Time Zone">
+                <input value={form.timeZone || ""} onChange={set("timeZone")} style={S.input} placeholder="e.g. Eastern" />
+              </Field>
+            </div>
+            <Field label="Business Address">
+              <input value={form.businessAddress || ""} onChange={set("businessAddress")} style={S.input} />
+            </Field>
+            <div style={S.dfsFieldGrid3}>
+              <Field label="City">
+                <input value={form.city || ""} onChange={set("city")} style={S.input} />
+              </Field>
+              <Field label="State">
+                <input value={form.state || ""} onChange={set("state")} style={S.input} />
+              </Field>
+              <Field label="ZIP">
+                <input value={form.zip || ""} onChange={set("zip")} style={S.input} />
+              </Field>
+            </div>
+
+            <div style={{ ...S.dfsSubHeader, marginTop: 20 }}>Business Information</div>
+            <div style={S.dfsFieldGrid3}>
+              <Field label="Legal Business Name">
+                <input value={form.legalBusinessName || ""} onChange={set("legalBusinessName")} style={S.input} />
+              </Field>
+              <Field label="Entity Type">
+                <div style={{ position: "relative" }}>
+                  <select value={form.entityType || ""} onChange={set("entityType")} style={S.select}>
+                    <option value="">—</option>
+                    {["LLC", "Corporation", "Sole Proprietor", "Partnership", "Other"].map((t2) => (
+                      <option key={t2} value={t2}>
+                        {t2}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+                </div>
+              </Field>
+              <Field label="Industry">
+                <input value={form.industry || ""} onChange={set("industry")} style={S.input} />
+              </Field>
+              <Field label="Years in Business">
+                <input type="number" value={form.yearsInBusiness || ""} onChange={set("yearsInBusiness")} style={S.input} />
+              </Field>
+              {isAdmin ? (
+                <Field label="EIN (admin only)">
+                  <input value={form.ein || ""} onChange={set("ein")} style={S.input} />
+                </Field>
+              ) : (
+                <Field label="EIN">
+                  <div style={{ ...S.input, color: T.textMuted, display: "flex", alignItems: "center" }}>Restricted</div>
+                </Field>
+              )}
+              <Field label="State of Incorporation">
+                <input value={form.stateOfIncorporation || ""} onChange={set("stateOfIncorporation")} style={S.input} />
+              </Field>
+              <Field label="Monthly Gross Revenue">
                 <input
                   type="number"
-                  value={d.originalBalance}
-                  onChange={(e) => updateDebt(d.id, { originalBalance: e.target.value })}
+                  value={form.monthlyGrossRevenue || ""}
+                  onChange={set("monthlyGrossRevenue")}
                   style={{ ...S.input, fontFamily: T.mono }}
-                  placeholder="Original balance"
                 />
+              </Field>
+              <Field label="Avg Monthly Bank Deposits">
                 <input
                   type="number"
-                  value={d.currentBalance}
-                  onChange={(e) => updateDebt(d.id, { currentBalance: e.target.value })}
+                  value={form.avgMonthlyBankDeposits || ""}
+                  onChange={set("avgMonthlyBankDeposits")}
                   style={{ ...S.input, fontFamily: T.mono }}
-                  placeholder="Current balance"
                 />
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
-                <input
-                  type="number"
-                  value={d.paymentAmount}
-                  onChange={(e) => updateDebt(d.id, { paymentAmount: e.target.value })}
-                  style={{ ...S.input, fontFamily: T.mono }}
-                  placeholder="Payment amount"
-                />
-                <input
-                  type="number"
-                  value={d.settlementOffer}
-                  onChange={(e) => updateDebt(d.id, { settlementOffer: e.target.value })}
-                  style={{ ...S.input, fontFamily: T.mono }}
-                  placeholder="Settlement offer"
-                />
-                <input
-                  type="number"
-                  value={d.negotiatedAmount}
-                  onChange={(e) => updateDebt(d.id, { negotiatedAmount: e.target.value })}
-                  style={{ ...S.input, fontFamily: T.mono }}
-                  placeholder="Negotiated amount"
-                />
-                <input
-                  type="number"
-                  value={d.settlementPercent}
-                  onChange={(e) => updateDebt(d.id, { settlementPercent: e.target.value })}
-                  style={{ ...S.input, fontFamily: T.mono }}
-                  placeholder="Settlement %"
-                />
-              </div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <div style={{ position: "relative", flex: 1 }}>
-                  <select value={d.status} onChange={(e) => updateDebt(d.id, { status: e.target.value })} style={S.select}>
-                    {["Active", "In Default", "In Collections", "Negotiating", "Settled", "Paid Off"].map((s) => (
+              </Field>
+              <Field label="Business Status">
+                <div style={{ position: "relative" }}>
+                  <select value={form.businessStatus || ""} onChange={set("businessStatus")} style={S.select}>
+                    <option value="">—</option>
+                    {["Open", "Closed", "Struggling", "Seasonal"].map((s) => (
                       <option key={s} value={s}>
                         {s}
                       </option>
@@ -7127,18 +7285,305 @@ function DfsClientForm({ initial, error: saveError, pipelineStages, onCancel, on
                   </select>
                   <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
                 </div>
-                <button onClick={() => removeDebt(d.id)} style={S.iconBtnGhost}>
-                  <Trash2 size={13} color={T.textMuted} />
-                </button>
+              </Field>
+            </div>
+
+            <div style={{ ...S.dfsSubHeader, marginTop: 20 }}>Sales / Enrollment</div>
+            <div style={S.dfsFieldGrid3}>
+              <Field label="Lead Source">
+                <input value={form.leadSource || ""} onChange={set("leadSource")} style={S.input} />
+              </Field>
+              <Field label="Campaign">
+                <input value={form.dfsCampaign || ""} onChange={set("dfsCampaign")} style={S.input} />
+              </Field>
+              <Field label="Assigned Sales Rep">
+                <input value={form.assignedRep || ""} onChange={set("assignedRep")} style={S.input} />
+              </Field>
+              <Field label="Assigned Closer">
+                <input value={form.assignedCloser || ""} onChange={set("assignedCloser")} style={S.input} />
+              </Field>
+              <Field label="Lead Status">
+                <input value={form.leadStatus || ""} onChange={set("leadStatus")} style={S.input} />
+              </Field>
+              <Field label="Pipeline Stage">
+                <div style={{ position: "relative" }}>
+                  <select value={form.pipelineStage || "New Lead"} onChange={set("pipelineStage")} style={S.select}>
+                    {(pipelineStages || DFS_PIPELINE_STAGES).map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+                </div>
+              </Field>
+              <Field label="Date Lead Received">
+                <input type="date" value={form.dateLeadReceived || ""} onChange={set("dateLeadReceived")} style={S.input} />
+              </Field>
+              <Field label="Date Contacted">
+                <input type="date" value={form.dateContacted || ""} onChange={set("dateContacted")} style={S.input} />
+              </Field>
+              <Field label="Enrollment Date">
+                <input type="date" value={form.enrollmentDate || ""} onChange={set("enrollmentDate")} style={S.input} />
+              </Field>
+              <Field label="Total Debt Enrolled">
+                <input
+                  type="number"
+                  value={form.totalDebtEnrolled || ""}
+                  onChange={set("totalDebtEnrolled")}
+                  style={{ ...S.input, fontFamily: T.mono }}
+                />
+              </Field>
+              <Field label="Program Length">
+                <input value={form.programLength || ""} onChange={set("programLength")} style={S.input} placeholder="e.g. 24 months" />
+              </Field>
+              <Field label="Client Deposit Amount">
+                <input
+                  type="number"
+                  value={form.clientDepositAmount || ""}
+                  onChange={set("clientDepositAmount")}
+                  style={{ ...S.input, fontFamily: T.mono }}
+                />
+              </Field>
+              <Field label="Deposit Frequency">
+                <div style={{ position: "relative" }}>
+                  <select value={form.depositFrequency || ""} onChange={set("depositFrequency")} style={S.select}>
+                    <option value="">—</option>
+                    {["Weekly", "Bi-weekly", "Monthly"].map((f) => (
+                      <option key={f} value={f}>
+                        {f}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+                </div>
+              </Field>
+              <Field label="Company Fee">
+                <input
+                  type="number"
+                  value={form.companyFee || ""}
+                  onChange={set("companyFee")}
+                  style={{ ...S.input, fontFamily: T.mono }}
+                />
+              </Field>
+              <Field label="Estimated Settlement Amount">
+                <input
+                  type="number"
+                  value={form.estimatedSettlementAmount || ""}
+                  onChange={set("estimatedSettlementAmount")}
+                  style={{ ...S.input, fontFamily: T.mono }}
+                />
+              </Field>
+              <Field label="Estimated Client Savings">
+                <input
+                  type="number"
+                  value={form.estimatedClientSavings || ""}
+                  onChange={set("estimatedClientSavings")}
+                  style={{ ...S.input, fontFamily: T.mono }}
+                />
+              </Field>
+            </div>
+          </>
+        )}
+
+        {tab === "mca" && (
+          <>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <div style={S.dfsSubHeader}>MCA Debts / Positions</div>
+              <button onClick={addDebt} style={S.ghostBtn}>
+                <Plus size={13} /> Add debt
+              </button>
+            </div>
+            <div style={{ display: "flex", gap: 18, fontSize: 12.5, marginBottom: 12, color: T.textMuted }}>
+              <div>
+                Total MCA Balance: <strong style={{ color: T.ink }}>{money(snapMcaDebt)}</strong>
+              </div>
+              <div>
+                Total Payments: <strong style={{ color: T.ink }}>{money(snapWeeklyPayments)}</strong>
+              </div>
+              <div>
+                Number of Positions: <strong style={{ color: T.ink }}>{debts.length}</strong>
               </div>
             </div>
-          ))}
-        </div>
-      )}
+            {debts.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: T.textMuted }}>No debts added yet.</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {debts.map((d, idx) => (
+                  <div key={d.id} style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: 12, background: T.paper }}>
+                    <div style={{ fontSize: 11.5, color: T.textMuted, marginBottom: 6 }}>Position {idx + 1}</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
+                      <input
+                        value={d.creditorName}
+                        onChange={(e) => updateDebt(d.id, { creditorName: e.target.value })}
+                        style={S.input}
+                        placeholder="Creditor / funder name"
+                      />
+                      <input
+                        type="number"
+                        value={d.originalBalance}
+                        onChange={(e) => updateDebt(d.id, { originalBalance: e.target.value })}
+                        style={{ ...S.input, fontFamily: T.mono }}
+                        placeholder="Original balance"
+                      />
+                      <input
+                        type="number"
+                        value={d.currentBalance}
+                        onChange={(e) => updateDebt(d.id, { currentBalance: e.target.value })}
+                        style={{ ...S.input, fontFamily: T.mono }}
+                        placeholder="Current balance"
+                      />
+                      <input
+                        value={d.position || ""}
+                        onChange={(e) => updateDebt(d.id, { position: e.target.value })}
+                        style={S.input}
+                        placeholder="Position (1st, 2nd…)"
+                      />
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
+                      <input
+                        type="number"
+                        value={d.paymentAmount}
+                        onChange={(e) => updateDebt(d.id, { paymentAmount: e.target.value })}
+                        style={{ ...S.input, fontFamily: T.mono }}
+                        placeholder="Payment amount"
+                      />
+                      <div style={{ position: "relative" }}>
+                        <select
+                          value={d.paymentFrequency || ""}
+                          onChange={(e) => updateDebt(d.id, { paymentFrequency: e.target.value })}
+                          style={S.select}
+                        >
+                          <option value="">Payment freq.</option>
+                          {["Daily", "Weekly", "Bi-weekly", "Monthly"].map((f) => (
+                            <option key={f} value={f}>
+                              {f}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+                      </div>
+                      <input
+                        type="date"
+                        value={d.dateFunded || ""}
+                        onChange={(e) => updateDebt(d.id, { dateFunded: e.target.value })}
+                        style={S.input}
+                        title="Date funded"
+                      />
+                      <input
+                        type="number"
+                        value={d.amountPastDue || ""}
+                        onChange={(e) => updateDebt(d.id, { amountPastDue: e.target.value })}
+                        style={{ ...S.input, fontFamily: T.mono }}
+                        placeholder="Amount past due"
+                      />
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
+                      <input
+                        value={d.collectionsCompany || ""}
+                        onChange={(e) => updateDebt(d.id, { collectionsCompany: e.target.value })}
+                        style={S.input}
+                        placeholder="Collections company"
+                      />
+                      <input
+                        value={d.attorneyLawFirm || ""}
+                        onChange={(e) => updateDebt(d.id, { attorneyLawFirm: e.target.value })}
+                        style={S.input}
+                        placeholder="Attorney / law firm"
+                      />
+                      <input
+                        value={d.lawsuitJudgmentStatus || ""}
+                        onChange={(e) => updateDebt(d.id, { lawsuitJudgmentStatus: e.target.value })}
+                        style={S.input}
+                        placeholder="Lawsuit / judgment status"
+                      />
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
+                      <input
+                        type="date"
+                        value={d.lastPaymentDate || ""}
+                        onChange={(e) => updateDebt(d.id, { lastPaymentDate: e.target.value })}
+                        style={S.input}
+                        title="Last payment date"
+                      />
+                      <input
+                        type="number"
+                        value={d.settlementOffer}
+                        onChange={(e) => updateDebt(d.id, { settlementOffer: e.target.value })}
+                        style={{ ...S.input, fontFamily: T.mono }}
+                        placeholder="Settlement offer"
+                      />
+                      <input
+                        type="number"
+                        value={d.negotiatedAmount}
+                        onChange={(e) => updateDebt(d.id, { negotiatedAmount: e.target.value })}
+                        style={{ ...S.input, fontFamily: T.mono }}
+                        placeholder="Negotiated amount"
+                      />
+                      <input
+                        type="number"
+                        value={d.settlementPercent}
+                        onChange={(e) => updateDebt(d.id, { settlementPercent: e.target.value })}
+                        style={{ ...S.input, fontFamily: T.mono }}
+                        placeholder="Settlement %"
+                      />
+                    </div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <div style={{ position: "relative", flex: 1 }}>
+                        <select value={d.status} onChange={(e) => updateDebt(d.id, { status: e.target.value })} style={S.select}>
+                          {["Active", "In Default", "In Collections", "Negotiating", "Settled", "Paid Off"].map((s) => (
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+                      </div>
+                      <button onClick={() => removeDebt(d.id)} style={S.iconBtnGhost}>
+                        <Trash2 size={13} color={T.textMuted} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {tab === "notes" && (
+          <Field label="Notes">
+            <textarea
+              value={form.notes || ""}
+              onChange={set("notes")}
+              style={{ ...S.input, minHeight: 200, resize: "vertical" }}
+              autoFocus
+            />
+          </Field>
+        )}
+
+        {!["overview", "mca", "notes"].includes(tab) && (
+          <div style={S.emptyState}>
+            <ClipboardList size={22} color={T.borderStrong} />
+            <div style={{ marginTop: 8, fontSize: 13, color: T.textMuted }}>
+              {DFS_TABS.find((t) => t.id === tab)?.label} hasn't been built yet — this is a placeholder for a
+              future session.
+            </div>
+          </div>
+        )}
+      </div>
 
       {error && <div style={{ ...S.errorText, marginTop: 12 }}>{error}</div>}
       {saveError && <div style={S.errorText}>{saveError}</div>}
-      <div style={{ display: "flex", gap: 8, justifyContent: onDelete ? "space-between" : "flex-end", marginTop: 16 }}>
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          justifyContent: onDelete ? "space-between" : "flex-end",
+          marginTop: 16,
+          paddingTop: 12,
+          borderTop: `1px solid ${T.border}`,
+        }}
+      >
         {onDelete && (
           <button onClick={onDelete} style={S.dangerGhostBtn}>
             <Trash2 size={13} /> Delete
@@ -9158,6 +9603,20 @@ const S = {
     border: `1px solid ${T.border}`,
     borderRadius: 10,
     padding: "16px 18px",
+  },
+  dfsSubHeader: {
+    fontFamily: T.display,
+    fontSize: 14,
+    fontWeight: 600,
+    color: T.ink,
+    marginBottom: 10,
+    paddingBottom: 6,
+    borderBottom: `1px solid ${T.border}`,
+  },
+  dfsFieldGrid3: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr 1fr",
+    gap: 12,
   },
   brandSub: {
     fontSize: 11,
