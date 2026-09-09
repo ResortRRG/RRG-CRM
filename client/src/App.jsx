@@ -6289,6 +6289,10 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
   const [dfsClientModal, setDfsClientModal] = useState(null); // null | client object
   const [dfsClientsSearch, setDfsClientsSearch] = useState("");
   const [dfsSaveError, setDfsSaveError] = useState("");
+  const [dfsCreditors, setDfsCreditors] = useState([]);
+  const [dfsCreditorModal, setDfsCreditorModal] = useState(null); // null | creditor object
+  const [dfsCreditorsSearch, setDfsCreditorsSearch] = useState("");
+  const [dfsCreditorSaveError, setDfsCreditorSaveError] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -6297,6 +6301,12 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
         setDfsClients(res && res.value ? JSON.parse(res.value) : []);
       } catch (e) {
         setDfsClients([]);
+      }
+      try {
+        const res = await window.storage.get("dfs:creditors", true);
+        setDfsCreditors(res && res.value ? JSON.parse(res.value) : []);
+      } catch (e) {
+        setDfsCreditors([]);
       }
       setDfsLoaded(true);
     })();
@@ -6325,6 +6335,29 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
       console.error("DFS client delete failed:", err);
     }
   }
+  async function saveDfsCreditor(form) {
+    const exists = dfsCreditors.some((c) => c.id === form.id);
+    const { isNew, ...cleanForm } = form;
+    const next = exists ? dfsCreditors.map((c) => (c.id === form.id ? { ...c, ...cleanForm } : c)) : [...dfsCreditors, cleanForm];
+    setDfsCreditors(next);
+    try {
+      await window.storage.set("dfs:creditors", JSON.stringify(next), true);
+      setDfsCreditorModal(null);
+      setDfsCreditorSaveError("");
+    } catch (err) {
+      console.error("DFS creditor save failed:", err);
+      setDfsCreditorSaveError("Couldn't save — " + (err.message || "unknown error"));
+    }
+  }
+  async function deleteDfsCreditor(id) {
+    const next = dfsCreditors.filter((c) => c.id !== id);
+    setDfsCreditors(next);
+    try {
+      await window.storage.set("dfs:creditors", JSON.stringify(next), true);
+    } catch (err) {
+      console.error("DFS creditor delete failed:", err);
+    }
+  }
 
   const dfsFilteredClients = dfsClients.filter((c) => {
     const q = dfsClientsSearch.trim().toLowerCase();
@@ -6332,6 +6365,17 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
     return (
       (c.name || "").toLowerCase().includes(q) ||
       (c.businessName || "").toLowerCase().includes(q) ||
+      (c.phone || "").toLowerCase().includes(q) ||
+      (c.email || "").toLowerCase().includes(q)
+    );
+  });
+
+  const dfsFilteredCreditors = dfsCreditors.filter((c) => {
+    const q = dfsCreditorsSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      (c.name || "").toLowerCase().includes(q) ||
+      (c.contactName || "").toLowerCase().includes(q) ||
       (c.phone || "").toLowerCase().includes(q) ||
       (c.email || "").toLowerCase().includes(q)
     );
@@ -6524,7 +6568,85 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
             </div>
           )}
 
-          {!["dashboard", "clients"].includes(dfsSection) && (
+          {dfsSection === "creditors" && (
+            <div style={S.dashboardWrap}>
+              <div style={S.contactsToolbar}>
+                <div style={{ position: "relative", flex: 1, maxWidth: 320 }}>
+                  <Search size={14} color={T.textMuted} style={S.searchIcon} />
+                  <input
+                    value={dfsCreditorsSearch}
+                    onChange={(e) => setDfsCreditorsSearch(e.target.value)}
+                    placeholder="Search creditors"
+                    style={S.searchInput}
+                  />
+                </div>
+                <button
+                  onClick={() =>
+                    setDfsCreditorModal({
+                      id: dfsUid(),
+                      name: "",
+                      contactName: "",
+                      phone: "",
+                      email: "",
+                      attorneyName: "",
+                      attorneyContact: "",
+                      collectionAgency: "",
+                      collectionAgencyContact: "",
+                      typicalSettlementRange: "",
+                      preferredPaymentArrangement: "",
+                      previousSettlements: "",
+                      negotiationNotes: "",
+                      isNew: true,
+                    })
+                  }
+                  style={S.primaryBtn}
+                >
+                  <Plus size={14} /> Creditor
+                </button>
+              </div>
+              {dfsFilteredCreditors.length === 0 ? (
+                <div style={S.emptyState}>
+                  <Building2 size={22} color={T.borderStrong} />
+                  <div style={{ marginTop: 8, fontSize: 13, color: T.textMuted }}>No creditors yet — add your first one</div>
+                </div>
+              ) : (
+                <div style={S.contactGrid}>
+                  {dfsFilteredCreditors.map((cr) => {
+                    const linkedDebts = dfsAllDebts.filter(
+                      (d) => (d.creditorName || "").trim().toLowerCase() === (cr.name || "").trim().toLowerCase()
+                    );
+                    const totalExposure = linkedDebts.reduce((s, d) => s + (Number(d.currentBalance) || 0), 0);
+                    return (
+                      <div key={cr.id} style={S.contactCard} onClick={() => setDfsCreditorModal({ ...cr, isNew: false })}>
+                        <div style={S.contactName}>{cr.name || "Unnamed creditor"}</div>
+                        {cr.contactName && (
+                          <div style={S.contactMetaRow}>
+                            <User size={12} /> {cr.contactName}
+                          </div>
+                        )}
+                        {cr.phone && (
+                          <div style={S.contactMetaRow}>
+                            <Phone size={12} /> {cr.phone}
+                          </div>
+                        )}
+                        {cr.typicalSettlementRange && (
+                          <div style={S.contactMetaRow}>
+                            <TrendingUp size={12} /> Typical settlement: {cr.typicalSettlementRange}
+                          </div>
+                        )}
+                        <div style={S.contactMetaRow}>
+                          <Wallet size={12} /> {linkedDebts.length} active position{linkedDebts.length === 1 ? "" : "s"}
+                          {linkedDebts.length > 0 ? ` · ${money(totalExposure)} exposure` : ""}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {!["dashboard", "clients", "creditors"].includes(dfsSection) && (
             <div style={S.dashboardWrap}>
               <div style={S.emptyState}>
                 <ClipboardList size={22} color={T.borderStrong} />
@@ -6550,6 +6672,24 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
                 ? async () => {
                     await deleteDfsClient(dfsClientModal.id);
                     setDfsClientModal(null);
+                  }
+                : null
+            }
+          />
+        </Modal>
+      )}
+      {dfsCreditorModal && (
+        <Modal onClose={() => setDfsCreditorModal(null)} wide>
+          <DfsCreditorForm
+            initial={dfsCreditorModal}
+            error={dfsCreditorSaveError}
+            onCancel={() => setDfsCreditorModal(null)}
+            onSave={saveDfsCreditor}
+            onDelete={
+              !dfsCreditorModal.isNew
+                ? async () => {
+                    await deleteDfsCreditor(dfsCreditorModal.id);
+                    setDfsCreditorModal(null);
                   }
                 : null
             }
@@ -6742,6 +6882,110 @@ function DfsClientForm({ initial, error: saveError, onCancel, onSave, onDelete }
           </button>
           <button onClick={submit} style={S.primaryBtn}>
             {form.isNew ? "New Client" : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DfsCreditorForm({ initial, error: saveError, onCancel, onSave, onDelete }) {
+  const [form, setForm] = useState(initial);
+  const [error, setError] = useState("");
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+
+  function submit() {
+    if (!form.name || !form.name.trim()) {
+      setError("Enter the creditor/funder's name first");
+      return;
+    }
+    setError("");
+    onSave(form);
+  }
+
+  return (
+    <div>
+      <div style={S.modalTitle}>{form.isNew ? "New Creditor" : "Edit creditor"}</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Field label="Creditor / Funder Name *">
+          <input value={form.name || ""} onChange={set("name")} style={S.input} autoFocus />
+        </Field>
+        <Field label="Contact Name">
+          <input value={form.contactName || ""} onChange={set("contactName")} style={S.input} />
+        </Field>
+        <Field label="Phone">
+          <input value={form.phone || ""} onChange={set("phone")} style={S.input} />
+        </Field>
+        <Field label="Email">
+          <input value={form.email || ""} onChange={set("email")} style={S.input} />
+        </Field>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Field label="Attorney Name">
+          <input value={form.attorneyName || ""} onChange={set("attorneyName")} style={S.input} />
+        </Field>
+        <Field label="Attorney Contact">
+          <input value={form.attorneyContact || ""} onChange={set("attorneyContact")} style={S.input} placeholder="Phone or email" />
+        </Field>
+        <Field label="Collection Agency">
+          <input value={form.collectionAgency || ""} onChange={set("collectionAgency")} style={S.input} />
+        </Field>
+        <Field label="Collection Agency Contact">
+          <input
+            value={form.collectionAgencyContact || ""}
+            onChange={set("collectionAgencyContact")}
+            style={S.input}
+            placeholder="Phone or email"
+          />
+        </Field>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Field label="Typical Settlement Range">
+          <input
+            value={form.typicalSettlementRange || ""}
+            onChange={set("typicalSettlementRange")}
+            style={S.input}
+            placeholder="e.g. 30-50%"
+          />
+        </Field>
+        <Field label="Preferred Payment Arrangement">
+          <input
+            value={form.preferredPaymentArrangement || ""}
+            onChange={set("preferredPaymentArrangement")}
+            style={S.input}
+            placeholder="e.g. Lump sum, 6-month plans"
+          />
+        </Field>
+      </div>
+      <Field label="Previous Settlements">
+        <textarea
+          value={form.previousSettlements || ""}
+          onChange={set("previousSettlements")}
+          style={{ ...S.input, minHeight: 60, resize: "vertical" }}
+          placeholder="History of past settlements with this creditor"
+        />
+      </Field>
+      <Field label="Negotiation Notes">
+        <textarea
+          value={form.negotiationNotes || ""}
+          onChange={set("negotiationNotes")}
+          style={{ ...S.input, minHeight: 60, resize: "vertical" }}
+        />
+      </Field>
+      {error && <div style={S.errorText}>{error}</div>}
+      {saveError && <div style={S.errorText}>{saveError}</div>}
+      <div style={{ display: "flex", gap: 8, justifyContent: onDelete ? "space-between" : "flex-end", marginTop: 16 }}>
+        {onDelete && (
+          <button onClick={onDelete} style={S.dangerGhostBtn}>
+            <Trash2 size={13} /> Delete
+          </button>
+        )}
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={onCancel} style={S.ghostBtn}>
+            Cancel
+          </button>
+          <button onClick={submit} style={S.primaryBtn}>
+            {form.isNew ? "New Creditor" : "Save"}
           </button>
         </div>
       </div>
