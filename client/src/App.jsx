@@ -2644,6 +2644,17 @@ export default function TeamCRM() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employeesView, currentUser && currentUser.role]);
 
+  // Accounts scoped to a single campaign skip the picker entirely and go
+  // straight to their campaign. Accounts with 'both' (or no value, for
+  // safety) still see the picker so they can choose.
+  useEffect(() => {
+    if (currentUser && !activeCampaign) {
+      if (currentUser.campaign === "dfs") setActiveCampaign("dfs");
+      else if (currentUser.campaign === "rrg") setActiveCampaign("rrg");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser]);
+
   if (!loaded || !authChecked) {
     return (
       <div style={{ ...S.app, minHeight: 400 }}>
@@ -2768,11 +2779,11 @@ export default function TeamCRM() {
   }
 
   // Admins choose which campaign to work in — RRG (travel) or DFS (business
-  // debt settlement). Non-admin accounts default straight into RRG for now,
-  // since DFS-specific accounts haven't been built out yet.
+  // debt settlement). Non-admin accounts go straight to whichever campaign
+  // they're assigned to (defaulting to RRG if somehow unset).
   if (!activeCampaign) {
     if (currentUser.role !== "admin") {
-      setActiveCampaign("rrg");
+      setActiveCampaign(currentUser.campaign === "dfs" ? "dfs" : "rrg");
       return null;
     }
     return (
@@ -5389,7 +5400,7 @@ export default function TeamCRM() {
               </table>
             </div>
             <button
-              onClick={() => setUserModal({ name: "", username: "", password: "", role: "rep" })}
+              onClick={() => setUserModal({ name: "", username: "", password: "", role: "rep", campaign: "rrg" })}
               style={{ ...S.primaryBtn, marginTop: 10 }}
             >
               <Plus size={14} /> Add user
@@ -5671,7 +5682,7 @@ export default function TeamCRM() {
               const isSelf = currentUser && form.id === currentUser.id;
               try {
                 if (form.id) {
-                  const body = { name: form.name, username: form.username, role: form.role };
+                  const body = { name: form.name, username: form.username, role: form.role, campaign: form.campaign };
                   if (form.password) body.password = form.password;
                   const res = await fetch(`/api/users/${form.id}`, {
                     method: "PUT",
@@ -6293,6 +6304,12 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
   const [dfsCreditorModal, setDfsCreditorModal] = useState(null); // null | creditor object
   const [dfsCreditorsSearch, setDfsCreditorsSearch] = useState("");
   const [dfsCreditorSaveError, setDfsCreditorSaveError] = useState("");
+  const [dfsUsers, setDfsUsers] = useState([]);
+  const [dfsUserModal, setDfsUserModal] = useState(null);
+  const [dfsUserFormError, setDfsUserFormError] = useState("");
+  const [dfsPipelineStages, setDfsPipelineStages] = useState(DFS_PIPELINE_STAGES);
+  const [dfsNewStageInput, setDfsNewStageInput] = useState("");
+  const [dfsSettings, setDfsSettings] = useState({ companyName: "DFS" });
 
   useEffect(() => {
     (async () => {
@@ -6307,6 +6324,25 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
         setDfsCreditors(res && res.value ? JSON.parse(res.value) : []);
       } catch (e) {
         setDfsCreditors([]);
+      }
+      try {
+        const res = await fetch("/api/users", { credentials: "include" });
+        const data = await res.json();
+        setDfsUsers((data.users || []).filter((u) => u.campaign === "dfs" || u.campaign === "both"));
+      } catch (e) {
+        setDfsUsers([]);
+      }
+      try {
+        const res = await window.storage.get("dfs:pipelineStages", true);
+        setDfsPipelineStages(res && res.value ? JSON.parse(res.value) : DFS_PIPELINE_STAGES);
+      } catch (e) {
+        setDfsPipelineStages(DFS_PIPELINE_STAGES);
+      }
+      try {
+        const res = await window.storage.get("dfs:settings", true);
+        setDfsSettings(res && res.value ? JSON.parse(res.value) : { companyName: "DFS" });
+      } catch (e) {
+        setDfsSettings({ companyName: "DFS" });
       }
       setDfsLoaded(true);
     })();
@@ -6356,6 +6392,31 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
       await window.storage.set("dfs:creditors", JSON.stringify(next), true);
     } catch (err) {
       console.error("DFS creditor delete failed:", err);
+    }
+  }
+  async function refreshDfsUsers() {
+    try {
+      const res = await fetch("/api/users", { credentials: "include" });
+      const data = await res.json();
+      setDfsUsers((data.users || []).filter((u) => u.campaign === "dfs" || u.campaign === "both"));
+    } catch (e) {
+      // ignore
+    }
+  }
+  async function saveDfsPipelineStages(stages) {
+    setDfsPipelineStages(stages);
+    try {
+      await window.storage.set("dfs:pipelineStages", JSON.stringify(stages), true);
+    } catch (err) {
+      console.error("DFS pipeline stage save failed:", err);
+    }
+  }
+  async function saveDfsSettings(next) {
+    setDfsSettings(next);
+    try {
+      await window.storage.set("dfs:settings", JSON.stringify(next), true);
+    } catch (err) {
+      console.error("DFS settings save failed:", err);
     }
   }
 
@@ -6420,7 +6481,7 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
 
       {/* Sidebar */}
       <div style={S.sidebar}>
-        <div style={S.brand}>DFS CRM</div>
+        <div style={S.brand}>{dfsSettings.companyName || "DFS"} CRM</div>
         <div style={{ ...S.brandSub, marginBottom: 24 }}>debt settlement</div>
         <nav style={{ flex: 1 }}>
           {DFS_NAV_ITEMS.map((item) => {
@@ -6646,12 +6707,152 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
             </div>
           )}
 
-          {!["dashboard", "clients", "creditors"].includes(dfsSection) && (
+          {dfsSection === "admin" && (
+            <div style={S.dashboardWrap}>
+              <div style={S.dashboardSectionLabel}>Users</div>
+              <div style={S.hint}>
+                DFS-specific accounts sign in and go straight into DFS, skipping the campaign picker. Accounts set
+                to "Both" (like admins) can switch between RRG and DFS.
+              </div>
+              {dfsUsers.length === 0 ? (
+                <div style={{ fontSize: 12.5, color: T.textMuted, marginTop: 8 }}>No DFS users yet.</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
+                  {dfsUsers.map((u) => (
+                    <div
+                      key={u.id}
+                      onClick={() => setDfsUserModal({ ...u, password: "" })}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        background: T.paperRaised,
+                        border: `1px solid ${T.border}`,
+                        borderRadius: 8,
+                        padding: "10px 12px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: T.ink }}>{u.name}</div>
+                        <div style={{ fontSize: 11.5, color: T.textMuted }}>@{u.username}</div>
+                      </div>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <RoleBadge role={u.role} size="sm" />
+                        <span style={{ ...S.leadBadge, background: "#F0EFE9", color: T.textMuted }}>
+                          {u.campaign === "both" ? "Both" : "DFS"}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button
+                onClick={() => setDfsUserModal({ name: "", username: "", password: "", role: "rep", campaign: "dfs" })}
+                style={{ ...S.primaryBtn, marginTop: 10 }}
+              >
+                <Plus size={14} /> Add user
+              </button>
+
+              <div style={{ ...S.dashboardSectionLabel, marginTop: 28 }}>Pipeline Stages</div>
+              <div style={S.hint}>Customize the stages clients move through. Reorder, rename, or remove as needed.</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
+                {dfsPipelineStages.map((stage, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      background: T.paperRaised,
+                      border: `1px solid ${T.border}`,
+                      borderRadius: 8,
+                      padding: "8px 10px",
+                    }}
+                  >
+                    <span style={{ fontSize: 11, color: T.textMuted, width: 20 }}>{idx + 1}</span>
+                    <input
+                      value={stage}
+                      onChange={(e) => {
+                        const next = [...dfsPipelineStages];
+                        next[idx] = e.target.value;
+                        saveDfsPipelineStages(next);
+                      }}
+                      style={{ ...S.input, flex: 1, padding: "6px 8px" }}
+                    />
+                    <button
+                      onClick={() => {
+                        if (idx === 0) return;
+                        const next = [...dfsPipelineStages];
+                        [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+                        saveDfsPipelineStages(next);
+                      }}
+                      disabled={idx === 0}
+                      style={{ ...S.iconBtnGhost, opacity: idx === 0 ? 0.3 : 1 }}
+                    >
+                      <ChevronUp size={13} color={T.textMuted} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (idx === dfsPipelineStages.length - 1) return;
+                        const next = [...dfsPipelineStages];
+                        [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+                        saveDfsPipelineStages(next);
+                      }}
+                      disabled={idx === dfsPipelineStages.length - 1}
+                      style={{ ...S.iconBtnGhost, opacity: idx === dfsPipelineStages.length - 1 ? 0.3 : 1 }}
+                    >
+                      <ChevronDown size={13} color={T.textMuted} />
+                    </button>
+                    <button
+                      onClick={() => saveDfsPipelineStages(dfsPipelineStages.filter((_, i) => i !== idx))}
+                      style={S.iconBtnGhost}
+                    >
+                      <Trash2 size={13} color={T.textMuted} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <input
+                  value={dfsNewStageInput}
+                  onChange={(e) => setDfsNewStageInput(e.target.value)}
+                  placeholder="New stage name"
+                  style={{ ...S.input, flex: 1 }}
+                />
+                <button
+                  onClick={() => {
+                    if (!dfsNewStageInput.trim()) return;
+                    saveDfsPipelineStages([...dfsPipelineStages, dfsNewStageInput.trim()]);
+                    setDfsNewStageInput("");
+                  }}
+                  style={S.ghostBtn}
+                >
+                  <Plus size={13} /> Add stage
+                </button>
+              </div>
+
+              <div style={{ ...S.dashboardSectionLabel, marginTop: 28 }}>System Settings</div>
+              <div style={{ maxWidth: 320, marginTop: 10 }}>
+                <Field label="Company name">
+                  <input
+                    value={dfsSettings.companyName || ""}
+                    onChange={(e) => setDfsSettings({ ...dfsSettings, companyName: e.target.value })}
+                    onBlur={() => saveDfsSettings(dfsSettings)}
+                    style={S.input}
+                  />
+                </Field>
+              </div>
+            </div>
+          )}
+
+          {!["dashboard", "clients", "creditors", "admin"].includes(dfsSection) && (
             <div style={S.dashboardWrap}>
               <div style={S.emptyState}>
                 <ClipboardList size={22} color={T.borderStrong} />
                 <div style={{ marginTop: 8, fontSize: 13, color: T.textMuted }}>
                   {DFS_NAV_ITEMS.find((n) => n.id === dfsSection)?.label} hasn't been built yet — this is a
+
                   placeholder for a future session.
                 </div>
               </div>
@@ -6665,6 +6866,7 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
           <DfsClientForm
             initial={dfsClientModal}
             error={dfsSaveError}
+            pipelineStages={dfsPipelineStages}
             onCancel={() => setDfsClientModal(null)}
             onSave={saveDfsClient}
             onDelete={
@@ -6696,11 +6898,77 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
           />
         </Modal>
       )}
+      {dfsUserModal && (
+        <Modal onClose={() => setDfsUserModal(null)} narrow>
+          <UserForm
+            initial={dfsUserModal}
+            currentUserId={currentUser ? currentUser.id : null}
+            userCount={dfsUsers.length}
+            serverError={dfsUserFormError}
+            onCancel={() => setDfsUserModal(null)}
+            onSave={async (form) => {
+              try {
+                if (form.id) {
+                  const body = { name: form.name, username: form.username, role: form.role, campaign: form.campaign };
+                  if (form.password) body.password = form.password;
+                  const res = await fetch(`/api/users/${form.id}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify(body),
+                  });
+                  if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    setDfsUserFormError(err.error || "Couldn't save that user.");
+                    return;
+                  }
+                } else {
+                  const res = await fetch("/api/users", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify(form),
+                  });
+                  if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    setDfsUserFormError(err.error || "Couldn't create that user.");
+                    return;
+                  }
+                }
+                setDfsUserFormError("");
+                setDfsUserModal(null);
+                refreshDfsUsers();
+              } catch (e) {
+                setDfsUserFormError("Couldn't reach the server. Try again.");
+              }
+            }}
+            onDelete={
+              dfsUserModal.id
+                ? async () => {
+                    try {
+                      const res = await fetch(`/api/users/${dfsUserModal.id}`, { method: "DELETE", credentials: "include" });
+                      if (!res.ok) {
+                        const err = await res.json().catch(() => ({}));
+                        setDfsUserFormError(err.error || "Couldn't delete that user.");
+                        return;
+                      }
+                      setDfsUserFormError("");
+                      setDfsUserModal(null);
+                      refreshDfsUsers();
+                    } catch (e) {
+                      setDfsUserFormError("Couldn't reach the server. Try again.");
+                    }
+                  }
+                : null
+            }
+          />
+        </Modal>
+      )}
     </div>
   );
 }
 
-function DfsClientForm({ initial, error: saveError, onCancel, onSave, onDelete }) {
+function DfsClientForm({ initial, error: saveError, pipelineStages, onCancel, onSave, onDelete }) {
   const [form, setForm] = useState(initial);
   const [error, setError] = useState("");
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -6770,7 +7038,7 @@ function DfsClientForm({ initial, error: saveError, onCancel, onSave, onDelete }
         <Field label="Pipeline Stage">
           <div style={{ position: "relative" }}>
             <select value={form.pipelineStage || "New Lead"} onChange={set("pipelineStage")} style={S.select}>
-              {DFS_PIPELINE_STAGES.map((s) => (
+              {(pipelineStages || DFS_PIPELINE_STAGES).map((s) => (
                 <option key={s} value={s}>
                   {s}
                 </option>
@@ -7435,6 +7703,19 @@ function UserForm({ initial, currentUserId, userCount, onCancel, onSave, onDelet
       {isSelf && isLastAdmin && (
         <div style={S.hint}>You're the only admin, so this role can't be changed until another admin exists.</div>
       )}
+      <Field label="Campaign">
+        <div style={{ position: "relative" }}>
+          <select value={form.campaign || "rrg"} onChange={set("campaign")} style={S.select}>
+            <option value="rrg">RRG only</option>
+            <option value="dfs">DFS only</option>
+            <option value="both">Both — sees the campaign picker</option>
+          </select>
+          <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+        </div>
+      </Field>
+      <div style={S.hint}>
+        A single-campaign account signs straight into that campaign, skipping the picker entirely.
+      </div>
       <div style={S.hint}>
         Passwords are hashed on the server and never stored or displayed in plain text.
       </div>

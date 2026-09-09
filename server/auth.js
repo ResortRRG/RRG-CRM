@@ -34,7 +34,7 @@ export function requireAuth(req, res, next) {
 }
 
 function publicUser(row) {
-  return { id: row.id, name: row.name, username: row.username, role: row.role };
+  return { id: row.id, name: row.name, username: row.username, role: row.role, campaign: row.campaign || "rrg" };
 }
 
 export function registerAuthRoutes(app) {
@@ -53,12 +53,12 @@ export function registerAuthRoutes(app) {
     const id = crypto.randomUUID();
     const hash = await bcrypt.hash(password, 10);
     await pool.query(
-      "INSERT INTO users (id, name, username, password_hash, role) VALUES ($1,$2,$3,$4,'admin')",
+      "INSERT INTO users (id, name, username, password_hash, role, campaign) VALUES ($1,$2,$3,$4,'admin','both')",
       [id, name, username, hash]
     );
     const token = issueSession(id);
     res.cookie(SESSION_COOKIE, token, { httpOnly: true, sameSite: "lax", maxAge: SESSION_TTL_MS });
-    res.json({ user: { id, name, username, role: "admin" } });
+    res.json({ user: { id, name, username, role: "admin", campaign: "both" } });
   });
 
   app.post("/api/auth/login", async (req, res) => {
@@ -98,30 +98,31 @@ export function registerAuthRoutes(app) {
   });
 
   app.post("/api/users", requireAuth, async (req, res) => {
-    const { name, username, password, role } = req.body || {};
+    const { name, username, password, role, campaign } = req.body || {};
     if (!name || !username || !password) return res.status(400).json({ error: "Name, username, and password are required" });
     const id = crypto.randomUUID();
     const hash = await bcrypt.hash(password, 10);
     try {
       await pool.query(
-        "INSERT INTO users (id, name, username, password_hash, role) VALUES ($1,$2,$3,$4,$5)",
-        [id, name, username, hash, role || "rep"]
+        "INSERT INTO users (id, name, username, password_hash, role, campaign) VALUES ($1,$2,$3,$4,$5,$6)",
+        [id, name, username, hash, role || "rep", campaign || "rrg"]
       );
     } catch (e) {
       if (e.code === "23505") return res.status(400).json({ error: "That username is already taken" });
       throw e;
     }
-    res.json({ user: { id, name, username, role: role || "rep" } });
+    res.json({ user: { id, name, username, role: role || "rep", campaign: campaign || "rrg" } });
   });
 
   app.put("/api/users/:id", requireAuth, async (req, res) => {
-    const { name, username, password, role } = req.body || {};
+    const { name, username, password, role, campaign } = req.body || {};
     const fields = [];
     const values = [];
     let i = 1;
     if (name) { fields.push(`name = $${i++}`); values.push(name); }
     if (username) { fields.push(`username = $${i++}`); values.push(username); }
     if (role) { fields.push(`role = $${i++}`); values.push(role); }
+    if (campaign) { fields.push(`campaign = $${i++}`); values.push(campaign); }
     if (password) {
       fields.push(`password_hash = $${i++}`);
       values.push(await bcrypt.hash(password, 10));

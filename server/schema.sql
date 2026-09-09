@@ -9,6 +9,12 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Which campaign(s) a user belongs to: 'rrg', 'dfs', or 'both'. Accounts
+-- with a single campaign skip the campaign picker and go straight in;
+-- 'both' (existing admins, by default) still sees the picker.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS campaign TEXT NOT NULL DEFAULT 'rrg';
+UPDATE users SET campaign = 'both' WHERE role = 'admin' AND campaign = 'rrg';
+
 -- Generic shared key-value store for all app data (contacts, sales, employees,
 -- payroll overrides, attendance, settings). Mirrors the shape the frontend
 -- already expects, so almost none of the app's business logic had to change.
