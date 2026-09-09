@@ -584,6 +584,7 @@ export default function TeamCRM() {
   const [loaded, setLoaded] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [activeCampaign, setActiveCampaign] = useState(null); // null | 'rrg' | 'dfs'
   const [needsSetup, setNeedsSetup] = useState(false);
   const [users, setUsers] = useState([]);
   const [gateNameInput, setGateNameInput] = useState("");
@@ -975,6 +976,7 @@ export default function TeamCRM() {
       // ignore
     }
     setCurrentUser(null);
+    setActiveCampaign(null);
   }
 
   const persist = useCallback((nextContacts, nextSales, nextEmployees, nextOverrides, nextAttendance, nextSettings, nextSpiffs, nextRefundDeductionOverrides, nextExpenses, nextExpenseTransactions) => {
@@ -2765,6 +2767,51 @@ export default function TeamCRM() {
     );
   }
 
+  // Admins choose which campaign to work in — RRG (travel) or DFS (business
+  // debt settlement). Non-admin accounts default straight into RRG for now,
+  // since DFS-specific accounts haven't been built out yet.
+  if (!activeCampaign) {
+    if (currentUser.role !== "admin") {
+      setActiveCampaign("rrg");
+      return null;
+    }
+    return (
+      <div style={{ ...S.app, minHeight: 440 }}>
+        <style>{`
+          @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+          * { box-sizing: border-box; }
+          button { font-family: inherit; cursor: pointer; }
+        `}</style>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ ...S.gateWrap, maxWidth: 460 }}>
+            <div style={S.brand}>Choose a Campaign</div>
+            <div style={{ ...S.brandSub, marginBottom: 24 }}>You can switch campaigns anytime from the sidebar</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <button
+                onClick={() => setActiveCampaign("rrg")}
+                style={S.campaignCard}
+              >
+                <div style={{ fontFamily: T.display, fontSize: 17, fontWeight: 600, color: T.ink }}>RRG</div>
+                <div style={{ fontSize: 12.5, color: T.textMuted, marginTop: 2 }}>Travel — sales, payroll, and leads</div>
+              </button>
+              <button
+                onClick={() => setActiveCampaign("dfs")}
+                style={S.campaignCard}
+              >
+                <div style={{ fontFamily: T.display, fontSize: 17, fontWeight: 600, color: T.ink }}>DFS</div>
+                <div style={{ fontSize: 12.5, color: T.textMuted, marginTop: 2 }}>Business Debt Settlement</div>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (activeCampaign === "dfs") {
+    return <DfsApp currentUser={currentUser} onSwitchCampaign={() => setActiveCampaign(null)} onLogout={logOut} />;
+  }
+
   return (
     <div style={S.app}>
       <style>{`
@@ -2828,6 +2875,11 @@ export default function TeamCRM() {
           </div>
           {currentUser && <RoleBadge role={currentUser.role} size="sm" />}
         </div>
+        {currentUser && currentUser.role === "admin" && (
+          <button style={S.logOutLink} onClick={() => setActiveCampaign(null)}>
+            Switch Campaign
+          </button>
+        )}
         <button style={S.logOutLink} onClick={logOut}>
           Log out
         </button>
@@ -6188,6 +6240,515 @@ export default function TeamCRM() {
   );
 }
 
+// ============================================================
+// DFS — Business Debt Settlement campaign. A separate, self-contained
+// application living inside the same login, with its own data (stored
+// under "dfs:" keys, completely isolated from anything RRG uses) and its
+// own nav. Built incrementally — Dashboard and Clients are real and
+// working; the rest of the requested sections are placeholders until
+// built out in future sessions.
+// ============================================================
+const DFS_NAV_ITEMS = [
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "leads", label: "Leads", icon: ClipboardList },
+  { id: "clients", label: "Clients", icon: Users },
+  { id: "settlements", label: "Settlements", icon: TrendingUp },
+  { id: "creditors", label: "Creditors", icon: Building2 },
+  { id: "payments", label: "Payments", icon: Wallet },
+  { id: "tasks", label: "Tasks", icon: ClipboardList },
+  { id: "documents", label: "Documents", icon: FileText },
+  { id: "calendar", label: "Calendar", icon: CalendarDays },
+  { id: "reports", label: "Reports", icon: BarChart3 },
+  { id: "admin", label: "Admin / Settings", icon: Settings },
+];
+
+const DFS_PIPELINE_STAGES = [
+  "New Lead",
+  "Contacted",
+  "Qualified",
+  "Docs Requested",
+  "Docs Received",
+  "Enrolled",
+  "Negotiating",
+  "Offer Received",
+  "Settlement Approved",
+  "Payment Plan",
+  "Settled",
+  "Completed",
+  "Lost/Cancelled",
+];
+
+function dfsUid() {
+  return "dfs_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+}
+
+function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
+  const [dfsSection, setDfsSection] = useState("dashboard");
+  const [dfsLoaded, setDfsLoaded] = useState(false);
+  const [dfsClients, setDfsClients] = useState([]);
+  const [dfsClientModal, setDfsClientModal] = useState(null); // null | client object
+  const [dfsClientsSearch, setDfsClientsSearch] = useState("");
+  const [dfsSaveError, setDfsSaveError] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await window.storage.get("dfs:clients", true);
+        setDfsClients(res && res.value ? JSON.parse(res.value) : []);
+      } catch (e) {
+        setDfsClients([]);
+      }
+      setDfsLoaded(true);
+    })();
+  }, []);
+
+  async function saveDfsClient(form) {
+    const exists = dfsClients.some((c) => c.id === form.id);
+    const { isNew, ...cleanForm } = form;
+    const next = exists ? dfsClients.map((c) => (c.id === form.id ? { ...c, ...cleanForm } : c)) : [...dfsClients, cleanForm];
+    setDfsClients(next);
+    try {
+      await window.storage.set("dfs:clients", JSON.stringify(next), true);
+      setDfsClientModal(null);
+      setDfsSaveError("");
+    } catch (err) {
+      console.error("DFS client save failed:", err);
+      setDfsSaveError("Couldn't save — " + (err.message || "unknown error"));
+    }
+  }
+  async function deleteDfsClient(id) {
+    const next = dfsClients.filter((c) => c.id !== id);
+    setDfsClients(next);
+    try {
+      await window.storage.set("dfs:clients", JSON.stringify(next), true);
+    } catch (err) {
+      console.error("DFS client delete failed:", err);
+    }
+  }
+
+  const dfsFilteredClients = dfsClients.filter((c) => {
+    const q = dfsClientsSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      (c.name || "").toLowerCase().includes(q) ||
+      (c.businessName || "").toLowerCase().includes(q) ||
+      (c.phone || "").toLowerCase().includes(q) ||
+      (c.email || "").toLowerCase().includes(q)
+    );
+  });
+
+  // Dashboard metrics computed directly from client + debt records
+  const dfsAllDebts = dfsClients.flatMap((c) => (c.debts || []).map((d) => ({ ...d, clientId: c.id, clientName: c.name })));
+  const dfsActiveClients = dfsClients.filter((c) => c.pipelineStage && !["Completed", "Lost/Cancelled"].includes(c.pipelineStage));
+  const dfsNewLeadsThisWeek = dfsClients.filter((c) => {
+    if (!c.createdAt) return false;
+    const days = (Date.now() - c.createdAt) / (1000 * 60 * 60 * 24);
+    return days <= 7;
+  });
+  const dfsTotalEnrolledDebt = dfsAllDebts.reduce((s, d) => s + (Number(d.originalBalance) || 0), 0);
+  const dfsSettledDebt = dfsAllDebts
+    .filter((d) => d.status === "Settled")
+    .reduce((s, d) => s + (Number(d.originalBalance) || 0), 0);
+  const dfsSettlementPercents = dfsAllDebts.filter((d) => d.settlementPercent).map((d) => Number(d.settlementPercent) || 0);
+  const dfsAvgSettlementPercent =
+    dfsSettlementPercents.length > 0 ? dfsSettlementPercents.reduce((s, p) => s + p, 0) / dfsSettlementPercents.length : 0;
+
+  if (!dfsLoaded) {
+    return (
+      <div style={{ ...S.app, alignItems: "center", justifyContent: "center" }}>
+        <div style={{ color: T.textMuted }}>Loading…</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={S.app}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+        * { box-sizing: border-box; }
+        .crm-scroll { scrollbar-width: auto; scrollbar-color: #B8B2A0 #EDEAE0; }
+        .crm-scroll::-webkit-scrollbar { height: 12px; width: 12px; }
+        .crm-scroll::-webkit-scrollbar-track { background: #EDEAE0; border-radius: 6px; }
+        .crm-scroll::-webkit-scrollbar-thumb { background: #B8B2A0; border-radius: 6px; }
+        button { font-family: inherit; cursor: pointer; }
+        input, textarea, select { font-family: inherit; }
+      `}</style>
+
+      {/* Sidebar */}
+      <div style={S.sidebar}>
+        <div style={S.brand}>DFS CRM</div>
+        <div style={{ ...S.brandSub, marginBottom: 24 }}>debt settlement</div>
+        <nav style={{ flex: 1 }}>
+          {DFS_NAV_ITEMS.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setDfsSection(item.id)}
+                style={{ ...S.navItem, ...(dfsSection === item.id ? S.navItemActive : {}) }}
+              >
+                <Icon size={16} />
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+        <div style={S.sidebarFooter}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <div style={S.avatarSm}>{currentUser ? initials(currentUser.name) : <User size={12} />}</div>
+            <div style={{ minWidth: 0, flex: 1, textAlign: "left" }}>
+              <div style={{ fontSize: 12.5, color: T.ink, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {currentUser ? currentUser.name : "Signed in"}
+              </div>
+            </div>
+          </div>
+          <button style={S.logOutLink} onClick={onSwitchCampaign}>
+            Switch Campaign
+          </button>
+          <button style={S.logOutLink} onClick={onLogout}>
+            Log out
+          </button>
+        </div>
+      </div>
+
+      {/* Main */}
+      <div style={S.main}>
+        <div style={S.topbar}>
+          <div style={S.topbarTitle}>{DFS_NAV_ITEMS.find((n) => n.id === dfsSection)?.label}</div>
+        </div>
+        <div style={S.content}>
+          {dfsSection === "dashboard" && (
+            <div style={S.dashboardWrap}>
+              <div style={S.dashboardSectionLabel}>Financial Overview</div>
+              <div style={S.sourceGrid}>
+                <div style={S.sourceCard}>
+                  <div style={S.reportsCardLabel}>New leads (7 days)</div>
+                  <div style={{ ...S.sourceValue, color: T.pineDark }}>{dfsNewLeadsThisWeek.length}</div>
+                </div>
+                <div style={S.sourceCard}>
+                  <div style={S.reportsCardLabel}>Active clients</div>
+                  <div style={{ ...S.sourceValue, color: T.pineDark }}>{dfsActiveClients.length}</div>
+                </div>
+                <div style={S.sourceCard}>
+                  <div style={S.reportsCardLabel}>Total enrolled debt</div>
+                  <div style={{ ...S.sourceValue, color: T.ink }}>{money(dfsTotalEnrolledDebt)}</div>
+                </div>
+                <div style={S.sourceCard}>
+                  <div style={S.reportsCardLabel}>Settled debt</div>
+                  <div style={{ ...S.sourceValue, color: T.pineDark }}>{money(dfsSettledDebt)}</div>
+                </div>
+                <div style={S.sourceCard}>
+                  <div style={S.reportsCardLabel}>Average settlement %</div>
+                  <div style={{ ...S.sourceValue, color: T.ink }}>
+                    {dfsSettlementPercents.length > 0 ? `${dfsAvgSettlementPercent.toFixed(1)}%` : "—"}
+                  </div>
+                </div>
+              </div>
+              <div style={{ ...S.hint, marginTop: 16 }}>
+                More dashboard widgets (expected revenue, collected fees, upcoming/missed payments, pending
+                documents, follow-ups due, rep performance) will be added as those sections get built out.
+              </div>
+            </div>
+          )}
+
+          {dfsSection === "clients" && (
+            <div style={S.dashboardWrap}>
+              <div style={S.contactsToolbar}>
+                <div style={{ position: "relative", flex: 1, maxWidth: 320 }}>
+                  <Search size={14} color={T.textMuted} style={S.searchIcon} />
+                  <input
+                    value={dfsClientsSearch}
+                    onChange={(e) => setDfsClientsSearch(e.target.value)}
+                    placeholder="Search clients"
+                    style={S.searchInput}
+                  />
+                </div>
+                <button
+                  onClick={() =>
+                    setDfsClientModal({
+                      id: dfsUid(),
+                      name: "",
+                      businessName: "",
+                      phone: "",
+                      email: "",
+                      address: "",
+                      leadSource: "",
+                      assignedRep: "",
+                      pipelineStage: "New Lead",
+                      notes: "",
+                      debts: [],
+                      isNew: true,
+                      createdAt: Date.now(),
+                    })
+                  }
+                  style={S.primaryBtn}
+                >
+                  <Plus size={14} /> Client
+                </button>
+              </div>
+              {dfsFilteredClients.length === 0 ? (
+                <div style={S.emptyState}>
+                  <Users size={22} color={T.borderStrong} />
+                  <div style={{ marginTop: 8, fontSize: 13, color: T.textMuted }}>No clients yet — add your first one</div>
+                </div>
+              ) : (
+                <div style={S.contactGrid}>
+                  {dfsFilteredClients.map((c) => {
+                    const totalDebt = (c.debts || []).reduce((s, d) => s + (Number(d.originalBalance) || 0), 0);
+                    return (
+                      <div key={c.id} style={S.contactCard} onClick={() => setDfsClientModal({ ...c, isNew: false })}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                          <div style={S.contactName}>{c.name || "Unnamed"}</div>
+                          <span style={{ ...S.leadBadge, background: "#F0EFE9", color: T.textMuted, flexShrink: 0 }}>
+                            {c.pipelineStage || "New Lead"}
+                          </span>
+                        </div>
+                        {c.businessName && (
+                          <div style={S.contactMetaRow}>
+                            <Building2 size={12} /> {c.businessName}
+                          </div>
+                        )}
+                        {c.phone && (
+                          <div style={S.contactMetaRow}>
+                            <Phone size={12} /> {c.phone}
+                          </div>
+                        )}
+                        <div style={S.contactMetaRow}>
+                          <Wallet size={12} /> {(c.debts || []).length} position{(c.debts || []).length === 1 ? "" : "s"} · {money(totalDebt)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {!["dashboard", "clients"].includes(dfsSection) && (
+            <div style={S.dashboardWrap}>
+              <div style={S.emptyState}>
+                <ClipboardList size={22} color={T.borderStrong} />
+                <div style={{ marginTop: 8, fontSize: 13, color: T.textMuted }}>
+                  {DFS_NAV_ITEMS.find((n) => n.id === dfsSection)?.label} hasn't been built yet — this is a
+                  placeholder for a future session.
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {dfsClientModal && (
+        <Modal onClose={() => setDfsClientModal(null)} wide>
+          <DfsClientForm
+            initial={dfsClientModal}
+            error={dfsSaveError}
+            onCancel={() => setDfsClientModal(null)}
+            onSave={saveDfsClient}
+            onDelete={
+              !dfsClientModal.isNew
+                ? async () => {
+                    await deleteDfsClient(dfsClientModal.id);
+                    setDfsClientModal(null);
+                  }
+                : null
+            }
+          />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function DfsClientForm({ initial, error: saveError, onCancel, onSave, onDelete }) {
+  const [form, setForm] = useState(initial);
+  const [error, setError] = useState("");
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+
+  function updateDebt(id, patch) {
+    setForm({ ...form, debts: (form.debts || []).map((d) => (d.id === id ? { ...d, ...patch } : d)) });
+  }
+  function addDebt() {
+    setForm({
+      ...form,
+      debts: [
+        ...(form.debts || []),
+        {
+          id: dfsUid(),
+          creditorName: "",
+          originalBalance: "",
+          currentBalance: "",
+          paymentAmount: "",
+          status: "Active",
+          settlementOffer: "",
+          negotiatedAmount: "",
+          settlementPercent: "",
+        },
+      ],
+    });
+  }
+  function removeDebt(id) {
+    setForm({ ...form, debts: (form.debts || []).filter((d) => d.id !== id) });
+  }
+
+  function submit() {
+    if (!form.name || !form.name.trim()) {
+      setError("Enter the client's name first");
+      return;
+    }
+    setError("");
+    onSave(form);
+  }
+
+  return (
+    <div>
+      <div style={S.modalTitle}>{form.isNew ? "New Client" : "Edit client"}</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Field label="Client Name *">
+          <input value={form.name || ""} onChange={set("name")} style={S.input} autoFocus />
+        </Field>
+        <Field label="Business Name">
+          <input value={form.businessName || ""} onChange={set("businessName")} style={S.input} />
+        </Field>
+        <Field label="Phone">
+          <input value={form.phone || ""} onChange={set("phone")} style={S.input} />
+        </Field>
+        <Field label="Email">
+          <input value={form.email || ""} onChange={set("email")} style={S.input} />
+        </Field>
+      </div>
+      <Field label="Address">
+        <input value={form.address || ""} onChange={set("address")} style={S.input} />
+      </Field>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+        <Field label="Lead Source">
+          <input value={form.leadSource || ""} onChange={set("leadSource")} style={S.input} />
+        </Field>
+        <Field label="Assigned Rep">
+          <input value={form.assignedRep || ""} onChange={set("assignedRep")} style={S.input} />
+        </Field>
+        <Field label="Pipeline Stage">
+          <div style={{ position: "relative" }}>
+            <select value={form.pipelineStage || "New Lead"} onChange={set("pipelineStage")} style={S.select}>
+              {DFS_PIPELINE_STAGES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+          </div>
+        </Field>
+      </div>
+      <Field label="Notes">
+        <textarea value={form.notes || ""} onChange={set("notes")} style={{ ...S.input, minHeight: 70, resize: "vertical" }} />
+      </Field>
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 16, marginBottom: 8 }}>
+        <div style={{ fontFamily: T.display, fontSize: 14, fontWeight: 600, color: T.ink }}>MCA Debts / Positions</div>
+        <button onClick={addDebt} style={S.ghostBtn}>
+          <Plus size={13} /> Add debt
+        </button>
+      </div>
+      {(form.debts || []).length === 0 ? (
+        <div style={{ fontSize: 12.5, color: T.textMuted }}>No debts added yet.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {(form.debts || []).map((d) => (
+            <div key={d.id} style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: 12, background: T.paper }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
+                <input
+                  value={d.creditorName}
+                  onChange={(e) => updateDebt(d.id, { creditorName: e.target.value })}
+                  style={S.input}
+                  placeholder="Creditor / funder name"
+                />
+                <input
+                  type="number"
+                  value={d.originalBalance}
+                  onChange={(e) => updateDebt(d.id, { originalBalance: e.target.value })}
+                  style={{ ...S.input, fontFamily: T.mono }}
+                  placeholder="Original balance"
+                />
+                <input
+                  type="number"
+                  value={d.currentBalance}
+                  onChange={(e) => updateDebt(d.id, { currentBalance: e.target.value })}
+                  style={{ ...S.input, fontFamily: T.mono }}
+                  placeholder="Current balance"
+                />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
+                <input
+                  type="number"
+                  value={d.paymentAmount}
+                  onChange={(e) => updateDebt(d.id, { paymentAmount: e.target.value })}
+                  style={{ ...S.input, fontFamily: T.mono }}
+                  placeholder="Payment amount"
+                />
+                <input
+                  type="number"
+                  value={d.settlementOffer}
+                  onChange={(e) => updateDebt(d.id, { settlementOffer: e.target.value })}
+                  style={{ ...S.input, fontFamily: T.mono }}
+                  placeholder="Settlement offer"
+                />
+                <input
+                  type="number"
+                  value={d.negotiatedAmount}
+                  onChange={(e) => updateDebt(d.id, { negotiatedAmount: e.target.value })}
+                  style={{ ...S.input, fontFamily: T.mono }}
+                  placeholder="Negotiated amount"
+                />
+                <input
+                  type="number"
+                  value={d.settlementPercent}
+                  onChange={(e) => updateDebt(d.id, { settlementPercent: e.target.value })}
+                  style={{ ...S.input, fontFamily: T.mono }}
+                  placeholder="Settlement %"
+                />
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <div style={{ position: "relative", flex: 1 }}>
+                  <select value={d.status} onChange={(e) => updateDebt(d.id, { status: e.target.value })} style={S.select}>
+                    {["Active", "In Default", "In Collections", "Negotiating", "Settled", "Paid Off"].map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+                </div>
+                <button onClick={() => removeDebt(d.id)} style={S.iconBtnGhost}>
+                  <Trash2 size={13} color={T.textMuted} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {error && <div style={{ ...S.errorText, marginTop: 12 }}>{error}</div>}
+      {saveError && <div style={S.errorText}>{saveError}</div>}
+      <div style={{ display: "flex", gap: 8, justifyContent: onDelete ? "space-between" : "flex-end", marginTop: 16 }}>
+        {onDelete && (
+          <button onClick={onDelete} style={S.dangerGhostBtn}>
+            <Trash2 size={13} /> Delete
+          </button>
+        )}
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={onCancel} style={S.ghostBtn}>
+            Cancel
+          </button>
+          <button onClick={submit} style={S.primaryBtn}>
+            {form.isNew ? "New Client" : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Modal({ children, onClose, narrow, wide, disableBackdropClose, fullScreen, printable }) {
   return (
     <div
@@ -8063,6 +8624,15 @@ const S = {
     maxWidth: 300,
     margin: "auto",
     padding: "40px 20px",
+  },
+  campaignCard: {
+    display: "block",
+    width: "100%",
+    textAlign: "left",
+    background: T.paperRaised,
+    border: `1px solid ${T.border}`,
+    borderRadius: 10,
+    padding: "16px 18px",
   },
   brandSub: {
     fontSize: 11,
