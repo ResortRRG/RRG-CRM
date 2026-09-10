@@ -280,6 +280,15 @@ function getWeekRange(offset) {
   return { start: monday, end: saturday };
 }
 
+function mondayOfWeek(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diffToMonday = (day + 6) % 7;
+  d.setDate(d.getDate() - diffToMonday);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 function formatWeekLabel(start, end) {
   const opts = { month: "short", day: "numeric" };
   return `${start.toLocaleDateString("en-US", opts)} – ${end.toLocaleDateString("en-US", opts)}`;
@@ -1949,10 +1958,29 @@ export default function TeamCRM() {
       }, 0);
       // The guarantee floor only makes sense within a bounded period — for
       // "All time" (no range), just compare against earned commission.
-      const weeksInPeriod = reportsRange
-        ? Math.max(1, Math.round((reportsRange.end - reportsRange.start) / (7 * 24 * 60 * 60 * 1000)))
-        : null;
-      const estimatedPaid = weeksInPeriod ? Math.max(commission, weeksInPeriod * settings.minWeeklyPay) : commission;
+      // Each week's guarantee is computed individually via
+      // effectiveMinGuarantee, which already correctly accounts for
+      // mid-week start dates, absences, and Saturday make-ups — a flat
+      // "weeks × $400" estimate would overstate pay for anyone who started
+      // partway through the period or missed days.
+      let estimatedPaid = commission;
+      if (reportsRange) {
+        let weekCursor = mondayOfWeek(reportsRange.start);
+        let totalGuarantee = 0;
+        let guard = 0;
+        while (weekCursor <= reportsRange.end && guard < 260) {
+          // Only count a week's guarantee if they were actually employed
+          // that week — not started yet, or already deactivated, shouldn't
+          // count as an unpaid week against them.
+          if (employeesForWeek(weekCursor).some((e) => e.id === emp.id)) {
+            totalGuarantee += effectiveMinGuarantee(emp.id, weekCursor);
+          }
+          weekCursor = new Date(weekCursor);
+          weekCursor.setDate(weekCursor.getDate() + 7);
+          guard++;
+        }
+        estimatedPaid = Math.max(commission, totalGuarantee);
+      }
       const profitLoss = companyRevenue - estimatedPaid;
       return { employee: emp, salesCount: empSales.length, credited, rate, commission, companyRevenue, profitLoss };
     })
@@ -4860,8 +4888,9 @@ export default function TeamCRM() {
               Commission figures here are earned-commission only for the period shown — they don't include base pay or the
               {" "}{money(settings.minWeeklyPay)} weekly minimum guarantee, since those apply per calendar week. Visit Payroll for
               exact take-home figures on any given week. Profit or Loss compares what RRG actually collects from Monster/PGR
-              on their sales against what they were paid (using the {money(settings.minWeeklyPay)}/week guarantee as a floor
-              for the period shown) — a rough gauge of whether each employee is net-positive, not an exact payroll figure.
+              on their sales against what they were paid — the guarantee side is calculated week by week, correctly
+              accounting for absences and employees who started partway through the period, not just a flat weeks×
+              {money(settings.minWeeklyPay)} estimate.
             </div>
               </>
             )}
