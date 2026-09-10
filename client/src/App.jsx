@@ -1169,15 +1169,35 @@ export default function TeamCRM() {
     }
   }
   function effectiveMinGuarantee(employeeId, weekStart) {
+    // Employees who started partway through the week only get a prorated
+    // base guarantee — $80 for each regular weekday (Mon-Fri) on or after
+    // their start date, $40 for Saturday (a half day), capped at the full
+    // weekly guarantee. Days before their start date don't count at all
+    // (not absences, they just weren't employed yet).
+    const emp = employees.find((e) => e.id === employeeId);
+    let baseGuarantee = settings.minWeeklyPay;
+    if (emp && emp.startDate) {
+      const startDate = new Date(emp.startDate + "T00:00:00");
+      if (startDate > weekStart) {
+        let prorated = 0;
+        for (let i = 0; i < 6; i++) {
+          const date = new Date(weekStart);
+          date.setDate(weekStart.getDate() + i);
+          if (date >= startDate) {
+            prorated += i === 5 ? ABSENCE_GUARANTEE_DEDUCTION / 2 : ABSENCE_GUARANTEE_DEDUCTION;
+          }
+        }
+        baseGuarantee = Math.min(prorated, settings.minWeeklyPay);
+      }
+    }
     const absences = absentDaysInWeek(employeeId, weekStart);
     if (absences >= 6) return 0; // absent every scheduled day — no partial guarantee
     // Working Saturday to make up a missed day during the week cancels out
     // that one day's deduction, capped so it can only offset one absence.
     const effectiveAbsences = getWorkedSaturday(employeeId, weekStart) ? Math.max(0, absences - 1) : absences;
-    let guarantee = Math.max(0, settings.minWeeklyPay - effectiveAbsences * ABSENCE_GUARANTEE_DEDUCTION);
+    let guarantee = Math.max(0, baseGuarantee - effectiveAbsences * ABSENCE_GUARANTEE_DEDUCTION);
     // 3+ unexcused lates in a week costs a half day's guarantee — but only
     // for employees who actually draw a base pay, not commission-only reps.
-    const emp = employees.find((e) => e.id === employeeId);
     const hasBasePay = emp && emp.basePay !== "" && emp.basePay !== undefined && emp.basePay !== null;
     if (hasBasePay && unexcusedLateDaysInWeek(employeeId, weekStart) >= 3) {
       guarantee = Math.max(0, guarantee - UNEXCUSED_LATE_HALF_DAY_DEDUCTION);
@@ -4172,11 +4192,18 @@ export default function TeamCRM() {
                   <thead>
                     <tr>
                       <th style={{ ...S.th, fontSize: 16 }}>Agent</th>
-                      {WEEKDAY_LABELS.map((d) => (
-                        <th key={d} style={{ ...S.th, fontSize: 16 }}>
-                          {d}
-                        </th>
-                      ))}
+                      {WEEKDAY_LABELS.map((d, i) => {
+                        const date = new Date(rrg.start);
+                        date.setDate(rrg.start.getDate() + i);
+                        return (
+                          <th key={d} style={{ ...S.th, fontSize: 16 }}>
+                            {d}
+                            <div style={{ fontSize: 11, fontWeight: 500, color: T.textMuted, marginTop: 2 }}>
+                              {date.toLocaleDateString("en-US", { month: "numeric", day: "numeric" })}
+                            </div>
+                          </th>
+                        );
+                      })}
                       <th style={{ ...S.th, fontSize: 16 }}>Total</th>
                     </tr>
                   </thead>
