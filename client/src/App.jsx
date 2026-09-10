@@ -1178,12 +1178,16 @@ export default function TeamCRM() {
     }
   }
   function effectiveMinGuarantee(employeeId, weekStart) {
+    // Commission-only employees (no Base Pay/Draw amount set) don't get any
+    // weekly guarantee at all — they're paid purely on what they earn.
+    const emp = employees.find((e) => e.id === employeeId);
+    const hasBasePay = emp && emp.basePay !== "" && emp.basePay !== undefined && emp.basePay !== null;
+    if (!hasBasePay) return 0;
     // Employees who started partway through the week only get a prorated
     // base guarantee — $80 for each regular weekday (Mon-Fri) on or after
     // their start date, $40 for Saturday (a half day), capped at the full
     // weekly guarantee. Days before their start date don't count at all
     // (not absences, they just weren't employed yet).
-    const emp = employees.find((e) => e.id === employeeId);
     let baseGuarantee = settings.minWeeklyPay;
     if (emp && emp.startDate) {
       const startDate = new Date(emp.startDate + "T00:00:00");
@@ -1205,10 +1209,8 @@ export default function TeamCRM() {
     // that one day's deduction, capped so it can only offset one absence.
     const effectiveAbsences = getWorkedSaturday(employeeId, weekStart) ? Math.max(0, absences - 1) : absences;
     let guarantee = Math.max(0, baseGuarantee - effectiveAbsences * ABSENCE_GUARANTEE_DEDUCTION);
-    // 3+ unexcused lates in a week costs a half day's guarantee — but only
-    // for employees who actually draw a base pay, not commission-only reps.
-    const hasBasePay = emp && emp.basePay !== "" && emp.basePay !== undefined && emp.basePay !== null;
-    if (hasBasePay && unexcusedLateDaysInWeek(employeeId, weekStart) >= 3) {
+    // 3+ unexcused lates in a week costs a half day's guarantee.
+    if (unexcusedLateDaysInWeek(employeeId, weekStart) >= 3) {
       guarantee = Math.max(0, guarantee - UNEXCUSED_LATE_HALF_DAY_DEDUCTION);
     }
     return guarantee;
@@ -1962,16 +1964,18 @@ export default function TeamCRM() {
       // effectiveMinGuarantee, which already correctly accounts for
       // mid-week start dates, absences, and Saturday make-ups — a flat
       // "weeks × $400" estimate would overstate pay for anyone who started
-      // partway through the period or missed days.
+      // partway through the period or missed days. Also stop at today —
+      // weeks that haven't happened yet (e.g. the rest of "This month")
+      // haven't been worked or paid, so they shouldn't count against
+      // someone who just started.
       let estimatedPaid = commission;
       if (reportsRange) {
+        const today = new Date();
+        today.setHours(23, 59, 59, 999);
         let weekCursor = mondayOfWeek(reportsRange.start);
         let totalGuarantee = 0;
         let guard = 0;
-        while (weekCursor <= reportsRange.end && guard < 260) {
-          // Only count a week's guarantee if they were actually employed
-          // that week — not started yet, or already deactivated, shouldn't
-          // count as an unpaid week against them.
+        while (weekCursor <= reportsRange.end && weekCursor <= today && guard < 260) {
           if (employeesForWeek(weekCursor).some((e) => e.id === emp.id)) {
             totalGuarantee += effectiveMinGuarantee(emp.id, weekCursor);
           }
