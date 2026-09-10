@@ -55,6 +55,13 @@ const ROLES = [
   { id: "rep", label: "Rep" },
 ];
 
+const DFS_ROLES = [
+  { id: "admin", label: "Admin" },
+  { id: "manager", label: "Manager" },
+  { id: "opener", label: "Opener" },
+  { id: "closer", label: "Closer" },
+];
+
 const ROLE_COLORS = {
   admin: { bg: "#F3E9DA", text: "#8A5A1E" },
   manager: { bg: "#E1EAF5", text: "#2A5488" },
@@ -6275,6 +6282,18 @@ const DFS_NAV_ITEMS = [
   { id: "admin", label: "Admin / Settings", icon: Settings },
 ];
 
+// Opener only works Leads. Closer works the deal once it's past the lead
+// stage — Clients, Calendar, Documents — but doesn't see Leads (that's the
+// opener's stage) or management-level sections. Manager sees everything
+// operational but not Reports or Admin. Admin (or anything unrecognized)
+// gets full access, same as it always has.
+function getDfsAllowedSections(role) {
+  if (role === "opener") return ["leads"];
+  if (role === "closer") return ["clients", "calendar", "documents"];
+  if (role === "manager") return DFS_NAV_ITEMS.map((n) => n.id).filter((id) => id !== "reports" && id !== "admin");
+  return DFS_NAV_ITEMS.map((n) => n.id);
+}
+
 const DFS_PIPELINE_STAGES = [
   "New Lead",
   "Contacted",
@@ -6482,6 +6501,17 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
       setDfsLoaded(true);
     })();
   }, []);
+
+  // If the current section isn't allowed for this role (e.g. the default
+  // "dashboard" state, but Opener/Closer can't see Dashboard), fall back to
+  // the first section they're actually allowed to see.
+  useEffect(() => {
+    const allowed = getDfsAllowedSections(currentUser && currentUser.role);
+    if (!allowed.includes(dfsSection) && allowed.length > 0) {
+      setDfsSection(allowed[0]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dfsSection, currentUser && currentUser.role]);
 
   async function saveDfsClient(form) {
     const exists = dfsClients.some((c) => c.id === form.id);
@@ -6776,7 +6806,7 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
         <div style={S.brand}>{dfsSettings.companyName || "DFS"} CRM</div>
         <div style={{ ...S.brandSub, marginBottom: 24 }}>debt settlement</div>
         <nav style={{ flex: 1 }}>
-          {DFS_NAV_ITEMS.map((item) => {
+          {DFS_NAV_ITEMS.filter((item) => getDfsAllowedSections(currentUser && currentUser.role).includes(item.id)).map((item) => {
             const Icon = item.icon;
             return (
               <button
@@ -7389,6 +7419,7 @@ function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
             currentUserId={currentUser ? currentUser.id : null}
             userCount={dfsUsers.length}
             serverError={dfsUserFormError}
+            roleOptions={DFS_ROLES}
             onCancel={() => setDfsUserModal(null)}
             onSave={async (form) => {
               try {
@@ -9380,7 +9411,7 @@ function ContactForm({ initial, onCancel, onSave, onDelete }) {
   );
 }
 
-function UserForm({ initial, currentUserId, userCount, onCancel, onSave, onDelete, serverError }) {
+function UserForm({ initial, currentUserId, userCount, onCancel, onSave, onDelete, serverError, roleOptions }) {
   const [form, setForm] = useState(initial);
   const [error, setError] = useState("");
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -9426,7 +9457,7 @@ function UserForm({ initial, currentUserId, userCount, onCancel, onSave, onDelet
       <Field label="Role">
         <div style={{ position: "relative" }}>
           <select value={form.role || "rep"} onChange={set("role")} style={S.select} disabled={isSelf && isLastAdmin}>
-            {ROLES.map((r) => (
+            {(roleOptions || ROLES).map((r) => (
               <option key={r.id} value={r.id}>
                 {r.label}
               </option>
