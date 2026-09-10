@@ -1935,7 +1935,26 @@ export default function TeamCRM() {
         return sum + saleCredit(s, emp.id);
       }, 0);
       const commission = credited * (rate / 100) - refundedCredit * (rate / 100);
-      return { employee: emp, salesCount: empSales.length, credited, rate, commission };
+      // What the company actually keeps from this employee's sales, using
+      // the same Monster/PGR contract rates P&L uses — not the full sale
+      // price, since that's not what RRG actually collects.
+      const companyRevenue = empSales.reduce((sum, s) => {
+        const contractRate =
+          s.leadSubmittedTo === "Monster"
+            ? (Number(settings.monsterCommissionRate) || 0) / 100
+            : s.leadSubmittedTo === "PGR"
+            ? (Number(settings.pgrCommissionRate) || 0) / 100
+            : 0;
+        return sum + saleCredit(s, emp.id) * contractRate;
+      }, 0);
+      // The guarantee floor only makes sense within a bounded period — for
+      // "All time" (no range), just compare against earned commission.
+      const weeksInPeriod = reportsRange
+        ? Math.max(1, Math.round((reportsRange.end - reportsRange.start) / (7 * 24 * 60 * 60 * 1000)))
+        : null;
+      const estimatedPaid = weeksInPeriod ? Math.max(commission, weeksInPeriod * settings.minWeeklyPay) : commission;
+      const profitLoss = companyRevenue - estimatedPaid;
+      return { employee: emp, salesCount: empSales.length, credited, rate, commission, companyRevenue, profitLoss };
     })
     .filter((r) => r.salesCount > 0 || r.rate > 0);
   const reportsTotalCommission = reportsEmployeeRows.reduce((s, r) => s + r.commission, 0);
@@ -1961,9 +1980,9 @@ export default function TeamCRM() {
     rows.push(["Declined", reportsDeclined.length, reportsDeclined.reduce((s, r) => s + (Number(r.totalPrice) || 0), 0).toFixed(2)]);
     rows.push([]);
     rows.push(["Employees"]);
-    rows.push(["Name", "Sales", "Credited total", "Commission %", "Commission earned"]);
+    rows.push(["Name", "Sales", "Credited total", "Commission %", "Commission earned", "Profit or Loss"]);
     reportsEmployeeRows.forEach((r) =>
-      rows.push([r.employee.name, r.salesCount, r.credited.toFixed(2), r.rate, r.commission.toFixed(2)])
+      rows.push([r.employee.name, r.salesCount, r.credited.toFixed(2), r.rate, r.commission.toFixed(2), r.profitLoss.toFixed(2)])
     );
     const csv = rows
       .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
@@ -4806,6 +4825,7 @@ export default function TeamCRM() {
                       <th style={S.th}>Credited total</th>
                       <th style={S.th}>Commission %</th>
                       <th style={S.th}>Commission earned</th>
+                      <th style={S.th}>Profit or Loss</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -4818,6 +4838,18 @@ export default function TeamCRM() {
                           {r.rate > 0 ? <span style={S.commissionRateBadge}>{r.rate}%</span> : <span style={{ color: T.borderStrong }}>—</span>}
                         </td>
                         <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 500 }}>{money(r.commission)}</td>
+                        <td
+                          style={{
+                            ...S.td,
+                            fontFamily: T.mono,
+                            fontSize: 14,
+                            fontWeight: 600,
+                            color: r.profitLoss >= 0 ? T.pineDark : "#A32D2D",
+                          }}
+                        >
+                          {r.profitLoss >= 0 ? "+" : "-"}
+                          {money(Math.abs(r.profitLoss))}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -4827,7 +4859,9 @@ export default function TeamCRM() {
             <div style={{ ...S.hint, marginTop: 12 }}>
               Commission figures here are earned-commission only for the period shown — they don't include base pay or the
               {" "}{money(settings.minWeeklyPay)} weekly minimum guarantee, since those apply per calendar week. Visit Payroll for
-              exact take-home figures on any given week.
+              exact take-home figures on any given week. Profit or Loss compares what RRG actually collects from Monster/PGR
+              on their sales against what they were paid (using the {money(settings.minWeeklyPay)}/week guarantee as a floor
+              for the period shown) — a rough gauge of whether each employee is net-positive, not an exact payroll figure.
             </div>
               </>
             )}
