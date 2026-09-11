@@ -1196,9 +1196,9 @@ export default function TeamCRM() {
     if (!hasBasePay) return 0;
     // Employees who started partway through the week only get a prorated
     // base guarantee — $80 for each regular weekday (Mon-Fri) on or after
-    // their start date, $40 for Saturday (a half day), capped at the full
-    // weekly guarantee. Days before their start date don't count at all
-    // (not absences, they just weren't employed yet).
+    // their start date. Saturday's $40 half-day only counts if they're
+    // actually marked as having worked that Saturday — otherwise a new
+    // hire's first week would assume a Saturday shift they never worked.
     let baseGuarantee = settings.minWeeklyPay;
     if (emp && emp.startDate) {
       const startDate = new Date(emp.startDate + "T00:00:00");
@@ -1208,7 +1208,11 @@ export default function TeamCRM() {
           const date = new Date(weekStart);
           date.setDate(weekStart.getDate() + i);
           if (date >= startDate) {
-            prorated += i === 5 ? ABSENCE_GUARANTEE_DEDUCTION / 2 : ABSENCE_GUARANTEE_DEDUCTION;
+            if (i === 5) {
+              if (getWorkedSaturday(employeeId, weekStart)) prorated += ABSENCE_GUARANTEE_DEDUCTION / 2;
+            } else {
+              prorated += ABSENCE_GUARANTEE_DEDUCTION;
+            }
           }
         }
         baseGuarantee = Math.min(prorated, settings.minWeeklyPay);
@@ -1246,7 +1250,11 @@ export default function TeamCRM() {
           const date = new Date(weekStart);
           date.setDate(weekStart.getDate() + i);
           if (date >= startDate) {
-            prorated += i === 5 ? dailyRate / 2 : dailyRate;
+            if (i === 5) {
+              if (getWorkedSaturday(employeeId, weekStart)) prorated += dailyRate / 2;
+            } else {
+              prorated += dailyRate;
+            }
           }
         }
         proratedAmount = Math.min(prorated, amount);
@@ -4528,6 +4536,8 @@ export default function TeamCRM() {
                       const computedTotalPay = guaranteedBase + spiffTotal;
                       const guaranteeApplied = rawBasePay < empMinGuarantee;
                       const empAbsences = absentDaysInWeek(emp.id, payrollWeek.start);
+                      const empIsProrated =
+                        !!emp.startDate && new Date(emp.startDate + "T00:00:00") > payrollWeek.start;
                       const override = getPayrollOverride(emp.id, payrollWeek.start);
                       const totalPay = Math.round(override !== null ? override : computedTotalPay);
                       const isOverridden = override !== null;
@@ -4644,7 +4654,7 @@ export default function TeamCRM() {
                               )}
                             </div>
                             {isOverridden && <div style={S.customPayNote}>Custom · calculated {money(computedTotalPay)}</div>}
-                            {!isOverridden && empAbsences > 0 && (
+                            {!isOverridden && (empAbsences > 0 || empIsProrated) && (
                               <label style={S.workedSaturdayLabel} onClick={(e) => e.stopPropagation()}>
                                 <input
                                   type="checkbox"
@@ -4652,7 +4662,7 @@ export default function TeamCRM() {
                                   onChange={(e) => setWorkedSaturdayValue(emp.id, payrollWeek.start, e.target.checked)}
                                   style={{ margin: 0 }}
                                 />
-                                Worked Saturday (makes up 1 day)
+                                {empAbsences > 0 ? "Worked Saturday (makes up 1 day)" : "Worked Saturday"}
                               </label>
                             )}
                           </td>
