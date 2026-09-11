@@ -381,6 +381,15 @@ function basePayLabel(name) {
   return BASE_PAY_LABEL_EXCEPTIONS.includes(normalized) ? "Base pay" : "Draw";
 }
 
+// For everyone on a Draw, pay is whichever is higher — commission OR the
+// draw — never both added together, since a draw is an advance against
+// commission, not extra pay on top. Cristina Rossi and Nicholas Pelloni
+// have a genuine standing Base Pay instead, which does add on top.
+function combinedEarnings(commission, basePay, employeeName) {
+  if (basePayLabel(employeeName) === "Base pay") return commission + basePay;
+  return Math.max(commission, basePay);
+}
+
 // Capitalizes the first letter of each word in a name, e.g. "john doe" or
 // "JOHN DOE" both become "John Doe" — applied on blur so it doesn't fight
 // with someone still typing.
@@ -1216,6 +1225,29 @@ export default function TeamCRM() {
     return guarantee;
   }
 
+  // An employee's actual weekly Draw/Base Pay amount also needs to be
+  // prorated for a mid-week start — otherwise someone who started Thursday
+  // still gets their full weekly basePay added on top of commission, on
+  // top of the (already correctly prorated) guarantee floor.
+  function effectiveBasePay(employeeId, weekStart, rawBasePay) {
+    const amount = Number(rawBasePay) || 0;
+    if (amount <= 0) return 0;
+    const emp = employees.find((e) => e.id === employeeId);
+    if (!emp || !emp.startDate) return amount;
+    const startDate = new Date(emp.startDate + "T00:00:00");
+    if (startDate <= weekStart) return amount;
+    const dailyRate = amount / 5;
+    let prorated = 0;
+    for (let i = 0; i < 6; i++) {
+      const date = new Date(weekStart);
+      date.setDate(weekStart.getDate() + i);
+      if (date >= startDate) {
+        prorated += i === 5 ? dailyRate / 2 : dailyRate;
+      }
+    }
+    return Math.min(prorated, amount);
+  }
+
   function spiffKey(employeeId, date) {
     return employeeId + "__" + date.toISOString().slice(0, 10);
   }
@@ -1293,9 +1325,9 @@ export default function TeamCRM() {
       const refundDed = refundOverrideVal !== null ? refundOverrideVal : refundedCredit * (rate / 100);
       const commission = total * (rate / 100) - refundDed;
       const hasBasePay = emp.basePay !== "" && emp.basePay !== undefined && emp.basePay !== null;
-      const basePay = hasBasePay ? Number(emp.basePay) || 0 : 0;
+      const basePay = hasBasePay ? effectiveBasePay(emp.id, weekStart, emp.basePay) : 0;
       const spiffTotal = spiffTotalInWeek(emp.id, weekStart);
-      const guaranteedBase = Math.max(commission + basePay, effectiveMinGuarantee(emp.id, weekStart));
+      const guaranteedBase = Math.max(combinedEarnings(commission, basePay, emp.name), effectiveMinGuarantee(emp.id, weekStart));
       return sum + guaranteedBase + spiffTotal;
     }, 0);
   }
@@ -2236,9 +2268,13 @@ export default function TeamCRM() {
   const employeeDetailCommission = employeeDetailTotalSales * (employeeDetailRate / 100) - employeeDetailRefundDeduction;
   const employeeDetailHasBasePay =
     employeeDetail && employeeDetail.basePay !== "" && employeeDetail.basePay !== undefined && employeeDetail.basePay !== null;
-  const employeeDetailBasePay = employeeDetailHasBasePay ? Number(employeeDetail.basePay) || 0 : 0;
+  const employeeDetailBasePay = employeeDetailHasBasePay
+    ? effectiveBasePay(employeeDetail.id, employeeDetailWeek.start, employeeDetail.basePay)
+    : 0;
   const employeeDetailSpiff = employeeDetail ? spiffTotalInWeek(employeeDetail.id, employeeDetailWeek.start) : 0;
-  const employeeDetailRawBasePay = employeeDetailCommission + employeeDetailBasePay;
+  const employeeDetailRawBasePay = employeeDetail
+    ? combinedEarnings(employeeDetailCommission, employeeDetailBasePay, employeeDetail.name)
+    : employeeDetailCommission + employeeDetailBasePay;
   const employeeDetailMinGuarantee = employeeDetail
     ? effectiveMinGuarantee(employeeDetail.id, employeeDetailWeek.start)
     : settings.minWeeklyPay;
@@ -4442,10 +4478,10 @@ export default function TeamCRM() {
                       const refundDeduction = refundDeductionIsOverridden ? refundDeductionOverrideVal : calculatedRefundDeduction;
                       const commissionOwed = grossCommission - refundDeduction;
                       const hasBasePay = emp.basePay !== "" && emp.basePay !== undefined && emp.basePay !== null;
-                      const basePay = hasBasePay ? Number(emp.basePay) || 0 : 0;
+                      const basePay = hasBasePay ? effectiveBasePay(emp.id, payrollWeek.start, emp.basePay) : 0;
                       const spiffTotal = spiffTotalInWeek(emp.id, payrollWeek.start);
                       const spiffPaidUnpaid = spiffPaidAndUnpaidInWeek(emp.id, payrollWeek.start);
-                      const rawBasePay = commissionOwed + basePay;
+                      const rawBasePay = combinedEarnings(commissionOwed, basePay, emp.name);
                       const empMinGuarantee = effectiveMinGuarantee(emp.id, payrollWeek.start);
                       const guaranteedBase = Math.max(rawBasePay, empMinGuarantee);
                       const computedTotalPay = guaranteedBase + spiffTotal;
@@ -4606,9 +4642,12 @@ export default function TeamCRM() {
                             const refundDed = refundOverrideVal !== null ? refundOverrideVal : refundedCredit * (rate / 100);
                             const commission = total * (rate / 100) - refundDed;
                             const hasBasePay = emp.basePay !== "" && emp.basePay !== undefined && emp.basePay !== null;
-                            const basePay = hasBasePay ? Number(emp.basePay) || 0 : 0;
+                            const basePay = hasBasePay ? effectiveBasePay(emp.id, payrollWeek.start, emp.basePay) : 0;
                             const spiffTotal = spiffTotalInWeek(emp.id, payrollWeek.start);
-                            const guaranteedBase = Math.max(commission + basePay, effectiveMinGuarantee(emp.id, payrollWeek.start));
+                            const guaranteedBase = Math.max(
+                              combinedEarnings(commission, basePay, emp.name),
+                              effectiveMinGuarantee(emp.id, payrollWeek.start)
+                            );
                             return sum + Math.round(guaranteedBase + spiffTotal);
                           }, 0)
                         )}
