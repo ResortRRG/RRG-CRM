@@ -1150,6 +1150,7 @@ export default function TeamCRM() {
   }
   const ABSENCE_GUARANTEE_DEDUCTION = 80;
   const UNEXCUSED_LATE_HALF_DAY_DEDUCTION = 40;
+  const BASE_PAY_ABSENCE_DEDUCTION = 100;
   function absentDaysInWeek(employeeId, weekStart) {
     let count = 0;
     for (let i = 0; i < 6; i++) {
@@ -1234,19 +1235,31 @@ export default function TeamCRM() {
     const amount = Number(rawBasePay) || 0;
     if (amount <= 0) return 0;
     const emp = employees.find((e) => e.id === employeeId);
-    if (!emp || !emp.startDate) return amount;
-    const startDate = new Date(emp.startDate + "T00:00:00");
-    if (startDate <= weekStart) return amount;
-    const dailyRate = amount / 5;
-    let prorated = 0;
-    for (let i = 0; i < 6; i++) {
-      const date = new Date(weekStart);
-      date.setDate(weekStart.getDate() + i);
-      if (date >= startDate) {
-        prorated += i === 5 ? dailyRate / 2 : dailyRate;
+    if (!emp) return amount;
+    let proratedAmount = amount;
+    if (emp.startDate) {
+      const startDate = new Date(emp.startDate + "T00:00:00");
+      if (startDate > weekStart) {
+        const dailyRate = amount / 5;
+        let prorated = 0;
+        for (let i = 0; i < 6; i++) {
+          const date = new Date(weekStart);
+          date.setDate(weekStart.getDate() + i);
+          if (date >= startDate) {
+            prorated += i === 5 ? dailyRate / 2 : dailyRate;
+          }
+        }
+        proratedAmount = Math.min(prorated, amount);
       }
     }
-    return Math.min(prorated, amount);
+    // Cristina Rossi and Nicholas Pelloni have a genuine standing Base Pay
+    // (not a draw compared against commission) — being marked absent
+    // deducts a flat $100 per absent day directly from it.
+    if (basePayLabel(emp.name) === "Base pay") {
+      const absences = absentDaysInWeek(employeeId, weekStart);
+      proratedAmount = Math.max(0, proratedAmount - absences * BASE_PAY_ABSENCE_DEDUCTION);
+    }
+    return proratedAmount;
   }
 
   function spiffKey(employeeId, date) {
