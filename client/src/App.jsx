@@ -5212,10 +5212,10 @@ export default function TeamCRM() {
             {reportsSubTab === "hourly" && (
               <>
                 <div style={S.dashboardSectionLabel}>Production by Hour</div>
-                <div style={S.hint}>
-                  Approved sales for {reportsFilterMode === "all" ? "all time" : reportsRangeLabel}, grouped by the
-                  hour they came in.
+                <div style={{ fontFamily: T.display, fontSize: 22, fontWeight: 600, color: T.ink, marginTop: 4, marginBottom: 6 }}>
+                  {reportsFilterMode === "all" ? "All Time" : reportsRangeLabel}
                 </div>
+                <div style={S.hint}>Approved sales grouped by the hour they came in.</div>
                 {reportsApprovedSales.length === 0 ? (
                   <div style={S.emptyState}>
                     <BarChart3 size={22} color={T.borderStrong} />
