@@ -623,6 +623,7 @@ export default function TeamCRM() {
   const [contactModal, setContactModal] = useState(null); // null | 'new' | contact object
   const [saleModal, setSaleModal] = useState(null);
   const [saleModalMinimized, setSaleModalMinimized] = useState(false);
+  const [saleSyncingToEpg, setSaleSyncingToEpg] = useState(false);
   // Wide tables (Sales, RRG Board, Payroll, Reports, Employees, All Leads) all
   // use the .crm-scroll container. Their horizontal scrollbar sits at the very
   // bottom of the table, which for tall tables means scrolling the page down
@@ -2600,7 +2601,7 @@ export default function TeamCRM() {
     setConfirmDelete(null);
     setContactModal(null);
   }
-  function saveSale(form) {
+  async function saveSale(form) {
     let savedSale;
     let wasAlreadyApproved = false;
     if (form.id) {
@@ -2613,16 +2614,21 @@ export default function TeamCRM() {
       updateSales([...sales, savedSale]);
       setEntryJustSaved(true);
     }
-    setSaleModal(null);
-    setSaleModalMinimized(false);
 
-    // Push newly-Approved Monster deals to EPG in the background — this
-    // never blocks the save or the UI, and failures get recorded on the
-    // sale itself (see pushSaleToEpg) instead of silently vanishing.
+    // Push newly-Approved Monster deals to EPG — awaited before the modal
+    // closes so the request can't get silently interrupted by closing the
+    // tab or navigating away right after saving.
     const justBecameApproved = savedSale.status === "Approved" && !wasAlreadyApproved;
     if (justBecameApproved && savedSale.leadSubmittedTo === "Monster") {
-      pushSaleToEpg(savedSale);
+      setSaleSyncingToEpg(true);
+      try {
+        await pushSaleToEpg(savedSale);
+      } finally {
+        setSaleSyncingToEpg(false);
+      }
     }
+    setSaleModal(null);
+    setSaleModalMinimized(false);
   }
   async function pushSaleToEpg(sale) {
     try {
@@ -5922,6 +5928,7 @@ export default function TeamCRM() {
             settings={settings}
             dncList={dncList}
             sales={sales}
+            syncingToEpg={saleSyncingToEpg}
             onCancel={() => {
               setSaleModal(null);
               setSaleModalMinimized(false);
@@ -9908,7 +9915,7 @@ function EmployeeForm({ initial, attendance, onCancel, onSave, onDelete, onToggl
   );
 }
 
-function SaleForm({ initial, employees, settings, dncList, sales, onCancel, onMinimize, onSave, onDelete }) {
+function SaleForm({ initial, employees, settings, dncList, sales, syncingToEpg, onCancel, onMinimize, onSave, onDelete }) {
   const [form, setForm] = useState(initial);
   const [error, setError] = useState("");
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -10388,8 +10395,9 @@ function SaleForm({ initial, employees, settings, dncList, sales, onCancel, onMi
         ) : (
           <span />
         )}
-        <div style={{ display: "flex", gap: 8 }}>
-          <button style={S.ghostBtn} onClick={onCancel}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {syncingToEpg && <span style={{ fontSize: 11.5, color: T.textMuted }}>Syncing to EPG…</span>}
+          <button style={S.ghostBtn} onClick={onCancel} disabled={syncingToEpg}>
             Cancel
           </button>
           <button
@@ -10398,11 +10406,12 @@ function SaleForm({ initial, employees, settings, dncList, sales, onCancel, onMi
               ...(blacklistResult && blacklistResult.message && blacklistResult.message !== "Good"
                 ? { opacity: 0.5, cursor: "not-allowed" }
                 : {}),
+              ...(syncingToEpg ? { opacity: 0.6, cursor: "not-allowed" } : {}),
             }}
-            disabled={!!(blacklistResult && blacklistResult.message && blacklistResult.message !== "Good")}
+            disabled={!!(blacklistResult && blacklistResult.message && blacklistResult.message !== "Good") || syncingToEpg}
             onClick={submit}
           >
-            Save sale
+            {syncingToEpg ? "Saving…" : "Save sale"}
           </button>
         </div>
       </div>
