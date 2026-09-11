@@ -1592,6 +1592,28 @@ export default function TeamCRM() {
   // of these totals until it's marked Approved.
   const reportsApprovedSales = reportsSales.filter((s) => s.status === "Approved");
 
+  // Groups approved sales by the hour they came in (using the timestamp
+  // already stored, which is local business time), covering the 12pm-8pm
+  // window most reps work in. Each bucket tracks both count and dollar
+  // value, so slow-but-high-value hours are still visible.
+  const reportsHourlyBuckets = [12, 13, 14, 15, 16, 17, 18, 19].map((hour) => ({ hour, count: 0, value: 0 }));
+  reportsApprovedSales.forEach((s) => {
+    if (!s.timestamp) return;
+    const d = new Date(s.timestamp);
+    const hour = d.getHours();
+    const bucket = reportsHourlyBuckets.find((b) => b.hour === hour);
+    if (bucket) {
+      bucket.count += 1;
+      bucket.value += Number(s.totalPrice) || 0;
+    }
+  });
+  const reportsHourlyMaxCount = Math.max(1, ...reportsHourlyBuckets.map((b) => b.count));
+  function formatHourLabel(hour) {
+    const period = hour >= 12 ? "PM" : "AM";
+    const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+    return `${displayHour}${period}`;
+  }
+
   const reportsTotalSalesValue = reportsApprovedSales.reduce((s, r) => s + (Number(r.totalPrice) || 0), 0);
   const reportsAverageSalePrice = reportsApprovedSales.length > 0 ? reportsTotalSalesValue / reportsApprovedSales.length : 0;
   const reportsTotalPackagePrice = reportsApprovedSales.reduce((s, r) => s + (Number(r.packagePrice) || 0), 0);
@@ -4694,6 +4716,12 @@ export default function TeamCRM() {
               >
                 Profit & Loss
               </button>
+              <button
+                onClick={() => setReportsSubTab("hourly")}
+                style={{ ...S.reportsSubTabBtn, ...(reportsSubTab === "hourly" ? S.reportsSubTabBtnActive : {}) }}
+              >
+                Production by Hour
+              </button>
             </div>
 
             {reportsSubTab === "snapshot" && (
@@ -5179,6 +5207,72 @@ export default function TeamCRM() {
                   Add or rename expense categories under Admin/Settings → Dropdown lists.
                 </div>
               </div>
+            )}
+
+            {reportsSubTab === "hourly" && (
+              <>
+                <div style={S.dashboardSectionLabel}>Production by Hour</div>
+                <div style={S.hint}>
+                  Approved sales for {reportsFilterMode === "all" ? "all time" : reportsRangeLabel}, grouped by the
+                  hour they came in.
+                </div>
+                {reportsApprovedSales.length === 0 ? (
+                  <div style={S.emptyState}>
+                    <BarChart3 size={22} color={T.borderStrong} />
+                    <div style={{ marginTop: 8, fontSize: 13, color: T.textMuted }}>No approved sales in this period yet</div>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 16 }}>
+                    {reportsHourlyBuckets.map((b) => {
+                      const widthPct = (b.count / reportsHourlyMaxCount) * 100;
+                      const isPeak = b.count > 0 && b.count === reportsHourlyMaxCount;
+                      return (
+                        <div key={b.hour} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                          <div style={{ width: 52, fontSize: 12.5, fontWeight: 600, color: T.ink, flexShrink: 0 }}>
+                            {formatHourLabel(b.hour)}
+                          </div>
+                          <div style={{ flex: 1, background: T.paper, borderRadius: 6, overflow: "hidden", height: 26 }}>
+                            <div
+                              style={{
+                                width: `${widthPct}%`,
+                                minWidth: b.count > 0 ? 4 : 0,
+                                height: "100%",
+                                background: isPeak ? T.pineDark : T.borderStrong,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "flex-end",
+                                paddingRight: 8,
+                                transition: "width 0.2s",
+                              }}
+                            >
+                              {b.count > 0 && widthPct > 25 && (
+                                <span style={{ fontSize: 11.5, fontWeight: 600, color: "#fff" }}>
+                                  {b.count} sale{b.count === 1 ? "" : "s"}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div style={{ width: 130, textAlign: "right", flexShrink: 0 }}>
+                            {b.count > 0 && widthPct <= 25 && (
+                              <span style={{ fontSize: 11.5, fontWeight: 600, color: T.textMuted, marginRight: 8 }}>
+                                {b.count} sale{b.count === 1 ? "" : "s"}
+                              </span>
+                            )}
+                            <span style={{ fontSize: 12.5, fontFamily: T.mono, color: T.ink }}>{money(b.value)}</span>
+                          </div>
+                          {isPeak && (
+                            <span style={{ ...S.leadBadge, background: "#EAF3EC", color: T.pineDark, flexShrink: 0 }}>Peak</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <div style={{ ...S.hint, marginTop: 16 }}>
+                  Based on each sale's recorded timestamp. If a sale was entered later than when it actually
+                  closed, that can shift which hour it counts toward.
+                </div>
+              </>
             )}
           </div>
         )}
