@@ -4724,10 +4724,11 @@ export default function TeamCRM() {
               </button>
             </div>
 
-            {reportsSubTab === "snapshot" && (
-              <>
-            <div style={S.weekNavRow}>
-              <div style={S.dashboardSectionLabel}>Business snapshot</div>
+            {reportsSubTab !== "pnl" && (
+              <div style={S.weekNavRow}>
+              <div style={S.dashboardSectionLabel}>
+                {reportsSubTab === "snapshot" ? "Business snapshot" : "Production by Hour"}
+              </div>
               <div style={S.weekNav}>
                 <div style={{ position: "relative" }}>
                   <select
@@ -4790,6 +4791,24 @@ export default function TeamCRM() {
                           />
                           {reportsNavIsCurrent && <span style={S.weekNavThisWeek}>Current</span>}
                         </div>
+                      ) : reportsFilterMode === "month" ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <div style={{ position: "relative" }}>
+                            <select
+                              value={reportsMonthOffset}
+                              onChange={(e) => setReportsMonthOffset(Number(e.target.value))}
+                              style={{ ...S.select, width: 170, paddingRight: 28, fontWeight: 600 }}
+                            >
+                              {Array.from({ length: 25 }, (_, i) => -i).map((offset) => (
+                                <option key={offset} value={offset}>
+                                  {formatMonthLabel(getMonthRange(offset).start)}
+                                </option>
+                              ))}
+                            </select>
+                            <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+                          </div>
+                          {reportsNavIsCurrent && <span style={S.weekNavThisWeek}>Current</span>}
+                        </div>
                       ) : (
                         <button
                           onClick={reportsNavReset}
@@ -4806,8 +4825,11 @@ export default function TeamCRM() {
                   )
                 )}
               </div>
-            </div>
+              </div>
+            )}
 
+            {reportsSubTab === "snapshot" && (
+              <>
             <div style={S.reportsExportRow}>
               <div style={{ ...S.hint, flex: 1 }}>
                 This snapshot covers {reportsFilterMode === "all" ? "all time" : reportsRangeLabel}. Export downloads a CSV
