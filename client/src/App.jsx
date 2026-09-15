@@ -8185,7 +8185,7 @@ const S = {
   leadCardActions: { display: "flex", alignItems: "center", gap: 6, flexShrink: 0 },
   refundedBadge: { fontSize: 10.5, fontWeight: 700, color: "#A32D2D" },
   leadInfoGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 8, marginBottom: 10 },
-  leadInfoItem: { display: "flex", flexDirection: "column", gap: 1 },
+  leadInfoItem: { display: "flex", flexDirection: "column", gap: 1, minWidth: 0, overflowWrap: "break-word", wordBreak: "break-word" },
   leadInfoLabel: { fontSize: 9.5, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.02em" },
   leadEmployeeRow: { display: "flex", gap: 16, flexWrap: "wrap", paddingTop: 10, borderTop: `1px solid ${T.border}` },
   leadEmployeeItem: { display: "flex", alignItems: "center", gap: 6, fontSize: 12 },
