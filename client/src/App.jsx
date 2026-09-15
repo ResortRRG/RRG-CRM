@@ -95,13 +95,11 @@ function categoryColor(name) {
   return CATEGORY_COLOR_MAP[name] || { bg: "#E6E2D6", color: "#767468" };
 }
 
-// Distinct palette for the Dashboard category chart, separate from the
-// badge colors used on All Leads/Reports.
 const DASHBOARD_CHART_COLORS = {
-  Monster: "#1E9E62", // shamrock green
-  PGR: "#007FFF", // azure blue
-  Declined: "#E07B1A", // orange
-  Chargeback: "#E5231B", // red
+  Monster: "#1E9E62",
+  PGR: "#007FFF",
+  Declined: "#E07B1A",
+  Chargeback: "#E5231B",
 };
 function chartColor(name) {
   return DASHBOARD_CHART_COLORS[name] || "#767468";
@@ -118,10 +116,6 @@ const DEFAULT_SETTINGS = {
   pgrCommissionRate: 75,
 };
 
-// Which sidebar sections each account role can see and use.
-// Only roles listed here are RESTRICTED — any role not listed (including
-// unknown/future roles) defaults to full access, so this can never
-// accidentally lock an admin or existing user out of everything.
 const ROLE_PERMISSIONS = {
   rep: ["sales"],
   manager: ["dashboard", "sales", "employees"],
@@ -130,7 +124,6 @@ function getAllowedSections(role) {
   if (ROLE_PERMISSIONS[role]) return ROLE_PERMISSIONS[role];
   return NAV_ITEMS.map((n) => n.id);
 }
-// Roles that see the restricted "just submit a sale" screen instead of the full Sales table.
 function isSalesEntryRole(role) {
   return role === "rep" || role === "manager";
 }
@@ -159,8 +152,6 @@ const REFUND_TARGET_OPTIONS = [
 
 const WEEKDAY_LABELS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-// Nominatim's address suggestions return full state names ("Florida"); the
-// form uses two-letter abbreviations, so this converts between the two.
 const US_STATE_ABBREVIATIONS = {
   Alabama: "AL", Alaska: "AK", Arizona: "AZ", Arkansas: "AR", California: "CA",
   Colorado: "CO", Connecticut: "CT", Delaware: "DE", Florida: "FL", Georgia: "GA",
@@ -270,7 +261,7 @@ function formatTimestamp(iso) {
 
 function getWeekRange(offset) {
   const now = new Date();
-  const day = now.getDay(); // 0 = Sun ... 6 = Sat
+  const day = now.getDay();
   const diffToMonday = (day + 6) % 7;
   const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diffToMonday + offset * 7);
   monday.setHours(0, 0, 0, 0);
@@ -334,8 +325,6 @@ function todayDateStr() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-// Like getDayRange, but takes an actual "YYYY-MM-DD" calendar date instead of
-// an offset from today — lets someone jump straight to any specific day.
 function getDayRangeFromDate(dateStr) {
   const [y, m, d] = dateStr.split("-").map(Number);
   const start = new Date(y, m - 1, d, 0, 0, 0, 0);
@@ -365,34 +354,22 @@ function dateInRange(dateStr, start, end) {
 }
 
 function getWeekdayIndex(dateObj) {
-  const day = dateObj.getDay(); // 0 Sun ... 6 Sat
-  const idx = (day + 6) % 7; // 0 Mon ... 6 Sun
+  const day = dateObj.getDay();
+  const idx = (day + 6) % 7;
   return idx <= 5 ? idx : null;
 }
 
-// Package price splits 50/50 between opener and closer; date flex price goes entirely to verification.
-// Cristina Rossi and Nicholas Pelloni keep the "Base pay" label on their
-// profile (their pay structure is a genuine standing base) — everyone else
-// sees "Draw" instead, since for them it's really an advance against
-// commission that the $400 guarantee tops up if commission alone falls short.
 const BASE_PAY_LABEL_EXCEPTIONS = ["cristina rossi", "nicholas pelloni"];
 function basePayLabel(name) {
   const normalized = (name || "").trim().toLowerCase();
   return BASE_PAY_LABEL_EXCEPTIONS.includes(normalized) ? "Base pay" : "Draw";
 }
 
-// For everyone on a Draw, pay is whichever is higher — commission OR the
-// draw — never both added together, since a draw is an advance against
-// commission, not extra pay on top. Cristina Rossi and Nicholas Pelloni
-// have a genuine standing Base Pay instead, which does add on top.
 function combinedEarnings(commission, basePay, employeeName) {
   if (basePayLabel(employeeName) === "Base pay") return commission + basePay;
   return Math.max(commission, basePay);
 }
 
-// Capitalizes the first letter of each word in a name, e.g. "john doe" or
-// "JOHN DOE" both become "John Doe" — applied on blur so it doesn't fight
-// with someone still typing.
 function toTitleCase(str) {
   return (str || "")
     .toLowerCase()
@@ -419,10 +396,6 @@ function roleCreditAmount(sale, type) {
   return 0;
 }
 
-// Builds the chip/list entries for a given employee on a given sale. When the
-// same person is both Opener and Closer, that's shown as a single combined
-// "openclose" entry (their full package-price credit, one color, one line)
-// instead of two separate front/close entries with the customer's name twice.
 function buildRoleEntries(sale, employeeId) {
   const entries = [];
   const isOpener = sale.openerId === employeeId;
@@ -461,7 +434,6 @@ function employeeIdForRole(sale, roleId) {
   return null;
 }
 
-// Dollar amount that should be deducted from a given role's credit due to a refund.
 function refundImpactForRole(sale, roleId) {
   if (!sale.refunded) return 0;
   if (sale.refundType === "partial") {
@@ -470,8 +442,6 @@ function refundImpactForRole(sale, roleId) {
   return roleCreditAmount(sale, roleId);
 }
 
-// Whether a specific role's credit on a sale is affected by a refund.
-// Full refunds affect every role; partial refunds only affect roles with a deduction amount entered.
 function isEntryRefunded(sale, roleId) {
   if (!sale.refunded) return false;
   if (sale.refundType === "partial") {
@@ -604,14 +574,14 @@ export default function TeamCRM() {
   const [employees, setEmployees] = useState([]);
   const [payrollOverrides, setPayrollOverrides] = useState({});
   const [refundDeductionOverrides, setRefundDeductionOverrides] = useState({});
-  const [workedSaturdays, setWorkedSaturdays] = useState({}); // { "employeeId__weekStartDate": true }
+  const [workedSaturdays, setWorkedSaturdays] = useState({});
   const [attendance, setAttendance] = useState({});
   const [spiffs, setSpiffs] = useState({});
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [loaded, setLoaded] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
-  const [activeCampaign, setActiveCampaign] = useState(null); // null | 'rrg' | 'dfs'
+  const [activeCampaign, setActiveCampaign] = useState(null);
   const [needsSetup, setNeedsSetup] = useState(false);
   const [users, setUsers] = useState([]);
   const [gateNameInput, setGateNameInput] = useState("");
@@ -620,16 +590,10 @@ export default function TeamCRM() {
   const [showGatePassword, setShowGatePassword] = useState(false);
   const [gateError, setGateError] = useState("");
   const [search, setSearch] = useState("");
-  const [contactModal, setContactModal] = useState(null); // null | 'new' | contact object
+  const [contactModal, setContactModal] = useState(null);
   const [saleModal, setSaleModal] = useState(null);
   const [saleModalMinimized, setSaleModalMinimized] = useState(false);
   const [saleSyncingToEpg, setSaleSyncingToEpg] = useState(false);
-  // Wide tables (Sales, RRG Board, Payroll, Reports, Employees, All Leads) all
-  // use the .crm-scroll container. Their horizontal scrollbar sits at the very
-  // bottom of the table, which for tall tables means scrolling the page down
-  // before it's even reachable. This lets a normal mouse-wheel scroll sideways
-  // whenever the cursor is anywhere over one of these tables, so people never
-  // need to hunt for the scrollbar itself.
   useEffect(() => {
     function handleWheel(e) {
       const scrollEl = e.target.closest && e.target.closest(".crm-scroll");
@@ -648,13 +612,13 @@ export default function TeamCRM() {
   }, [saleModal]);
   const [entryJustSaved, setEntryJustSaved] = useState(false);
   const [employeeModal, setEmployeeModal] = useState(null);
-  const [confirmDelete, setConfirmDelete] = useState(null); // {type, id, label}
+  const [confirmDelete, setConfirmDelete] = useState(null);
   const [viewer, setViewer] = useState({ name: "", role: "rep" });
   const [viewerOpen, setViewerOpen] = useState(false);
   const [myItemsOnly, setMyItemsOnly] = useState(false);
   const [weekOffset, setWeekOffset] = useState(0);
-  const [dashboardFilterMode, setDashboardFilterMode] = useState("week"); // 'day' | 'week' | 'month' | 'year' | 'custom' | 'all'
-  const [dashboardSalesListMode, setDashboardSalesListMode] = useState("approved"); // 'approved' | 'pending'
+  const [dashboardFilterMode, setDashboardFilterMode] = useState("week");
+  const [dashboardSalesListMode, setDashboardSalesListMode] = useState("approved");
   const [dashboardSelectedDate, setDashboardSelectedDate] = useState(todayDateStr());
   const [dashboardCustomStart, setDashboardCustomStart] = useState(shiftDateStr(todayDateStr(), -7));
   const [dashboardCustomEnd, setDashboardCustomEnd] = useState(todayDateStr());
@@ -662,30 +626,30 @@ export default function TeamCRM() {
   const [dashboardYearOffset, setDashboardYearOffset] = useState(0);
   const [rrgWeekOffset, setRrgWeekOffset] = useState(0);
   const [payrollWeekOffset, setPayrollWeekOffset] = useState(0);
-  const [reportsSubTab, setReportsSubTab] = useState("snapshot"); // 'snapshot' | 'pnl'
-  const [pnlMode, setPnlMode] = useState("month"); // 'month' | 'week'
+  const [reportsSubTab, setReportsSubTab] = useState("snapshot");
+  const [pnlMode, setPnlMode] = useState("month");
   const [pnlMonthOffset, setPnlMonthOffset] = useState(0);
   const [pnlWeekOffset, setPnlWeekOffset] = useState(0);
   const [pnlCustomStart, setPnlCustomStart] = useState(shiftDateStr(todayDateStr(), -7));
   const [pnlCustomEnd, setPnlCustomEnd] = useState(todayDateStr());
-  const [expenses, setExpenses] = useState({}); // { "YYYY-MM": { CategoryName: amount } } — legacy single-number entry
-  const [expenseTransactions, setExpenseTransactions] = useState([]); // [{ id, date, category, amount, notes }] — itemized entries
-  const [infoNotes, setInfoNotes] = useState([]); // [{ id, date, title, body }] — free-form notes
-  const [dncList, setDncList] = useState([]); // [{ id, name, phone, email, notes, addedAt }]
-  const [dncModal, setDncModal] = useState(null); // null | entry object
+  const [expenses, setExpenses] = useState({});
+  const [expenseTransactions, setExpenseTransactions] = useState([]);
+  const [infoNotes, setInfoNotes] = useState([]);
+  const [dncList, setDncList] = useState([]);
+  const [dncModal, setDncModal] = useState(null);
   const [dncBulkOpen, setDncBulkOpen] = useState(false);
   const [dncBulkText, setDncBulkText] = useState("");
-  const [infoNoteModal, setInfoNoteModal] = useState(null); // null | note object
-  const [informationSubTab, setInformationSubTab] = useState("notes"); // 'notes' | 'scripts'
+  const [infoNoteModal, setInfoNoteModal] = useState(null);
+  const [informationSubTab, setInformationSubTab] = useState("notes");
   const [scriptFiles, setScriptFiles] = useState([]);
   const [scriptFilesLoading, setScriptFilesLoading] = useState(false);
   const [scriptUploadBusy, setScriptUploadBusy] = useState(false);
   const [scriptFilesError, setScriptFilesError] = useState("");
   const [infoNoteError, setInfoNoteError] = useState("");
-  const [expenseModal, setExpenseModal] = useState(null); // null | transaction object (always has an id, even before first save)
+  const [expenseModal, setExpenseModal] = useState(null);
   const [expenseModalError, setExpenseModalError] = useState("");
-  const [confirmClearMonthExpenses, setConfirmClearMonthExpenses] = useState(null); // month key pending confirmation, or null
-  const [reportsFilterMode, setReportsFilterMode] = useState("month"); // 'day' | 'week' | 'month' | 'year' | 'custom' | 'all'
+  const [confirmClearMonthExpenses, setConfirmClearMonthExpenses] = useState(null);
+  const [reportsFilterMode, setReportsFilterMode] = useState("month");
   const [reportsSelectedDate, setReportsSelectedDate] = useState(todayDateStr());
   const [reportsCustomStart, setReportsCustomStart] = useState(shiftDateStr(todayDateStr(), -7));
   const [reportsCustomEnd, setReportsCustomEnd] = useState(todayDateStr());
@@ -694,16 +658,16 @@ export default function TeamCRM() {
   const [reportsYearOffset, setReportsYearOffset] = useState(0);
   const [employeeDetailId, setEmployeeDetailId] = useState(null);
   const [employeeDetailMinimized, setEmployeeDetailMinimized] = useState(false);
-  const [payslipStatus, setPayslipStatus] = useState(null); // null | 'sending' | 'sent' | { error }
-  const [backupStatus, setBackupStatus] = useState(null); // null | 'restored' | { error }
-  const [confirmRestoreBackup, setConfirmRestoreBackup] = useState(null); // parsed backup object pending confirmation, or null
-  const [confirmImportLeads, setConfirmImportLeads] = useState(null); // parsed import object pending confirmation, or null
+  const [payslipStatus, setPayslipStatus] = useState(null);
+  const [backupStatus, setBackupStatus] = useState(null);
+  const [confirmRestoreBackup, setConfirmRestoreBackup] = useState(null);
+  const [confirmImportLeads, setConfirmImportLeads] = useState(null);
   const [mergeBuilderOpen, setMergeBuilderOpen] = useState(false);
-  const [mergeBuilderPairs, setMergeBuilderPairs] = useState([]); // [{ fromId, toId, fromName, toName }]
+  const [mergeBuilderPairs, setMergeBuilderPairs] = useState([]);
   const [mergeBuilderFromId, setMergeBuilderFromId] = useState("");
   const [mergeBuilderToId, setMergeBuilderToId] = useState("");
-  const [mergeStatus, setMergeStatus] = useState(null); // null | 'merging' | 'success' | { error }
-  const [confirmDeactivateEmployee, setConfirmDeactivateEmployee] = useState(null); // { id, name, date } | null
+  const [mergeStatus, setMergeStatus] = useState(null);
+  const [confirmDeactivateEmployee, setConfirmDeactivateEmployee] = useState(null);
   useEffect(() => {
     if (employeeDetailId) {
       setEmployeeDetailMinimized(false);
@@ -711,19 +675,19 @@ export default function TeamCRM() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employeeDetailId]);
-  const [employeesView, setEmployeesView] = useState("active"); // 'active' | 'exemployees' | 'hiring'
+  const [employeesView, setEmployeesView] = useState("active");
   const [candidates, setCandidates] = useState([]);
-  const [candidateModal, setCandidateModal] = useState(null); // null | candidate object
-  const [employeeStatsMode, setEmployeeStatsMode] = useState("all"); // 'all' | 'year' | 'month'
+  const [candidateModal, setCandidateModal] = useState(null);
+  const [employeeStatsMode, setEmployeeStatsMode] = useState("all");
   const [employeeStatsMonthOffset, setEmployeeStatsMonthOffset] = useState(0);
   const [employeeStatsYearOffset, setEmployeeStatsYearOffset] = useState(0);
   const [employeeDetailWeekOffset, setEmployeeDetailWeekOffset] = useState(0);
   const [leadsSearch, setLeadsSearch] = useState("");
-  const [leadsSubTab, setLeadsSubTab] = useState("leads"); // 'leads' | 'dnc'
+  const [leadsSubTab, setLeadsSubTab] = useState("leads");
   const [showDuplicateCustomers, setShowDuplicateCustomers] = useState(false);
-  const [leadsFilterMode, setLeadsFilterMode] = useState("all"); // 'day' | 'week' | 'month' | 'year' | 'all'
+  const [leadsFilterMode, setLeadsFilterMode] = useState("all");
   const [leadsSelectedDate, setLeadsSelectedDate] = useState(todayDateStr());
-  const [leadsCategoryFilter, setLeadsCategoryFilter] = useState(""); // '' | 'Monster' | 'PGR' | 'Chargeback' | 'Declined'
+  const [leadsCategoryFilter, setLeadsCategoryFilter] = useState("");
   const [adminNewSource, setAdminNewSource] = useState("");
   const [adminNewLeadSource, setAdminNewLeadSource] = useState("");
   const [adminNewCategory, setAdminNewCategory] = useState("");
@@ -734,7 +698,7 @@ export default function TeamCRM() {
   const [leadsWeekOffset, setLeadsWeekOffset] = useState(0);
   const [leadsMonthOffset, setLeadsMonthOffset] = useState(0);
   const [leadsYearOffset, setLeadsYearOffset] = useState(0);
-  const [confirmRefund, setConfirmRefund] = useState(null); // full sale object being refunded, or null
+  const [confirmRefund, setConfirmRefund] = useState(null);
   const [refundType, setRefundType] = useState("full");
   const [refundWeekChoices, setRefundWeekChoices] = useState({ front: "next", close: "next", verification: "next" });
   const [refundAmounts, setRefundAmounts] = useState({ front: "", close: "", verification: "" });
@@ -748,7 +712,6 @@ export default function TeamCRM() {
     }
   }, [confirmRefund]);
 
-  // ---- load ----
   async function loadAppData() {
     try {
       const c = await window.storage.get("crm:contacts", true);
@@ -863,10 +826,6 @@ export default function TeamCRM() {
     loadAppData();
   }, []);
 
-  // Every window.storage call above requires an authenticated session. On a
-  // brand-new login (no session cookie yet when the page first mounted),
-  // that first load attempt fails silently and leaves everything empty —
-  // so re-run it as soon as we know who's actually signed in.
   useEffect(() => {
     if (currentUser) {
       loadAppData();
@@ -874,10 +833,6 @@ export default function TeamCRM() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser && currentUser.id]);
 
-  // Multiple people use this CRM at once, but the data only loads once on
-  // page load — without this, you'd never see a teammate's changes unless
-  // you knew to manually refresh. So: re-check for updates whenever this
-  // tab regains focus, and every couple minutes while it's just sitting open.
   useEffect(() => {
     if (!currentUser) return;
     function handleFocus() {
@@ -888,7 +843,7 @@ export default function TeamCRM() {
     }
     window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibility);
-    const interval = setInterval(loadAppData, 120000); // every 2 minutes
+    const interval = setInterval(loadAppData, 120000);
     return () => {
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibility);
@@ -897,7 +852,6 @@ export default function TeamCRM() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser && currentUser.id]);
 
-  // ---- real auth (separate from the app-data load above) ----
   useEffect(() => {
     (async () => {
       try {
@@ -917,10 +871,6 @@ export default function TeamCRM() {
     })();
   }, []);
 
-  // If a role's allowed sections don't include the current tab (e.g. right
-  // after logging in as a restricted account), send them to a tab they can
-  // actually see. Only runs when the signed-in user changes, so it never
-  // fights normal navigation.
   useEffect(() => {
     if (!currentUser) return;
     const allowed = getAllowedSections(currentUser.role);
@@ -1189,16 +1139,9 @@ export default function TeamCRM() {
     }
   }
   function effectiveMinGuarantee(employeeId, weekStart) {
-    // Commission-only employees (no Base Pay/Draw amount set) don't get any
-    // weekly guarantee at all — they're paid purely on what they earn.
     const emp = employees.find((e) => e.id === employeeId);
     const hasBasePay = emp && emp.basePay !== "" && emp.basePay !== undefined && emp.basePay !== null;
     if (!hasBasePay) return 0;
-    // Employees who started partway through the week only get a prorated
-    // base guarantee — $80 for each regular weekday (Mon-Fri) on or after
-    // their start date. Saturday's $40 half-day only counts if they're
-    // actually marked as having worked that Saturday — otherwise a new
-    // hire's first week would assume a Saturday shift they never worked.
     let baseGuarantee = settings.minWeeklyPay;
     if (emp && emp.startDate) {
       const startDate = new Date(emp.startDate + "T00:00:00");
@@ -1219,22 +1162,15 @@ export default function TeamCRM() {
       }
     }
     const absences = absentDaysInWeek(employeeId, weekStart);
-    if (absences >= 6) return 0; // absent every scheduled day — no partial guarantee
-    // Working Saturday to make up a missed day during the week cancels out
-    // that one day's deduction, capped so it can only offset one absence.
+    if (absences >= 6) return 0;
     const effectiveAbsences = getWorkedSaturday(employeeId, weekStart) ? Math.max(0, absences - 1) : absences;
     let guarantee = Math.max(0, baseGuarantee - effectiveAbsences * ABSENCE_GUARANTEE_DEDUCTION);
-    // 3+ unexcused lates in a week costs a half day's guarantee.
     if (unexcusedLateDaysInWeek(employeeId, weekStart) >= 3) {
       guarantee = Math.max(0, guarantee - UNEXCUSED_LATE_HALF_DAY_DEDUCTION);
     }
     return guarantee;
   }
 
-  // An employee's actual weekly Draw/Base Pay amount also needs to be
-  // prorated for a mid-week start — otherwise someone who started Thursday
-  // still gets their full weekly basePay added on top of commission, on
-  // top of the (already correctly prorated) guarantee floor.
   function effectiveBasePay(employeeId, weekStart, rawBasePay) {
     const amount = Number(rawBasePay) || 0;
     if (amount <= 0) return 0;
@@ -1260,9 +1196,6 @@ export default function TeamCRM() {
         proratedAmount = Math.min(prorated, amount);
       }
     }
-    // Cristina Rossi and Nicholas Pelloni have a genuine standing Base Pay
-    // (not a draw compared against commission) — being marked absent
-    // deducts a flat $100 per absent day directly from it.
     if (basePayLabel(emp.name) === "Base pay") {
       const absences = absentDaysInWeek(employeeId, weekStart);
       proratedAmount = Math.max(0, proratedAmount - absences * BASE_PAY_ABSENCE_DEDUCTION);
@@ -1273,9 +1206,6 @@ export default function TeamCRM() {
   function spiffKey(employeeId, date) {
     return employeeId + "__" + date.toISOString().slice(0, 10);
   }
-  // Spiffs used to be stored as a plain number per employee/day. Now they can
-  // also carry a "paid" flag (paid same-day in cash, so it shouldn't also
-  // land on their check) — getSpiffEntry reads either shape transparently.
   function getSpiffEntry(employeeId, date) {
     const key = spiffKey(employeeId, date);
     const raw = spiffs[key];
@@ -1303,7 +1233,7 @@ export default function TeamCRM() {
   function setSpiffPaid(employeeId, date, paid) {
     const key = spiffKey(employeeId, date);
     const existing = getSpiffEntry(employeeId, date);
-    if (existing.amount === "" || Number(existing.amount) === 0) return; // nothing to mark paid without an amount
+    if (existing.amount === "" || Number(existing.amount) === 0) return;
     updateSpiffs({ ...spiffs, [key]: { amount: Number(existing.amount) || 0, paid } });
   }
   function spiffTotalInWeek(employeeId, weekStart) {
@@ -1316,9 +1246,6 @@ export default function TeamCRM() {
     }
     return total;
   }
-  // Splits a week's spiffs into paid (already handed over, won't hit the
-  // check) vs unpaid (still owed, will be added to the check) — used so
-  // Payroll can show both, color-coded, instead of just one combined number.
   function spiffPaidAndUnpaidInWeek(employeeId, weekStart) {
     let paid = 0;
     let unpaid = 0;
@@ -1333,8 +1260,6 @@ export default function TeamCRM() {
     return { paid, unpaid };
   }
 
-  // Same formula as Payroll's "Total owed this week" footer, but callable for
-  // any arbitrary week — used to auto-total payroll cost into Profit & Loss.
   function computeWeeklyPayrollTotal(weekStart, weekEnd) {
     return employeesForWeek(weekStart).reduce((sum, emp) => {
       const override = getPayrollOverride(emp.id, weekStart);
@@ -1353,9 +1278,6 @@ export default function TeamCRM() {
       return sum + guaranteedBase + spiffTotal;
     }, 0);
   }
-  // Sums payroll across every Mon–Sat week whose Monday falls within the
-  // given date range — used for the P&L's monthly payroll total, so each
-  // week is only counted once even if it straddles two calendar months.
   function payrollTotalForRange(rangeStart, rangeEnd) {
     let total = 0;
     let cursor = new Date(rangeStart);
@@ -1375,7 +1297,6 @@ export default function TeamCRM() {
     return total;
   }
 
-  // ---- derived ----
   const q = search.trim().toLowerCase();
   const vName = viewer.name.trim().toLowerCase();
   const filteredContacts = contacts.filter((c) => {
@@ -1416,9 +1337,6 @@ export default function TeamCRM() {
     dashboardRangeLabel = formatWeekLabel(start, end);
   }
   const dashboardSales = dashboardRange ? sales.filter((s) => isSaleInRange(s, dashboardRange.start, dashboardRange.end)) : sales;
-  // Sales don't count toward source totals or dashboard visibility until they're
-  // marked Approved — a pending or declined sale shows as $0 here regardless of
-  // which source it's tagged with, until someone approves it.
   const dashboardApprovedSales = dashboardSales.filter((s) => s.status === "Approved");
   const totalSalesValue = dashboardApprovedSales.reduce((s, r) => s + (Number(r.totalPrice) || 0), 0);
   function dashboardNavPrev() {
@@ -1455,9 +1373,6 @@ export default function TeamCRM() {
   });
   const declinedSales = dashboardSales.filter((s) => s.status === "Declined");
   const pendingSales = dashboardSales.filter((s) => s.status === "Pending");
-  // Uses the refund's own date (not the original sale's date) so this always
-  // matches Reports' "Refunds" figure — a refund belongs to whichever period
-  // it actually happened in, same as any other transaction.
   const chargebackSales = dashboardRange
     ? sales.filter((s) => s.refunded && dateInRange(s.refundedAt, dashboardRange.start, dashboardRange.end))
     : sales.filter((s) => s.refunded);
@@ -1492,11 +1407,6 @@ export default function TeamCRM() {
   }
 
   const activeEmployees = employees.filter((e) => e.active !== false);
-  // For week-specific views (RRG Board, Payroll) — an employee should show
-  // up for a given week if they'd already started by then, AND either
-  // they're still active or weren't let go until after that week. This lets
-  // a former employee's history stay intact on old weeks while keeping them
-  // off brand-new weeks, and keeps a brand-new hire off weeks before they started.
   function employeesForWeek(weekStart) {
     return employees.filter((e) => {
       if (e.startDate) {
@@ -1510,7 +1420,7 @@ export default function TeamCRM() {
         const deactivated = new Date(e.deactivatedDate + "T00:00:00");
         return weekStart < deactivated;
       }
-      return false; // deactivated with no recorded date — legacy data, hide as before
+      return false;
     });
   }
   const exEmployees = employees.filter((e) => e.active === false);
@@ -1596,14 +1506,8 @@ export default function TeamCRM() {
   const reportsRefundedSales = reportsRange
     ? sales.filter((s) => s.refunded && dateInRange(s.refundedAt, reportsRange.start, reportsRange.end))
     : sales.filter((s) => s.refunded);
-  // Same rule as Dashboard/RRG Board/Payroll: a sale doesn't count toward any
-  // of these totals until it's marked Approved.
   const reportsApprovedSales = reportsSales.filter((s) => s.status === "Approved");
 
-  // Groups approved sales by the hour they came in (using the timestamp
-  // already stored, which is local business time), covering the 12pm-8pm
-  // window most reps work in. Each bucket tracks both count and dollar
-  // value, so slow-but-high-value hours are still visible.
   const reportsHourlyBuckets = [12, 13, 14, 15, 16, 17, 18, 19].map((hour) => ({ hour, count: 0, value: 0 }));
   reportsApprovedSales.forEach((s) => {
     if (!s.timestamp) return;
@@ -1631,8 +1535,6 @@ export default function TeamCRM() {
     const rows = reportsApprovedSales.filter((s) => s.leadSubmittedTo === src);
     return { source: src, count: rows.length, total: rows.reduce((sum, r) => sum + (Number(r.totalPrice) || 0), 0) };
   });
-  // Dialer vs Paper — a different axis than Monster/PGR (which lead vendor a
-  // sale went to). This is about how the sale itself was worked.
   const reportsChannelBreakdown = settings.sources.map((src) => {
     const rows = reportsApprovedSales.filter((s) => s.source === src);
     return { source: src, count: rows.length, total: rows.reduce((sum, r) => sum + (Number(r.totalPrice) || 0), 0) };
@@ -1643,7 +1545,6 @@ export default function TeamCRM() {
   const reportsMonsterCommission = reportsMonsterTotal * ((Number(settings.monsterCommissionRate) || 0) / 100);
   const reportsPgrCommission = reportsPgrTotal * ((Number(settings.pgrCommissionRate) || 0) / 100);
 
-  // ---- Profit & Loss ----
   const pnlMonth = getMonthRange(pnlMonthOffset);
   const pnlWeek = getWeekRange(pnlWeekOffset);
   const pnlPeriodStart =
@@ -1653,7 +1554,7 @@ export default function TeamCRM() {
       ? pnlMonth.start
       : pnlMode === "custom"
       ? new Date(pnlCustomStart + "T00:00:00")
-      : new Date(2000, 0, 1); // "all"
+      : new Date(2000, 0, 1);
   const pnlPeriodEnd =
     pnlMode === "week"
       ? pnlWeek.end
@@ -1661,7 +1562,7 @@ export default function TeamCRM() {
       ? pnlMonth.end
       : pnlMode === "custom"
       ? new Date(pnlCustomEnd + "T23:59:59")
-      : new Date(2100, 0, 1); // "all"
+      : new Date(2100, 0, 1);
   const pnlPeriodLabel =
     pnlMode === "week"
       ? formatWeekLabel(pnlWeek.start, pnlWeek.end)
@@ -1671,9 +1572,6 @@ export default function TeamCRM() {
       ? formatWeekLabel(pnlPeriodStart, pnlPeriodEnd)
       : "All time";
   const pnlIsMultiMonth = pnlMode === "all" || pnlMode === "custom";
-  // Expenses are always entered per calendar month (the source of truth).
-  // In weekly view, that same monthly figure is prorated down to a per-week
-  // share instead of asking anyone to re-enter numbers weekly.
   const pnlExpenseSourceMonthDate = pnlMode === "week" ? pnlWeek.start : pnlMonth.start;
   const pnlExpenseSourceMonthKey = `${pnlExpenseSourceMonthDate.getFullYear()}-${String(pnlExpenseSourceMonthDate.getMonth() + 1).padStart(2, "0")}`;
   const pnlExpenseSourceMonthLabel = formatMonthLabel(pnlExpenseSourceMonthDate);
@@ -1694,14 +1592,9 @@ export default function TeamCRM() {
     pnlPeriodSales
       .filter((s) => s.leadSubmittedTo === "PGR")
       .reduce((sum, s) => sum + (Number(s.totalPrice) || 0), 0) * ((Number(settings.pgrCommissionRate) || 0) / 100);
-  // Sales not tagged Monster or PGR (e.g. Dialer/Paper self-sourced leads)
-  // don't have a vendor commission split, so they count at full value.
   const pnlOtherRevenue = pnlPeriodSales
     .filter((s) => s.leadSubmittedTo !== "Monster" && s.leadSubmittedTo !== "PGR")
     .reduce((sum, s) => sum + (Number(s.totalPrice) || 0), 0);
-  // Refunds count toward whichever period the refund itself happened in
-  // (not the original sale date) — same rule as Dashboard and Reports, so
-  // all three always agree with each other.
   const pnlRefundedSales = sales.filter(
     (s) => s.refunded && isSaleInRange({ timestamp: s.refundedAt }, pnlPeriodStart, pnlPeriodEnd)
   );
@@ -1725,9 +1618,6 @@ export default function TeamCRM() {
       return { category: cat, amount: pnlAutoPayrollTotal, auto: true, transactions: [] };
     }
     if (pnlIsMultiMonth) {
-      // Custom range / All time can span many months — sum every logged
-      // transaction whose own date falls in the window directly, plus any
-      // legacy manually-typed month totals whose month overlaps the window.
       const catTransactions = expenseTransactions
         .filter((t) => t.category === cat && t.date && isSaleInRange({ timestamp: t.date }, pnlPeriodStart, pnlPeriodEnd))
         .sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -1742,9 +1632,6 @@ export default function TeamCRM() {
       });
       return { category: cat, amount: transactionTotal + legacyTotal, auto: false, transactions: catTransactions };
     }
-    // Individually-logged expenses (via "New Expense") for this single
-    // month, grouped by category — these add on top of whatever's typed
-    // directly into the amount field, so both ways combine cleanly.
     const catTransactions = expenseTransactions
       .filter((t) => t.category === cat && t.date && t.date.slice(0, 7) === pnlMonthKey)
       .sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -1769,7 +1656,7 @@ export default function TeamCRM() {
   }
   async function saveExpenseTransaction(form) {
     const exists = expenseTransactions.some((t) => t.id === form.id);
-    const { isNew, ...cleanForm } = form; // strip the isNew marker, it's only for the form's own bookkeeping
+    const { isNew, ...cleanForm } = form;
     const next = exists
       ? expenseTransactions.map((t) => (t.id === form.id ? { ...t, ...cleanForm } : t))
       : [...expenseTransactions, cleanForm];
@@ -1897,9 +1784,6 @@ export default function TeamCRM() {
       console.error("Candidate delete failed:", err);
     }
   }
-  // Converts a hired candidate into a real employee record — the admin
-  // still needs to fill in commission rate, base pay, etc. afterward, since
-  // an interview intake doesn't cover those details.
   async function convertCandidateToEmployee(candidate) {
     const newEmployee = {
       id: uid(),
@@ -1949,9 +1833,6 @@ export default function TeamCRM() {
       console.error("DNC delete failed:", err);
     }
   }
-  // Accepts one entry per line, either a bare phone number or
-  // "Name, Phone, Email" (email optional) — flexible for pasting in
-  // whatever format an existing DNC list happens to already be in.
   async function bulkAddDncEntries(text) {
     const lines = text
       .split("\n")
@@ -1962,8 +1843,6 @@ export default function TeamCRM() {
         const parts = line.split(",").map((p) => p.trim());
         if (parts.length === 1) {
           const val = parts[0];
-          // Guess what a bare single value is: an email has "@", a phone is
-          // mostly digits, otherwise treat it as a name.
           if (val.includes("@")) {
             return { id: uid(), name: "", phone: "", email: val, notes: "", addedAt: new Date().toISOString() };
           }
@@ -1993,8 +1872,6 @@ export default function TeamCRM() {
       console.error("DNC bulk add failed:", err);
     }
   }
-  // Normalizes a phone number to just digits, so formatting differences
-  // ("555-123-4567" vs "(555) 123-4567") don't cause false negatives.
   function normalizePhone(p) {
     return (p || "").replace(/\D/g, "");
   }
@@ -2022,9 +1899,6 @@ export default function TeamCRM() {
         return sum + saleCredit(s, emp.id);
       }, 0);
       const commission = credited * (rate / 100) - refundedCredit * (rate / 100);
-      // What the company actually keeps from this employee's sales, using
-      // the same Monster/PGR contract rates P&L uses — not the full sale
-      // price, since that's not what RRG actually collects.
       const companyRevenue = empSales.reduce((sum, s) => {
         const contractRate =
           s.leadSubmittedTo === "Monster"
@@ -2034,16 +1908,6 @@ export default function TeamCRM() {
             : 0;
         return sum + saleCredit(s, emp.id) * contractRate;
       }, 0);
-      // The guarantee floor only makes sense within a bounded period — for
-      // "All time" (no range), just compare against earned commission.
-      // Each week's guarantee is computed individually via
-      // effectiveMinGuarantee, which already correctly accounts for
-      // mid-week start dates, absences, and Saturday make-ups — a flat
-      // "weeks × $400" estimate would overstate pay for anyone who started
-      // partway through the period or missed days. Also stop at today —
-      // weeks that haven't happened yet (e.g. the rest of "This month")
-      // haven't been worked or paid, so they shouldn't count against
-      // someone who just started.
       let estimatedPaid = commission;
       if (reportsRange) {
         const today = new Date();
@@ -2219,15 +2083,10 @@ export default function TeamCRM() {
     return rows.map((r) => ({ ...r, dayTotal: r.entries.reduce((sum, e) => sum + e.amount, 0) }));
   }
 
-  // Which payroll week a specific role's (Opener/Closer/Verification) refund
-  // deduction should land in — each role on the same refund can have its own
-  // choice, since different employees involved may want different timing.
   function refundTargetWeekStart(sale, roleId) {
     if (!sale.refundedAt) return null;
     const choice =
       (sale.refundWeekChoices && sale.refundWeekChoices[roleId]) || sale.refundWeekChoice || "next";
-    // A choice that isn't one of the three fixed options is a specific
-    // "YYYY-MM-DD" date someone picked — use the Mon–Sat week containing it.
     if (choice !== "previous" && choice !== "current" && choice !== "next") {
       const [y, m, d] = choice.split("-").map(Number);
       const picked = new Date(y, m - 1, d);
@@ -2261,9 +2120,6 @@ export default function TeamCRM() {
     }, 0);
   }
 
-  // Same matching as refundedCreditForEmployee, but broken out per sale (with
-  // the customer name) instead of summed into one total — so the Employees
-  // tab can list exactly which leads are behind a pending refund.
   function pendingRefundEntriesForEmployee(employeeId, weekStart) {
     const bySale = {};
     sales.forEach((s) => {
@@ -2327,7 +2183,6 @@ export default function TeamCRM() {
   const employeeDetailGuarantee = employeeDetailRawBasePay < employeeDetailMinGuarantee;
   const employeeDetailAbsences = employeeDetail ? absentDaysInWeek(employeeDetail.id, employeeDetailWeek.start) : 0;
 
-  // ---- actions ----
   async function sendPayslip() {
     if (!employeeDetail || !employeeDetail.email) return;
     setPayslipStatus("sending");
@@ -2453,7 +2308,7 @@ export default function TeamCRM() {
 
   function handleBackupFileSelected(e) {
     const file = e.target.files && e.target.files[0];
-    e.target.value = ""; // allow selecting the same file again later
+    e.target.value = "";
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
@@ -2534,10 +2389,6 @@ export default function TeamCRM() {
     reader.readAsText(file);
   }
 
-  // Adds historical records ON TOP of what's already here — existing sales
-  // and employees are untouched. Any employee referenced by name that
-  // doesn't already exist gets created (inactive, so they don't show up as
-  // current team members, but their sales history stays attributed to them).
   async function importLeadsData(importData) {
     try {
       const idMap = {};
@@ -2586,16 +2437,10 @@ export default function TeamCRM() {
     }
   }
 
-  // Merges historical placeholder employees (e.g. "Cotey", created during a
-  // leads import) into their real, full-name employee record. Every sale
-  // crediting the placeholder gets reassigned to the real employee, and the
-  // placeholder record is removed. Matching is by exact name (case-insensitive)
-  // on both sides — if either isn't found, that specific pair is skipped and
-  // reported, so nothing gets silently mismatched.
   async function mergeEmployees(mergePairs) {
     const notFound = [];
     let nextEmployees = [...employees];
-    const idRedirect = {}; // placeholder employee id -> real employee id
+    const idRedirect = {};
     mergePairs.forEach((pair) => {
       const fromEmp = pair.fromId
         ? nextEmployees.find((e) => e.id === pair.fromId)
@@ -2611,7 +2456,7 @@ export default function TeamCRM() {
         notFound.push(`"${pair.to || pair.toId}" (not found)`);
         return;
       }
-      if (fromEmp.id === toEmp.id) return; // already the same record
+      if (fromEmp.id === toEmp.id) return;
       idRedirect[fromEmp.id] = toEmp.id;
     });
     const placeholderIds = new Set(Object.keys(idRedirect));
@@ -2685,6 +2530,13 @@ export default function TeamCRM() {
       const patch = res.ok
         ? { epgPushStatus: "success", epgPushedAt: new Date().toISOString(), epgPushError: null }
         : { epgPushStatus: "failed", epgPushError: data.error || `EPG rejected the request (status ${res.status}).` };
+      // The updateSales() call just above scheduled a DEBOUNCED write of the
+      // sale as it looked before this EPG patch (see persist(), 250ms
+      // timer). If that stale timer fires after this direct write, it
+      // silently overwrites the epgPushStatus we're setting right now — so
+      // cancel it first. This is the fix for the badge disappearing even
+      // though EPG genuinely received the sale.
+      clearTimeout(saveTimer.current);
       setSales((prev) => {
         const next = prev.map((s) => (s.id === sale.id ? { ...s, ...patch } : s));
         window.storage.set("crm:sales", JSON.stringify(next), true).catch((e) => console.error("EPG status save failed", e));
@@ -2692,6 +2544,7 @@ export default function TeamCRM() {
       });
     } catch (err) {
       console.error("EPG push failed:", err);
+      clearTimeout(saveTimer.current);
       setSales((prev) => {
         const next = prev.map((s) =>
           s.id === sale.id ? { ...s, epgPushStatus: "failed", epgPushError: "Network error reaching EPG" } : s
@@ -2766,8 +2619,6 @@ export default function TeamCRM() {
     updateEmployees(employees.map((e) => (e.id === id ? { ...e, active: true, deactivatedDate: null } : e)));
     setEmployeeModal(null);
   }
-  // Moves an employee up/down relative to its position within a displayed subset
-  // (e.g. only active employees), while keeping the underlying full list intact.
   function moveEmployee(id, direction, list) {
     const displayList = list || employees;
     const idx = displayList.findIndex((e) => e.id === id);
@@ -2783,9 +2634,6 @@ export default function TeamCRM() {
     updateEmployees(next);
   }
 
-  // "Today" on the Dashboard is Admin/Manager-only — if a Rep account somehow
-  // ends up with it selected (e.g. a role change mid-session), fall back to
-  // This week instead of silently showing them a filter they shouldn't have.
   useEffect(() => {
     if (dashboardFilterMode === "day" && !(currentUser && (currentUser.role === "admin" || currentUser.role === "manager"))) {
       setDashboardFilterMode("week");
@@ -2798,10 +2646,6 @@ export default function TeamCRM() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [section, informationSubTab]);
 
-  // Manager only sees the Hiring tab under Employees — if they somehow end
-  // up on Active or Ex Employees (e.g. the default state, or a role change
-  // mid-session), fall back to Hiring instead of silently showing them a
-  // view they shouldn't have.
   useEffect(() => {
     if (currentUser && currentUser.role === "manager" && employeesView !== "hiring") {
       setEmployeesView("hiring");
@@ -2809,9 +2653,6 @@ export default function TeamCRM() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employeesView, currentUser && currentUser.role]);
 
-  // Accounts scoped to a single campaign skip the picker entirely and go
-  // straight to their campaign. Accounts with 'both' (or no value, for
-  // safety) still see the picker so they can choose.
   useEffect(() => {
     if (currentUser && !activeCampaign) {
       if (currentUser.campaign === "dfs") setActiveCampaign("dfs");
@@ -2943,9 +2784,6 @@ export default function TeamCRM() {
     );
   }
 
-  // Admins choose which campaign to work in — RRG (travel) or DFS (business
-  // debt settlement). Non-admin accounts go straight to whichever campaign
-  // they're assigned to (defaulting to RRG if somehow unset).
   if (!activeCampaign) {
     if (currentUser.role !== "admin") {
       setActiveCampaign(currentUser.campaign === "dfs" ? "dfs" : "rrg");
@@ -3019,7 +2857,6 @@ export default function TeamCRM() {
         }
       `}</style>
 
-      {/* Sidebar */}
       <div style={S.sidebar}>
         <div>
           <div style={S.brand}>{settings.companyName}</div>
@@ -3061,7 +2898,6 @@ export default function TeamCRM() {
         </button>
       </div>
 
-      {/* Main */}
       <div style={S.main}>
         <div style={S.topbar}>
           <div>
@@ -3580,9 +3416,6 @@ export default function TeamCRM() {
                 })
                 .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
 
-              // Group ALL sales (not just the filtered/visible ones) by
-              // customer name to find repeat customers — someone who bought
-              // more than once shouldn't look like an unrelated duplicate.
               const nameGroups = {};
               sales.forEach((s) => {
                 const key = (s.name || "").trim().toLowerCase();
@@ -5151,7 +4984,7 @@ export default function TeamCRM() {
                         ? todayDateStr()
                         : new Date(pnlExpenseSourceMonthDate.getFullYear(), pnlExpenseSourceMonthDate.getMonth() + 1, 0)
                             .toISOString()
-                            .slice(0, 10); // last day of the month currently being viewed
+                            .slice(0, 10);
                       setExpenseModal({
                         id: uid(),
                         date: defaultDate,
@@ -5432,7 +5265,6 @@ export default function TeamCRM() {
           </div>
         )}
 
-        {/* Add/edit information note */}
         {infoNoteModal && (
           <Modal onClose={() => setInfoNoteModal(null)}>
             <NoteForm
@@ -5452,7 +5284,6 @@ export default function TeamCRM() {
           </Modal>
         )}
 
-        {/* Add/edit DNC entry */}
         {dncModal && (
           <Modal onClose={() => setDncModal(null)}>
             <DncEntryForm
@@ -5471,7 +5302,6 @@ export default function TeamCRM() {
           </Modal>
         )}
 
-        {/* Bulk add DNC entries */}
         {dncBulkOpen && (
           <Modal onClose={() => setDncBulkOpen(false)} narrow>
             <div style={S.modalTitle}>Bulk add DNC entries</div>
@@ -5501,7 +5331,6 @@ export default function TeamCRM() {
           </Modal>
         )}
 
-        {/* Merge duplicate employees */}
         {mergeBuilderOpen && (
           <Modal onClose={() => setMergeBuilderOpen(false)}>
             <div style={S.modalTitle}>Merge duplicate employees</div>
@@ -5890,7 +5719,6 @@ export default function TeamCRM() {
         )}
       </div>
 
-      {/* Confirm restore backup */}
       {confirmRestoreBackup && (
         <Modal onClose={() => setConfirmRestoreBackup(null)} narrow>
           <div style={{ fontFamily: T.display, fontSize: 17, fontWeight: 500, color: T.ink, marginBottom: 6 }}>
@@ -5912,7 +5740,6 @@ export default function TeamCRM() {
         </Modal>
       )}
 
-      {/* Confirm import leads */}
       {confirmImportLeads && (
         <Modal onClose={() => setConfirmImportLeads(null)} narrow>
           <div style={{ fontFamily: T.display, fontSize: 17, fontWeight: 500, color: T.ink, marginBottom: 6 }}>
@@ -5936,7 +5763,6 @@ export default function TeamCRM() {
         </Modal>
       )}
 
-      {/* Add/edit expense transaction */}
       {expenseModal && (
         <Modal onClose={() => setExpenseModal(null)}>
           <ExpenseTransactionForm
@@ -5957,7 +5783,6 @@ export default function TeamCRM() {
         </Modal>
       )}
 
-      {/* User modal */}
       {userModal && (
         <Modal onClose={() => setUserModal(null)} narrow>
           <UserForm
@@ -6034,7 +5859,6 @@ export default function TeamCRM() {
         </Modal>
       )}
 
-      {/* Contact modal */}
       {contactModal && (
         <Modal onClose={() => setContactModal(null)}>
           <ContactForm
@@ -6050,7 +5874,6 @@ export default function TeamCRM() {
         </Modal>
       )}
 
-      {/* Sale modal */}
       {saleModal && !saleModalMinimized && (
         <Modal
           onClose={() => {
@@ -6098,7 +5921,6 @@ export default function TeamCRM() {
         </button>
       )}
 
-      {/* Employee modal */}
       {employeeModal && (
         <Modal onClose={() => setEmployeeModal(null)}>
           <EmployeeForm
@@ -6123,7 +5945,6 @@ export default function TeamCRM() {
         </Modal>
       )}
 
-      {/* Confirm deactivate employee with a chosen date */}
       {confirmDeactivateEmployee && (
         <Modal onClose={() => setConfirmDeactivateEmployee(null)} narrow>
           <div style={{ fontFamily: T.display, fontSize: 17, fontWeight: 500, color: T.ink, marginBottom: 6 }}>
@@ -6155,7 +5976,6 @@ export default function TeamCRM() {
         </Modal>
       )}
 
-      {/* Add/edit hiring candidate */}
       {candidateModal && (
         <Modal onClose={() => setCandidateModal(null)}>
           <CandidateForm
@@ -6179,2920 +5999,459 @@ export default function TeamCRM() {
         </Modal>
       )}
 
-      {/* Employee weekly template modal */}
       {employeeDetail && !employeeDetailMinimized && (
-        <Modal
-          onClose={() => {
-            setEmployeeDetailId(null);
-            setEmployeeDetailMinimized(false);
-          }}
-          fullScreen
-        >
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-              <div style={S.avatar}>{initials(employeeDetail.name)}</div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={S.modalTitle}>{employeeDetail.name}</div>
-              </div>
-              <RoleBadge role={employeeDetail.role} size="sm" />
-              {payslipStatus === "sent" && <span style={S.payslipSentNote}>Sent ✓</span>}
-              {payslipStatus && typeof payslipStatus === "object" && (
-                <span style={S.payslipErrorNote}>{payslipStatus.error}</span>
-              )}
-              <button
-                type="button"
-                onClick={sendPayslip}
-                disabled={!employeeDetail.email || payslipStatus === "sending"}
-                style={{
-                  ...S.minimizeBtn,
-                  ...(!employeeDetail.email ? { opacity: 0.5, cursor: "not-allowed" } : {}),
-                }}
-                title={employeeDetail.email ? `Email payslip to ${employeeDetail.email}` : "No email on file for this employee"}
-              >
-                <Mail size={14} /> {payslipStatus === "sending" ? "Sending…" : "Send Payslip"}
+        <Modal onClose={() => setEmployeeDetailId(null)} onMinimize={() => setEmployeeDetailMinimized(true)} wide>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+            <div>
+              <div style={S.modalTitle}>{employeeDetail.name}</div>
+              <div style={{ fontSize: 12, color: T.textMuted }}>Weekly template</div>
+            </div>
+            <div style={S.weekNav}>
+              <button onClick={() => setEmployeeDetailWeekOffset((w) => w - 1)} style={S.weekNavBtn} aria-label="Previous week">
+                ‹
               </button>
               <button
-                type="button"
-                onClick={() => setEmployeeDetailMinimized(true)}
-                style={S.minimizeBtn}
-                title="Minimize — come back to this later"
+                onClick={() => setEmployeeDetailWeekOffset(0)}
+                style={{ ...S.weekNavLabel, ...(employeeDetailWeekOffset === 0 ? S.weekNavLabelActive : {}) }}
               >
-                <Minus size={14} /> Minimize
+                {employeeDetailWeekLabel}
               </button>
-            </div>
-
-            <div style={S.weekNavRow}>
-              <div style={S.dashboardSectionLabel}>Weekly template</div>
-              <div style={S.weekNav}>
-                <button
-                  onClick={() => setEmployeeDetailWeekOffset((w) => w - 1)}
-                  style={S.weekNavBtn}
-                  aria-label="Previous week"
-                >
-                  ‹
-                </button>
-                <button
-                  onClick={() => setEmployeeDetailWeekOffset(0)}
-                  style={{ ...S.weekNavLabel, ...(employeeDetailWeekOffset === 0 ? S.weekNavLabelActive : {}) }}
-                >
-                  {employeeDetailWeekLabel}
-                  {employeeDetailWeekOffset === 0 && <span style={S.weekNavThisWeek}>This week</span>}
-                </button>
-                <button
-                  onClick={() => setEmployeeDetailWeekOffset((w) => w + 1)}
-                  style={S.weekNavBtn}
-                  aria-label="Next week"
-                >
-                  ›
-                </button>
-              </div>
-            </div>
-
-            <div className="crm-scroll" style={S.tableScroll}>
-              <table style={{ ...S.table, minWidth: 560 }}>
-                <thead>
-                  <tr>
-                    <th style={S.th}>Date</th>
-                    <th style={S.th}>Day</th>
-                    <th style={S.th}>Sales</th>
-                    <th style={S.th}>Total</th>
-                    <th style={S.th}>Commission</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {employeeDetailRows.map((row, i) => {
-                    const dayCommission = row.dayTotal * (employeeDetailRate / 100);
-                    return (
-                      <tr key={i}>
-                        <td style={{ ...S.td, whiteSpace: "nowrap" }}>
-                          {row.date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                        </td>
-                        <td style={{ ...S.td, whiteSpace: "nowrap" }}>{row.label}</td>
-                        <td style={{ ...S.td, whiteSpace: "normal" }}>
-                          {row.entries.length === 0 ? (
-                            ""
-                          ) : (
-                            <div style={S.rrgChipRow}>
-                              {row.entries.map((entry, j) => {
-                                const t = SALE_TYPES.find((x) => x.id === entry.type);
-                                const refunded = isEntryRefunded(entry.sale, entry.type);
-                                return (
-                                  <span
-                                    key={entry.sale.id + "-" + entry.type + "-" + j}
-                                    style={{
-                                      ...S.rrgChip,
-                                      color: refunded ? "#A32D2D" : t ? t.color : T.textMuted,
-                                      textDecoration: refunded ? "line-through" : "none",
-                                      cursor: "pointer",
-                                    }}
-                                    onClick={() => {
-                                      setEmployeeDetailId(null);
-                                      setSection("sales");
-                                      setView("salesform");
-                                      setSaleModal({ ...entry.sale });
-                                    }}
-                                  >
-                                    {entry.sale.name} {money(entry.amount)}
-                                  </span>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </td>
-                        <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 500 }}>
-                          {row.dayTotal ? money(row.dayTotal) : ""}
-                        </td>
-                        <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14 }}>
-                          {row.dayTotal ? money(dayCommission) : ""}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <td style={{ ...S.td, fontWeight: 600 }} colSpan={3}>
-                      Total sales
-                    </td>
-                    <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 600 }}>{money(employeeDetailTotalSales)}</td>
-                    <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 600 }}>{money(employeeDetailCommission)}</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-
-            <div style={S.detailSummary}>
-              <div style={S.detailSummaryRow}>
-                <span>Commission ({employeeDetailRate}%)</span>
-                <span style={{ fontFamily: T.mono, fontSize: 14 }}>{money(employeeDetailTotalSales * (employeeDetailRate / 100))}</span>
-              </div>
-              {employeeDetailRefundEntries.length > 0 && (
-                <>
-                  {employeeDetailRefundEntries.map(({ sale, credit }) => {
-                    const entryType = (buildRoleEntries(sale, employeeDetail.id)[0] || {}).type;
-                    const nameColor = (SALE_TYPES.find((t) => t.id === entryType) || {}).color || "#A32D2D";
-                    return (
-                      <div key={sale.id} style={{ ...S.detailSummaryRow, color: "#A32D2D" }}>
-                        <span>
-                          Refund — <span style={{ color: nameColor, fontWeight: 600 }}>{sale.name}</span>
-                        </span>
-                        <span style={{ fontFamily: T.mono, fontSize: 14 }}>
-                          -{money(credit * (employeeDetailRate / 100))}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </>
-              )}
-              {employeeDetailRefundOverride !== null && (
-                <div style={{ ...S.detailSummaryRow, color: "#A32D2D" }}>
-                  <span>Refund deduction (custom)</span>
-                  <span style={{ fontFamily: T.mono, fontSize: 14 }}>-{money(employeeDetailRefundOverride)}</span>
-                </div>
-              )}
-              <div style={S.detailSummaryRow}>
-                <span>{basePayLabel(employeeDetail && employeeDetail.name)}</span>
-                <span style={{ fontFamily: T.mono, fontSize: 14 }}>{employeeDetailHasBasePay ? money(employeeDetailBasePay) : "—"}</span>
-              </div>
-              {employeeDetailSpiff > 0 && (
-                <div style={{ ...S.detailSummaryRow, color: "#8A5A1E" }}>
-                  <span>Spiff</span>
-                  <span style={{ fontFamily: T.mono, fontSize: 14 }}>{money(employeeDetailSpiff)}</span>
-                </div>
-              )}
-              <div style={{ ...S.detailSummaryRow, ...S.detailSummaryTotal }}>
-                <span>
-                  Total pay{" "}
-                  {employeeDetailGuarantee && (
-                    <span style={S.minGuaranteeBadge}>
-                      min guarantee{employeeDetailAbsences > 0 ? ` (−${employeeDetailAbsences}d)` : ""}
-                    </span>
-                  )}
-                </span>
-                <span style={{ fontFamily: T.mono, fontSize: 14 }}>{money(employeeDetailTotalPay)}</span>
-              </div>
-            </div>
-
-            <div style={S.modalFooter}>
-              <span />
-              <button style={S.primaryBtn} onClick={() => setEmployeeDetailId(null)}>
-                Done
+              <button onClick={() => setEmployeeDetailWeekOffset((w) => w + 1)} style={S.weekNavBtn} aria-label="Next week">
+                ›
               </button>
             </div>
           </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {employeeDetailRows.map((r) => (
+              <div key={r.label} style={S.employeeDetailDayRow}>
+                <div style={S.employeeDetailDayLabel}>
+                  {r.label}
+                  <div style={{ fontSize: 10.5, color: T.textMuted, fontWeight: 400 }}>
+                    {r.date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  </div>
+                </div>
+                <div style={{ flex: 1 }}>
+                  {r.entries.length === 0 ? (
+                    <span style={{ color: T.borderStrong, fontSize: 12.5 }}>—</span>
+                  ) : (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {r.entries.map((entry, i) => {
+                        const t = SALE_TYPES.find((x) => x.id === entry.type);
+                        const refunded = isEntryRefunded(entry.sale, entry.type);
+                        return (
+                          <span
+                            key={entry.sale.id + "-" + entry.type + "-" + i}
+                            style={{
+                              ...S.rrgChip,
+                              color: refunded ? "#A32D2D" : t ? t.color : T.textMuted,
+                              textDecoration: refunded ? "line-through" : "none",
+                            }}
+                            onClick={() => setSaleModal({ ...entry.sale })}
+                          >
+                            {entry.sale.name} {money(entry.amount)}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                <div style={{ fontFamily: T.mono, fontSize: 13, fontWeight: 600, minWidth: 70, textAlign: "right" }}>
+                  {money(r.dayTotal)}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={S.employeeDetailSummary}>
+            <div style={S.employeeDetailSummaryRow}>
+              <span>Total sales this week</span>
+              <span style={{ fontFamily: T.mono }}>{money(employeeDetailTotalSales)}</span>
+            </div>
+            <div style={S.employeeDetailSummaryRow}>
+              <span>Commission ({employeeDetailRate}%)</span>
+              <span style={{ fontFamily: T.mono }}>{money(employeeDetailTotalSales * (employeeDetailRate / 100))}</span>
+            </div>
+            {employeeDetailRefundEntries.map((r) => {
+              const entryType = (buildRoleEntries(r.sale, employeeDetail.id)[0] || {}).type;
+              const nameColor = (SALE_TYPES.find((t) => t.id === entryType) || {}).color || "#A32D2D";
+              return (
+                <div key={r.sale.id} style={{ ...S.employeeDetailSummaryRow, color: "#A32D2D" }}>
+                  <span>
+                    Refund — <span style={{ color: nameColor, fontWeight: 600 }}>{r.sale.name}</span>
+                  </span>
+                  <span style={{ fontFamily: T.mono }}>-{money(r.credit * (employeeDetailRate / 100))}</span>
+                </div>
+              );
+            })}
+            {employeeDetailHasBasePay && (
+              <div style={S.employeeDetailSummaryRow}>
+                <span>Draw</span>
+                <span style={{ fontFamily: T.mono }}>{money(employeeDetailBasePay)}</span>
+              </div>
+            )}
+            {employeeDetailSpiff > 0 && (
+              <div style={{ ...S.employeeDetailSummaryRow, color: "#8A5A1E" }}>
+                <span>Spiff</span>
+                <span style={{ fontFamily: T.mono }}>{money(employeeDetailSpiff)}</span>
+              </div>
+            )}
+            {employeeDetailAbsences > 0 && (
+              <div style={{ ...S.employeeDetailSummaryRow, color: "#A32D2D" }}>
+                <span>Absences this week</span>
+                <span>{employeeDetailAbsences}</span>
+              </div>
+            )}
+            <div style={{ ...S.employeeDetailSummaryRow, fontWeight: 700, borderTop: `1px solid ${T.border}`, paddingTop: 8, marginTop: 4 }}>
+              <span>Total pay {employeeDetailGuarantee && <span style={S.minGuaranteeBadge}>min guarantee</span>}</span>
+              <span style={{ fontFamily: T.mono, color: T.pineDark }}>{money(employeeDetailTotalPay)}</span>
+            </div>
+          </div>
+
+          {employeeDetail.email && (
+            <div style={{ marginTop: 16 }}>
+              <button
+                onClick={sendPayslip}
+                disabled={payslipStatus === "sending"}
+                style={{ ...S.primaryBtn, ...(payslipStatus === "sending" ? { opacity: 0.6, cursor: "not-allowed" } : {}) }}
+              >
+                <Mail size={14} /> {payslipStatus === "sending" ? "Sending…" : `Email payslip to ${employeeDetail.email}`}
+              </button>
+              {payslipStatus === "sent" && <div style={S.payslipSentNote}>Sent ✓</div>}
+              {payslipStatus && typeof payslipStatus === "object" && (
+                <div style={S.payslipErrorNote}>{payslipStatus.error}</div>
+              )}
+            </div>
+          )}
         </Modal>
       )}
 
-      {/* Confirm delete */}
       {confirmDelete && (
         <Modal onClose={() => setConfirmDelete(null)} narrow>
-          <div style={{ padding: 4 }}>
-            <div style={{ fontFamily: T.display, fontSize: 17, fontWeight: 500, color: T.ink, marginBottom: 6 }}>
-              Delete {confirmDelete.type === "contact" ? "contact" : confirmDelete.type === "employee" ? "employee" : "sale"}?
-            </div>
-            <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 18, lineHeight: 1.5 }}>
-              {confirmDelete.type === "contact"
-                ? `This removes "${confirmDelete.label}". This can't be undone.`
-                : confirmDelete.type === "employee"
-                ? `This removes "${confirmDelete.label}" from your employee roster. Their sales records aren't affected. This can't be undone.`
-                : `This removes the sale record for "${confirmDelete.label}". This can't be undone.`}
-            </div>
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button style={S.ghostBtn} onClick={() => setConfirmDelete(null)}>
-                Cancel
-              </button>
-              <button
-                style={S.dangerBtn}
-                onClick={() =>
-                  confirmDelete.type === "contact"
-                    ? deleteContact(confirmDelete.id)
-                    : confirmDelete.type === "employee"
-                    ? deleteEmployee(confirmDelete.id)
-                    : deleteSale(confirmDelete.id)
-                }
-              >
-                Delete
-              </button>
-            </div>
+          <div style={{ fontFamily: T.display, fontSize: 17, fontWeight: 500, color: T.ink, marginBottom: 6 }}>
+            Delete {confirmDelete.label || "this"}?
+          </div>
+          <div style={{ fontSize: 12.5, color: T.textMuted, marginBottom: 18 }}>This can't be undone.</div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button style={S.ghostBtn} onClick={() => setConfirmDelete(null)}>
+              Cancel
+            </button>
+            <button
+              style={S.dangerBtn}
+              onClick={() => {
+                if (confirmDelete.type === "contact") deleteContact(confirmDelete.id);
+                else if (confirmDelete.type === "sale") deleteSale(confirmDelete.id);
+                else if (confirmDelete.type === "employee") deleteEmployee(confirmDelete.id);
+              }}
+            >
+              Delete
+            </button>
           </div>
         </Modal>
       )}
 
-      {/* Confirm refund */}
       {confirmRefund && (
-        <Modal onClose={() => setConfirmRefund(null)}>
-          <div style={{ padding: 4 }}>
-            <div style={{ fontFamily: T.display, fontSize: 17, fontWeight: 500, color: T.ink, marginBottom: 6 }}>
-              Refund "{confirmRefund.name}"
-            </div>
-            <div style={{ fontSize: 12.5, color: T.textMuted, marginBottom: 14, lineHeight: 1.5 }}>
-              A full refund deducts the whole credited commission from everyone on the lead. A partial refund lets you
-              enter a specific amount to deduct from each person separately. Each person can have their deduction land
-              in a different payroll week — handy when one person wants it out right away and another wants it spread
-              out or delayed.
-            </div>
-
-            <Field label="Refund type">
-              <div style={{ display: "flex", gap: 6 }}>
-                <button
-                  onClick={() => setRefundType("full")}
-                  style={{ ...S.roleChip, ...(refundType === "full" ? S.refundTypeActive : {}) }}
-                >
-                  Full refund
-                </button>
-                <button
-                  onClick={() => setRefundType("partial")}
-                  style={{ ...S.roleChip, ...(refundType === "partial" ? S.refundTypeActive : {}) }}
-                >
-                  Partial refund
-                </button>
-              </div>
-            </Field>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
-              {REFUND_TARGET_OPTIONS.map((opt) => {
-                const empId = employeeIdForRole(confirmRefund, opt.id);
-                const emp = empId ? employeeById[empId] : null;
-                const choice = refundWeekChoices[opt.id];
-                const isCustom = !["previous", "current", "next"].includes(choice);
-                return (
-                  <div key={opt.id} style={S.refundRoleBlock}>
-                    <div style={S.refundRoleBlockLabel}>{emp ? `${opt.label} — ${emp.name}` : `${opt.label} — unassigned`}</div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      {refundType === "partial" && (
-                        <input
-                          value={refundAmounts[opt.id]}
-                          onChange={(e) => setRefundAmounts((a) => ({ ...a, [opt.id]: e.target.value }))}
-                          type="number"
-                          disabled={!emp}
-                          style={{
-                            ...S.input,
-                            fontFamily: T.mono,
-                            width: 100,
-                            flexShrink: 0,
-                            ...(emp ? {} : { background: T.border, cursor: "not-allowed", color: T.textMuted }),
-                          }}
-                          placeholder="0"
-                        />
-                      )}
-                      <div style={{ position: "relative", flex: 1 }}>
-                        <select
-                          value={isCustom ? "custom" : choice}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            setRefundWeekChoices((c) => ({
-                              ...c,
-                              [opt.id]: v === "custom" ? todayDateStr() : v,
-                            }));
-                          }}
-                          disabled={!emp}
-                          style={{ ...S.select, ...(emp ? {} : { background: T.border, cursor: "not-allowed", color: T.textMuted }) }}
-                        >
-                          <option value="previous">Previous week's check</option>
-                          <option value="current">This week's check</option>
-                          <option value="next">Next week's check</option>
-                          <option value="custom">Custom date…</option>
-                        </select>
-                        <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
-                      </div>
-                    </div>
-                    {isCustom && emp && (
-                      <input
-                        type="date"
-                        value={choice}
-                        onChange={(e) => e.target.value && setRefundWeekChoices((c) => ({ ...c, [opt.id]: e.target.value }))}
-                        style={{ ...S.customRangeInput, marginTop: 8, width: "100%" }}
-                      />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
-              <button style={S.ghostBtn} onClick={() => setConfirmRefund(null)}>
-                Cancel
-              </button>
-              <button
-                style={{
-                  ...S.dangerBtn,
-                  ...(refundType === "partial" &&
-                  !(Number(refundAmounts.front) || Number(refundAmounts.close) || Number(refundAmounts.verification))
-                    ? { opacity: 0.5, cursor: "not-allowed" }
-                    : {}),
-                }}
-                disabled={
-                  refundType === "partial" &&
-                  !(Number(refundAmounts.front) || Number(refundAmounts.close) || Number(refundAmounts.verification))
-                }
-                onClick={() =>
-                  markRefunded(confirmRefund.id, { type: refundType, amounts: refundAmounts, weekChoices: refundWeekChoices })
-                }
-              >
-                Mark refunded
-              </button>
-            </div>
+        <Modal onClose={() => setConfirmRefund(null)} narrow>
+          <div style={{ fontFamily: T.display, fontSize: 17, fontWeight: 500, color: T.ink, marginBottom: 6 }}>
+            Refund {confirmRefund.name}?
           </div>
-        </Modal>
-      )}
-    </div>
-  );
-}
+          <div style={{ fontSize: 12.5, color: T.textMuted, marginBottom: 14, lineHeight: 1.5 }}>
+            This deducts the involved employees' commission from payroll. Choose full or partial, and which week each
+            person's deduction should land on.
+          </div>
 
-// ============================================================
-// DFS — Business Debt Settlement campaign. A separate, self-contained
-// application living inside the same login, with its own data (stored
-// under "dfs:" keys, completely isolated from anything RRG uses) and its
-// own nav. Built incrementally — Dashboard and Clients are real and
-// working; the rest of the requested sections are placeholders until
-// built out in future sessions.
-// ============================================================
-const DFS_NAV_ITEMS = [
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "leads", label: "Leads", icon: ClipboardList },
-  { id: "clients", label: "Clients", icon: Users },
-  { id: "settlements", label: "Settlements", icon: TrendingUp },
-  { id: "creditors", label: "Creditors", icon: Building2 },
-  { id: "payments", label: "Payments", icon: Wallet },
-  { id: "tasks", label: "Tasks", icon: ClipboardList },
-  { id: "documents", label: "Documents", icon: FileText },
-  { id: "calendar", label: "Calendar", icon: CalendarDays },
-  { id: "reports", label: "Reports", icon: BarChart3 },
-  { id: "admin", label: "Admin / Settings", icon: Settings },
-];
+          <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+            <button
+              onClick={() => setRefundType("full")}
+              style={{ ...S.refundTypeBtn, ...(refundType === "full" ? S.refundTypeActive : {}) }}
+            >
+              Full refund
+            </button>
+            <button
+              onClick={() => setRefundType("partial")}
+              style={{ ...S.refundTypeBtn, ...(refundType === "partial" ? S.refundTypeActive : {}) }}
+            >
+              Partial refund
+            </button>
+          </div>
 
-// Opener only works Leads. Closer works the deal once it's past the lead
-// stage — Clients, Calendar, Documents — but doesn't see Leads (that's the
-// opener's stage) or management-level sections. Manager sees everything
-// operational but not Reports or Admin. Admin (or anything unrecognized)
-// gets full access, same as it always has.
-function getDfsAllowedSections(role) {
-  if (role === "opener") return ["leads"];
-  if (role === "closer") return ["clients", "calendar", "documents"];
-  if (role === "manager") return DFS_NAV_ITEMS.map((n) => n.id).filter((id) => id !== "reports" && id !== "admin");
-  return DFS_NAV_ITEMS.map((n) => n.id);
-}
-
-const DFS_PIPELINE_STAGES = [
-  "New Lead",
-  "Contacted",
-  "Qualified",
-  "Docs Requested",
-  "Docs Received",
-  "Enrolled",
-  "Negotiating",
-  "Offer Received",
-  "Settlement Approved",
-  "Payment Plan",
-  "Settled",
-  "Completed",
-  "Lost/Cancelled",
-];
-
-const DFS_EVENT_TYPES = [
-  { id: "appointment", label: "Appointment", color: "#1F4536", icon: "📅" },
-  { id: "callback", label: "Callback", color: "#B8763E", icon: "📞", showCallbackFields: true },
-  { id: "settlement_deadline", label: "Settlement Deadline", color: "#A32D2D", icon: "🔴", showMcaFields: true },
-  { id: "payment_date", label: "Payment Date", color: "#3D6B96", icon: "💳", showMcaFields: true },
-  { id: "court_date", label: "Court Date", color: "#7A1F1F", icon: "⚖️", showMcaFields: true },
-  { id: "other", label: "Other", color: "#767468", icon: "📌" },
-];
-const DFS_PRIORITIES = ["Low", "Normal", "High", "Urgent"];
-const DFS_REMINDER_OPTIONS = ["None", "15 minutes before", "1 hour before", "2 hours before", "1 day before"];
-
-const DFS_LEAD_STAGES = [
-  "New Lead",
-  "Attempting Contact",
-  "Contacted",
-  "Qualified",
-  "Docs Requested",
-  "Docs Pending",
-  "Ready for Closer",
-  "Closing",
-  "Agreement Sent",
-  "Agreement Signed",
-  "Ready to Convert",
-  "Follow-Up",
-  "Not Interested",
-  "Unqualified",
-  "Bad Lead",
-  "Lost",
-  "Do Not Contact",
-];
-const DFS_LEAD_TERMINAL_STAGES = ["Not Interested", "Unqualified", "Bad Lead", "Lost", "Do Not Contact"];
-const DFS_DOCUMENT_CHECKLIST_ITEMS = [
-  "MCA Statements/Contracts",
-  "Bank Statements",
-  "Driver's License",
-  "Voided Check",
-  "Signed Enrollment Agreement",
-];
-const DFS_LEAD_NOT_WORKED_HOURS = 24;
-
-function dfsUid() {
-  return "dfs_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
-}
-
-// Handles both the old single "name" field (from before the form split it
-// into first/last) and the new firstName/lastName fields, so existing
-// client records don't break.
-function dfsClientDisplayName(c) {
-  const full = `${c.firstName || ""} ${c.lastName || ""}`.trim();
-  return full || c.name || "Unnamed";
-}
-
-function dfsNewEventDefaults(dateStr) {
-  return {
-    id: dfsUid(),
-    title: "",
-    type: "appointment",
-    date: dateStr || "",
-    time: "",
-    clientId: "",
-    relatedDebtId: "",
-    assignedTo: "",
-    department: "",
-    priority: "Normal",
-    status: "Scheduled",
-    settlementAmount: "",
-    originalBalance: "",
-    requiredPayment: "",
-    offerExpiration: "",
-    paymentStatus: "",
-    reason: "",
-    reminder: "None",
-    secondReminder: "None",
-    notes: "",
-    isNew: true,
-  };
-}
-
-// Every important lead action gets a permanent, timestamped entry — this
-// log is never edited or deleted once written, only appended to.
-function dfsLogActivity(activityLog, description) {
-  return [
-    ...(activityLog || []),
-    { id: dfsUid(), timestamp: Date.now(), description },
-  ];
-}
-
-function dfsNewLeadDefaults() {
-  return {
-    id: dfsUid(),
-    firstName: "",
-    lastName: "",
-    businessName: "",
-    phone: "",
-    email: "",
-    businessAddress: "",
-    city: "",
-    state: "",
-    zip: "",
-    leadSource: "",
-    assignedRep: "",
-    assignedCloser: "",
-    leadStage: "New Lead",
-    leadTemperature: "",
-    requestedAmount: "",
-    notesForCloser: "",
-    callbackDate: "",
-    documentChecklist: {},
-    debts: [],
-    notes: "",
-    activityLog: [{ id: dfsUid(), timestamp: Date.now(), description: "Lead created" }],
-    createdAt: Date.now(),
-    isNew: true,
-  };
-}
-
-function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
-  const [dfsSection, setDfsSection] = useState("dashboard");
-  const [dfsLoaded, setDfsLoaded] = useState(false);
-  const [dfsClients, setDfsClients] = useState([]);
-  const [dfsClientModal, setDfsClientModal] = useState(null); // null | client object
-  const [dfsClientsSearch, setDfsClientsSearch] = useState("");
-  const [dfsSaveError, setDfsSaveError] = useState("");
-  const [dfsCreditors, setDfsCreditors] = useState([]);
-  const [dfsCreditorModal, setDfsCreditorModal] = useState(null); // null | creditor object
-  const [dfsCreditorsSearch, setDfsCreditorsSearch] = useState("");
-  const [dfsCreditorSaveError, setDfsCreditorSaveError] = useState("");
-  const [dfsUsers, setDfsUsers] = useState([]);
-  const [dfsUserModal, setDfsUserModal] = useState(null);
-  const [dfsUserFormError, setDfsUserFormError] = useState("");
-  const [dfsPipelineStages, setDfsPipelineStages] = useState(DFS_PIPELINE_STAGES);
-  const [dfsNewStageInput, setDfsNewStageInput] = useState("");
-  const [dfsSettings, setDfsSettings] = useState({ companyName: "DFS" });
-  const [dfsEvents, setDfsEvents] = useState([]);
-  const [dfsEventModal, setDfsEventModal] = useState(null); // null | event object
-  const [dfsCalendarMonthOffset, setDfsCalendarMonthOffset] = useState(0);
-  const [dfsEventDetailModal, setDfsEventDetailModal] = useState(null); // null | event object (read-only view)
-  const [dfsLeads, setDfsLeads] = useState([]);
-  const [dfsLeadModal, setDfsLeadModal] = useState(null); // null | lead object
-  const [dfsLeadsSearch, setDfsLeadsSearch] = useState("");
-  const [dfsSendToCloserModal, setDfsSendToCloserModal] = useState(null); // null | lead object
-  const [dfsConvertError, setDfsConvertError] = useState("");
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await window.storage.get("dfs:clients", true);
-        setDfsClients(res && res.value ? JSON.parse(res.value) : []);
-      } catch (e) {
-        setDfsClients([]);
-      }
-      try {
-        const res = await window.storage.get("dfs:creditors", true);
-        setDfsCreditors(res && res.value ? JSON.parse(res.value) : []);
-      } catch (e) {
-        setDfsCreditors([]);
-      }
-      try {
-        const res = await fetch("/api/users", { credentials: "include" });
-        const data = await res.json();
-        setDfsUsers((data.users || []).filter((u) => u.campaign === "dfs" || u.campaign === "both"));
-      } catch (e) {
-        setDfsUsers([]);
-      }
-      try {
-        const res = await window.storage.get("dfs:pipelineStages", true);
-        setDfsPipelineStages(res && res.value ? JSON.parse(res.value) : DFS_PIPELINE_STAGES);
-      } catch (e) {
-        setDfsPipelineStages(DFS_PIPELINE_STAGES);
-      }
-      try {
-        const res = await window.storage.get("dfs:settings", true);
-        setDfsSettings(res && res.value ? JSON.parse(res.value) : { companyName: "DFS" });
-      } catch (e) {
-        setDfsSettings({ companyName: "DFS" });
-      }
-      try {
-        const res = await window.storage.get("dfs:events", true);
-        setDfsEvents(res && res.value ? JSON.parse(res.value) : []);
-      } catch (e) {
-        setDfsEvents([]);
-      }
-      try {
-        const res = await window.storage.get("dfs:leads", true);
-        setDfsLeads(res && res.value ? JSON.parse(res.value) : []);
-      } catch (e) {
-        setDfsLeads([]);
-      }
-      setDfsLoaded(true);
-    })();
-  }, []);
-
-  // If the current section isn't allowed for this role (e.g. the default
-  // "dashboard" state, but Opener/Closer can't see Dashboard), fall back to
-  // the first section they're actually allowed to see.
-  useEffect(() => {
-    const allowed = getDfsAllowedSections(currentUser && currentUser.role);
-    if (!allowed.includes(dfsSection) && allowed.length > 0) {
-      setDfsSection(allowed[0]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dfsSection, currentUser && currentUser.role]);
-
-  async function saveDfsClient(form) {
-    const exists = dfsClients.some((c) => c.id === form.id);
-    const { isNew, ...cleanForm } = form;
-    const next = exists ? dfsClients.map((c) => (c.id === form.id ? { ...c, ...cleanForm } : c)) : [...dfsClients, cleanForm];
-    setDfsClients(next);
-    try {
-      await window.storage.set("dfs:clients", JSON.stringify(next), true);
-      setDfsClientModal(null);
-      setDfsSaveError("");
-    } catch (err) {
-      console.error("DFS client save failed:", err);
-      setDfsSaveError("Couldn't save — " + (err.message || "unknown error"));
-    }
-  }
-  async function deleteDfsClient(id) {
-    const next = dfsClients.filter((c) => c.id !== id);
-    setDfsClients(next);
-    try {
-      await window.storage.set("dfs:clients", JSON.stringify(next), true);
-    } catch (err) {
-      console.error("DFS client delete failed:", err);
-    }
-  }
-  async function saveDfsCreditor(form) {
-    const exists = dfsCreditors.some((c) => c.id === form.id);
-    const { isNew, ...cleanForm } = form;
-    const next = exists ? dfsCreditors.map((c) => (c.id === form.id ? { ...c, ...cleanForm } : c)) : [...dfsCreditors, cleanForm];
-    setDfsCreditors(next);
-    try {
-      await window.storage.set("dfs:creditors", JSON.stringify(next), true);
-      setDfsCreditorModal(null);
-      setDfsCreditorSaveError("");
-    } catch (err) {
-      console.error("DFS creditor save failed:", err);
-      setDfsCreditorSaveError("Couldn't save — " + (err.message || "unknown error"));
-    }
-  }
-  async function deleteDfsCreditor(id) {
-    const next = dfsCreditors.filter((c) => c.id !== id);
-    setDfsCreditors(next);
-    try {
-      await window.storage.set("dfs:creditors", JSON.stringify(next), true);
-    } catch (err) {
-      console.error("DFS creditor delete failed:", err);
-    }
-  }
-  async function refreshDfsUsers() {
-    try {
-      const res = await fetch("/api/users", { credentials: "include" });
-      const data = await res.json();
-      setDfsUsers((data.users || []).filter((u) => u.campaign === "dfs" || u.campaign === "both"));
-    } catch (e) {
-      // ignore
-    }
-  }
-  async function saveDfsPipelineStages(stages) {
-    setDfsPipelineStages(stages);
-    try {
-      await window.storage.set("dfs:pipelineStages", JSON.stringify(stages), true);
-    } catch (err) {
-      console.error("DFS pipeline stage save failed:", err);
-    }
-  }
-  async function saveDfsSettings(next) {
-    setDfsSettings(next);
-    try {
-      await window.storage.set("dfs:settings", JSON.stringify(next), true);
-    } catch (err) {
-      console.error("DFS settings save failed:", err);
-    }
-  }
-  async function saveDfsEvent(form) {
-    const exists = dfsEvents.some((e) => e.id === form.id);
-    const { isNew, ...cleanForm } = form;
-    const next = exists ? dfsEvents.map((e) => (e.id === form.id ? { ...e, ...cleanForm } : e)) : [...dfsEvents, cleanForm];
-    setDfsEvents(next);
-    try {
-      await window.storage.set("dfs:events", JSON.stringify(next), true);
-      setDfsEventModal(null);
-    } catch (err) {
-      console.error("DFS event save failed:", err);
-    }
-  }
-  async function deleteDfsEvent(id) {
-    const next = dfsEvents.filter((e) => e.id !== id);
-    setDfsEvents(next);
-    try {
-      await window.storage.set("dfs:events", JSON.stringify(next), true);
-    } catch (err) {
-      console.error("DFS event delete failed:", err);
-    }
-  }
-  async function saveDfsLead(form) {
-    const exists = dfsLeads.some((l) => l.id === form.id);
-    const { isNew, ...cleanForm } = form;
-    const next = exists ? dfsLeads.map((l) => (l.id === form.id ? { ...l, ...cleanForm } : l)) : [...dfsLeads, cleanForm];
-    setDfsLeads(next);
-    try {
-      await window.storage.set("dfs:leads", JSON.stringify(next), true);
-      setDfsLeadModal(null);
-    } catch (err) {
-      console.error("DFS lead save failed:", err);
-    }
-  }
-  async function deleteDfsLead(id) {
-    const next = dfsLeads.filter((l) => l.id !== id);
-    setDfsLeads(next);
-    try {
-      await window.storage.set("dfs:leads", JSON.stringify(next), true);
-    } catch (err) {
-      console.error("DFS lead delete failed:", err);
-    }
-  }
-  async function sendDfsLeadToCloser(lead, closerData) {
-    const updated = {
-      ...lead,
-      assignedCloser: closerData.assignedCloser,
-      leadTemperature: closerData.leadTemperature,
-      requestedAmount: closerData.requestedAmount,
-      notesForCloser: closerData.notesForCloser,
-      leadStage: "Ready for Closer",
-      activityLog: dfsLogActivity(
-        lead.activityLog,
-        `Sent to ${closerData.assignedCloser || "closer"} (Closer)${closerData.leadTemperature ? ` — ${closerData.leadTemperature}` : ""}`
-      ),
-    };
-    await saveDfsLead(updated);
-    setDfsSendToCloserModal(null);
-  }
-  // Converting is a deliberate, manual action — never automatic just because
-  // documents got uploaded. Carries the entire lead history over so nothing
-  // gets lost: contact info, MCA positions, notes, and the full activity log.
-  async function convertDfsLeadToClient(lead) {
-    const missing = [];
-    const requiredDocs = DFS_DOCUMENT_CHECKLIST_ITEMS.filter((d) => d !== "Signed Enrollment Agreement");
-    const docs = lead.documentChecklist || {};
-    if (!requiredDocs.every((d) => docs[d])) missing.push("Required documents received");
-    if (!docs["Signed Enrollment Agreement"]) missing.push("Agreement signed");
-    if (!lead.debts || lead.debts.length === 0) missing.push("MCA accounts entered");
-    if (!lead.requestedAmount) missing.push("Program/enrollment information complete");
-    if (!lead.assignedCloser) missing.push("Assigned closer");
-    if (missing.length > 0) {
-      setDfsConvertError("Can't convert yet — missing: " + missing.join(", "));
-      return;
-    }
-    setDfsConvertError("");
-    const newClient = {
-      id: dfsUid(),
-      firstName: lead.firstName,
-      lastName: lead.lastName,
-      businessName: lead.businessName,
-      phone: lead.phone,
-      email: lead.email,
-      businessAddress: lead.businessAddress,
-      city: lead.city,
-      state: lead.state,
-      zip: lead.zip,
-      leadSource: lead.leadSource,
-      assignedRep: lead.assignedRep,
-      assignedCloser: lead.assignedCloser,
-      pipelineStage: "Enrolled",
-      debts: lead.debts || [],
-      notes: lead.notes,
-      activityLog: dfsLogActivity(lead.activityLog, "Converted to Client"),
-      documentChecklist: lead.documentChecklist,
-      convertedFromLeadId: lead.id,
-      createdAt: Date.now(),
-    };
-    const nextClients = [...dfsClients, newClient];
-    const nextLeads = dfsLeads.filter((l) => l.id !== lead.id);
-    setDfsClients(nextClients);
-    setDfsLeads(nextLeads);
-    try {
-      await window.storage.set("dfs:clients", JSON.stringify(nextClients), true);
-      await window.storage.set("dfs:leads", JSON.stringify(nextLeads), true);
-      setDfsLeadModal(null);
-      setDfsSection("clients");
-      setDfsClientModal({ ...newClient, isNew: false });
-    } catch (err) {
-      console.error("Lead conversion failed:", err);
-    }
-  }
-
-  const dfsFilteredClients = dfsClients.filter((c) => {
-    const q = dfsClientsSearch.trim().toLowerCase();
-    if (!q) return true;
-    return (
-      dfsClientDisplayName(c).toLowerCase().includes(q) ||
-      (c.businessName || "").toLowerCase().includes(q) ||
-      (c.phone || "").toLowerCase().includes(q) ||
-      (c.email || "").toLowerCase().includes(q)
-    );
-  });
-
-  const dfsFilteredCreditors = dfsCreditors.filter((c) => {
-    const q = dfsCreditorsSearch.trim().toLowerCase();
-    if (!q) return true;
-    return (
-      (c.name || "").toLowerCase().includes(q) ||
-      (c.contactName || "").toLowerCase().includes(q) ||
-      (c.phone || "").toLowerCase().includes(q) ||
-      (c.email || "").toLowerCase().includes(q)
-    );
-  });
-
-  const dfsFilteredLeads = dfsLeads.filter((l) => {
-    const q = dfsLeadsSearch.trim().toLowerCase();
-    if (!q) return true;
-    return (
-      dfsClientDisplayName(l).toLowerCase().includes(q) ||
-      (l.businessName || "").toLowerCase().includes(q) ||
-      (l.phone || "").toLowerCase().includes(q) ||
-      (l.email || "").toLowerCase().includes(q)
-    );
-  });
-  // Flags a lead if it's had no activity logged (beyond its initial
-  // creation entry) within the configured window, so it doesn't silently
-  // go cold before anyone notices.
-  function dfsIsLeadNotWorked(lead) {
-    if (DFS_LEAD_TERMINAL_STAGES.includes(lead.leadStage)) return false;
-    const log = lead.activityLog || [];
-    const lastEntry = log[log.length - 1];
-    const lastTimestamp = lastEntry ? lastEntry.timestamp : lead.createdAt;
-    if (!lastTimestamp) return false;
-    const hoursSince = (Date.now() - lastTimestamp) / (1000 * 60 * 60);
-    return hoursSince >= DFS_LEAD_NOT_WORKED_HOURS && log.length <= 1;
-  }
-
-  // Calendar month grid
-  const dfsCalendarBase = new Date();
-  dfsCalendarBase.setDate(1);
-  dfsCalendarBase.setMonth(dfsCalendarBase.getMonth() + dfsCalendarMonthOffset);
-  const dfsCalendarYear = dfsCalendarBase.getFullYear();
-  const dfsCalendarMonthIndex = dfsCalendarBase.getMonth();
-  const dfsCalendarDaysInMonth = new Date(dfsCalendarYear, dfsCalendarMonthIndex + 1, 0).getDate();
-  const dfsCalendarFirstDayOfWeek = new Date(dfsCalendarYear, dfsCalendarMonthIndex, 1).getDay();
-  const dfsCalendarMonthLabel = dfsCalendarBase.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-  const dfsTodayStr = todayDateStr();
-  const dfsEventsByDate = {};
-  dfsEvents.forEach((ev) => {
-    if (!ev.date) return;
-    if (!dfsEventsByDate[ev.date]) dfsEventsByDate[ev.date] = [];
-    dfsEventsByDate[ev.date].push(ev);
-  });
-  const dfsCalendarCells = [];
-  for (let i = 0; i < dfsCalendarFirstDayOfWeek; i++) dfsCalendarCells.push(null);
-  for (let d = 1; d <= dfsCalendarDaysInMonth; d++) {
-    const dateStr = `${dfsCalendarYear}-${String(dfsCalendarMonthIndex + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-    dfsCalendarCells.push({ day: d, dateStr, events: dfsEventsByDate[dateStr] || [] });
-  }
-
-  // Dashboard metrics computed directly from client + debt records
-  const dfsAllDebts = dfsClients.flatMap((c) => (c.debts || []).map((d) => ({ ...d, clientId: c.id, clientName: dfsClientDisplayName(c) })));
-  const dfsActiveClients = dfsClients.filter((c) => c.pipelineStage && !["Completed", "Lost/Cancelled"].includes(c.pipelineStage));
-  const dfsNewLeadsThisWeek = dfsClients.filter((c) => {
-    if (!c.createdAt) return false;
-    const days = (Date.now() - c.createdAt) / (1000 * 60 * 60 * 24);
-    return days <= 7;
-  });
-  const dfsTotalEnrolledDebt = dfsAllDebts.reduce((s, d) => s + (Number(d.originalBalance) || 0), 0);
-  const dfsSettledDebt = dfsAllDebts
-    .filter((d) => d.status === "Settled")
-    .reduce((s, d) => s + (Number(d.originalBalance) || 0), 0);
-  const dfsSettlementPercents = dfsAllDebts.filter((d) => d.settlementPercent).map((d) => Number(d.settlementPercent) || 0);
-  const dfsAvgSettlementPercent =
-    dfsSettlementPercents.length > 0 ? dfsSettlementPercents.reduce((s, p) => s + p, 0) / dfsSettlementPercents.length : 0;
-
-  if (!dfsLoaded) {
-    return (
-      <div style={{ ...S.app, alignItems: "center", justifyContent: "center" }}>
-        <div style={{ color: T.textMuted }}>Loading…</div>
-      </div>
-    );
-  }
-
-  return (
-    <div style={S.app}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
-        * { box-sizing: border-box; }
-        .crm-scroll { scrollbar-width: auto; scrollbar-color: #B8B2A0 #EDEAE0; }
-        .crm-scroll::-webkit-scrollbar { height: 12px; width: 12px; }
-        .crm-scroll::-webkit-scrollbar-track { background: #EDEAE0; border-radius: 6px; }
-        .crm-scroll::-webkit-scrollbar-thumb { background: #B8B2A0; border-radius: 6px; }
-        button { font-family: inherit; cursor: pointer; }
-        input, textarea, select { font-family: inherit; }
-      `}</style>
-
-      {/* Sidebar */}
-      <div style={S.sidebar}>
-        <div style={S.brand}>{dfsSettings.companyName || "DFS"} CRM</div>
-        <div style={{ ...S.brandSub, marginBottom: 24 }}>debt settlement</div>
-        <nav style={{ flex: 1 }}>
-          {DFS_NAV_ITEMS.filter((item) => getDfsAllowedSections(currentUser && currentUser.role).includes(item.id)).map((item) => {
-            const Icon = item.icon;
+          {REFUND_TARGET_OPTIONS.map((opt) => {
+            const empId = employeeIdForRole(confirmRefund, opt.id);
+            if (!empId) return null;
+            const emp = employeeById[empId];
+            const fullAmount = roleCreditAmount(confirmRefund, opt.id);
             return (
-              <button
-                key={item.id}
-                onClick={() => setDfsSection(item.id)}
-                style={{ ...S.navItem, ...(dfsSection === item.id ? S.navItemActive : {}) }}
-              >
-                <Icon size={16} />
-                {item.label}
-              </button>
+              <div key={opt.id} style={S.refundRoleRow}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 600, color: T.ink }}>
+                    {opt.label} — {emp ? emp.name : "Unassigned"}
+                  </div>
+                  <div style={{ fontSize: 11, color: T.textMuted }}>Full credit {money(fullAmount)}</div>
+                </div>
+                {refundType === "partial" && (
+                  <input
+                    type="number"
+                    value={refundAmounts[opt.id]}
+                    onChange={(e) => setRefundAmounts((r) => ({ ...r, [opt.id]: e.target.value }))}
+                    placeholder="0"
+                    style={{ ...S.input, width: 90, fontFamily: T.mono }}
+                  />
+                )}
+                <div style={{ position: "relative" }}>
+                  <select
+                    value={refundWeekChoices[opt.id]}
+                    onChange={(e) => setRefundWeekChoices((r) => ({ ...r, [opt.id]: e.target.value }))}
+                    style={{ ...S.select, width: 130, paddingRight: 26, fontSize: 12 }}
+                  >
+                    <option value="previous">Previous week</option>
+                    <option value="current">This week</option>
+                    <option value="next">Next week</option>
+                  </select>
+                  <ChevronDown size={12} color={T.textMuted} style={S.selectChevron} />
+                </div>
+              </div>
             );
           })}
-        </nav>
-        <div style={S.sidebarFooter}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-            <div style={S.avatarSm}>{currentUser ? initials(currentUser.name) : <User size={12} />}</div>
-            <div style={{ minWidth: 0, flex: 1, textAlign: "left" }}>
-              <div style={{ fontSize: 12.5, color: T.ink, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {currentUser ? currentUser.name : "Signed in"}
-              </div>
-            </div>
+
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
+            <button style={S.ghostBtn} onClick={() => setConfirmRefund(null)}>
+              Cancel
+            </button>
+            <button
+              style={S.dangerBtn}
+              onClick={() =>
+                markRefunded(confirmRefund.id, { type: refundType, amounts: refundAmounts, weekChoices: refundWeekChoices })
+              }
+            >
+              Confirm refund
+            </button>
           </div>
-          <button style={S.logOutLink} onClick={onSwitchCampaign}>
-            Switch Campaign
-          </button>
-          <button style={S.logOutLink} onClick={onLogout}>
-            Log out
-          </button>
-        </div>
-      </div>
-
-      {/* Main */}
-      <div style={S.main}>
-        <div style={S.topbar}>
-          <div style={S.topbarTitle}>{DFS_NAV_ITEMS.find((n) => n.id === dfsSection)?.label}</div>
-        </div>
-        <div style={S.content}>
-          {dfsSection === "dashboard" && (
-            <div style={S.dashboardWrap}>
-              <div style={S.dashboardSectionLabel}>Financial Overview</div>
-              <div style={S.sourceGrid}>
-                <div style={S.sourceCard}>
-                  <div style={S.reportsCardLabel}>New leads (7 days)</div>
-                  <div style={{ ...S.sourceValue, color: T.pineDark }}>{dfsNewLeadsThisWeek.length}</div>
-                </div>
-                <div style={S.sourceCard}>
-                  <div style={S.reportsCardLabel}>Active clients</div>
-                  <div style={{ ...S.sourceValue, color: T.pineDark }}>{dfsActiveClients.length}</div>
-                </div>
-                <div style={S.sourceCard}>
-                  <div style={S.reportsCardLabel}>Total enrolled debt</div>
-                  <div style={{ ...S.sourceValue, color: T.ink }}>{money(dfsTotalEnrolledDebt)}</div>
-                </div>
-                <div style={S.sourceCard}>
-                  <div style={S.reportsCardLabel}>Settled debt</div>
-                  <div style={{ ...S.sourceValue, color: T.pineDark }}>{money(dfsSettledDebt)}</div>
-                </div>
-                <div style={S.sourceCard}>
-                  <div style={S.reportsCardLabel}>Average settlement %</div>
-                  <div style={{ ...S.sourceValue, color: T.ink }}>
-                    {dfsSettlementPercents.length > 0 ? `${dfsAvgSettlementPercent.toFixed(1)}%` : "—"}
-                  </div>
-                </div>
-              </div>
-              <div style={{ ...S.hint, marginTop: 16 }}>
-                More dashboard widgets (expected revenue, collected fees, upcoming/missed payments, pending
-                documents, follow-ups due, rep performance) will be added as those sections get built out.
-              </div>
-            </div>
-          )}
-
-          {dfsSection === "clients" && (
-            <div style={S.dashboardWrap}>
-              <div style={S.contactsToolbar}>
-                <div style={{ position: "relative", flex: 1, maxWidth: 320 }}>
-                  <Search size={14} color={T.textMuted} style={S.searchIcon} />
-                  <input
-                    value={dfsClientsSearch}
-                    onChange={(e) => setDfsClientsSearch(e.target.value)}
-                    placeholder="Search clients"
-                    style={S.searchInput}
-                  />
-                </div>
-                <button
-                  onClick={() =>
-                    setDfsClientModal({
-                      id: dfsUid(),
-                      // Section 1 — Contact Information
-                      firstName: "",
-                      lastName: "",
-                      businessName: "",
-                      phone: "",
-                      altPhone: "",
-                      email: "",
-                      businessAddress: "",
-                      city: "",
-                      state: "",
-                      zip: "",
-                      preferredContactMethod: "",
-                      timeZone: "",
-                      // Section 2 — Business Information
-                      legalBusinessName: "",
-                      entityType: "",
-                      industry: "",
-                      yearsInBusiness: "",
-                      ein: "",
-                      monthlyGrossRevenue: "",
-                      avgMonthlyBankDeposits: "",
-                      stateOfIncorporation: "",
-                      businessStatus: "",
-                      // Section 4 — Sales / Enrollment
-                      leadSource: "",
-                      dfsCampaign: "",
-                      assignedRep: "",
-                      assignedCloser: "",
-                      leadStatus: "",
-                      pipelineStage: "New Lead",
-                      dateLeadReceived: "",
-                      dateContacted: "",
-                      enrollmentDate: "",
-                      totalDebtEnrolled: "",
-                      programLength: "",
-                      clientDepositAmount: "",
-                      depositFrequency: "",
-                      companyFee: "",
-                      estimatedSettlementAmount: "",
-                      estimatedClientSavings: "",
-                      notes: "",
-                      debts: [],
-                      isNew: true,
-                      createdAt: Date.now(),
-                    })
-                  }
-                  style={S.primaryBtn}
-                >
-                  <Plus size={14} /> Client
-                </button>
-              </div>
-              {dfsFilteredClients.length === 0 ? (
-                <div style={S.emptyState}>
-                  <Users size={22} color={T.borderStrong} />
-                  <div style={{ marginTop: 8, fontSize: 13, color: T.textMuted }}>No clients yet — add your first one</div>
-                </div>
-              ) : (
-                <div style={S.contactGrid}>
-                  {dfsFilteredClients.map((c) => {
-                    const totalDebt = (c.debts || []).reduce((s, d) => s + (Number(d.originalBalance) || 0), 0);
-                    return (
-                      <div key={c.id} style={S.contactCard} onClick={() => setDfsClientModal({ ...c, isNew: false })}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                          <div style={S.contactName}>{dfsClientDisplayName(c)}</div>
-                          <span style={{ ...S.leadBadge, background: "#F0EFE9", color: T.textMuted, flexShrink: 0 }}>
-                            {c.pipelineStage || "New Lead"}
-                          </span>
-                        </div>
-                        {c.businessName && (
-                          <div style={S.contactMetaRow}>
-                            <Building2 size={12} /> {c.businessName}
-                          </div>
-                        )}
-                        {c.phone && (
-                          <div style={S.contactMetaRow}>
-                            <Phone size={12} /> {c.phone}
-                          </div>
-                        )}
-                        <div style={S.contactMetaRow}>
-                          <Wallet size={12} /> {(c.debts || []).length} position{(c.debts || []).length === 1 ? "" : "s"} · {money(totalDebt)}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
-          {dfsSection === "creditors" && (
-            <div style={S.dashboardWrap}>
-              <div style={S.contactsToolbar}>
-                <div style={{ position: "relative", flex: 1, maxWidth: 320 }}>
-                  <Search size={14} color={T.textMuted} style={S.searchIcon} />
-                  <input
-                    value={dfsCreditorsSearch}
-                    onChange={(e) => setDfsCreditorsSearch(e.target.value)}
-                    placeholder="Search creditors"
-                    style={S.searchInput}
-                  />
-                </div>
-                <button
-                  onClick={() =>
-                    setDfsCreditorModal({
-                      id: dfsUid(),
-                      name: "",
-                      contactName: "",
-                      phone: "",
-                      email: "",
-                      attorneyName: "",
-                      attorneyContact: "",
-                      collectionAgency: "",
-                      collectionAgencyContact: "",
-                      typicalSettlementRange: "",
-                      preferredPaymentArrangement: "",
-                      previousSettlements: "",
-                      negotiationNotes: "",
-                      isNew: true,
-                    })
-                  }
-                  style={S.primaryBtn}
-                >
-                  <Plus size={14} /> Creditor
-                </button>
-              </div>
-              {dfsFilteredCreditors.length === 0 ? (
-                <div style={S.emptyState}>
-                  <Building2 size={22} color={T.borderStrong} />
-                  <div style={{ marginTop: 8, fontSize: 13, color: T.textMuted }}>No creditors yet — add your first one</div>
-                </div>
-              ) : (
-                <div style={S.contactGrid}>
-                  {dfsFilteredCreditors.map((cr) => {
-                    const linkedDebts = dfsAllDebts.filter(
-                      (d) => (d.creditorName || "").trim().toLowerCase() === (cr.name || "").trim().toLowerCase()
-                    );
-                    const totalExposure = linkedDebts.reduce((s, d) => s + (Number(d.currentBalance) || 0), 0);
-                    return (
-                      <div key={cr.id} style={S.contactCard} onClick={() => setDfsCreditorModal({ ...cr, isNew: false })}>
-                        <div style={S.contactName}>{cr.name || "Unnamed creditor"}</div>
-                        {cr.contactName && (
-                          <div style={S.contactMetaRow}>
-                            <User size={12} /> {cr.contactName}
-                          </div>
-                        )}
-                        {cr.phone && (
-                          <div style={S.contactMetaRow}>
-                            <Phone size={12} /> {cr.phone}
-                          </div>
-                        )}
-                        {cr.typicalSettlementRange && (
-                          <div style={S.contactMetaRow}>
-                            <TrendingUp size={12} /> Typical settlement: {cr.typicalSettlementRange}
-                          </div>
-                        )}
-                        <div style={S.contactMetaRow}>
-                          <Wallet size={12} /> {linkedDebts.length} active position{linkedDebts.length === 1 ? "" : "s"}
-                          {linkedDebts.length > 0 ? ` · ${money(totalExposure)} exposure` : ""}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
-          {dfsSection === "admin" && (
-            <div style={S.dashboardWrap}>
-              <div style={S.dashboardSectionLabel}>Users</div>
-              <div style={S.hint}>
-                DFS-specific accounts sign in and go straight into DFS, skipping the campaign picker. Accounts set
-                to "Both" (like admins) can switch between RRG and DFS.
-              </div>
-              {dfsUsers.length === 0 ? (
-                <div style={{ fontSize: 12.5, color: T.textMuted, marginTop: 8 }}>No DFS users yet.</div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
-                  {dfsUsers.map((u) => (
-                    <div
-                      key={u.id}
-                      onClick={() => setDfsUserModal({ ...u, password: "" })}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        background: T.paperRaised,
-                        border: `1px solid ${T.border}`,
-                        borderRadius: 8,
-                        padding: "10px 12px",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: T.ink }}>{u.name}</div>
-                        <div style={{ fontSize: 11.5, color: T.textMuted }}>@{u.username}</div>
-                      </div>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <RoleBadge role={u.role} size="sm" />
-                        <span style={{ ...S.leadBadge, background: "#F0EFE9", color: T.textMuted }}>
-                          {u.campaign === "both" ? "Both" : "DFS"}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <button
-                onClick={() => setDfsUserModal({ name: "", username: "", password: "", role: "rep", campaign: "dfs" })}
-                style={{ ...S.primaryBtn, marginTop: 10 }}
-              >
-                <Plus size={14} /> Add user
-              </button>
-
-              <div style={{ ...S.dashboardSectionLabel, marginTop: 28 }}>Pipeline Stages</div>
-              <div style={S.hint}>Customize the stages clients move through. Reorder, rename, or remove as needed.</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
-                {dfsPipelineStages.map((stage, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      background: T.paperRaised,
-                      border: `1px solid ${T.border}`,
-                      borderRadius: 8,
-                      padding: "8px 10px",
-                    }}
-                  >
-                    <span style={{ fontSize: 11, color: T.textMuted, width: 20 }}>{idx + 1}</span>
-                    <input
-                      value={stage}
-                      onChange={(e) => {
-                        const next = [...dfsPipelineStages];
-                        next[idx] = e.target.value;
-                        saveDfsPipelineStages(next);
-                      }}
-                      style={{ ...S.input, flex: 1, padding: "6px 8px" }}
-                    />
-                    <button
-                      onClick={() => {
-                        if (idx === 0) return;
-                        const next = [...dfsPipelineStages];
-                        [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
-                        saveDfsPipelineStages(next);
-                      }}
-                      disabled={idx === 0}
-                      style={{ ...S.iconBtnGhost, opacity: idx === 0 ? 0.3 : 1 }}
-                    >
-                      <ChevronUp size={13} color={T.textMuted} />
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (idx === dfsPipelineStages.length - 1) return;
-                        const next = [...dfsPipelineStages];
-                        [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
-                        saveDfsPipelineStages(next);
-                      }}
-                      disabled={idx === dfsPipelineStages.length - 1}
-                      style={{ ...S.iconBtnGhost, opacity: idx === dfsPipelineStages.length - 1 ? 0.3 : 1 }}
-                    >
-                      <ChevronDown size={13} color={T.textMuted} />
-                    </button>
-                    <button
-                      onClick={() => saveDfsPipelineStages(dfsPipelineStages.filter((_, i) => i !== idx))}
-                      style={S.iconBtnGhost}
-                    >
-                      <Trash2 size={13} color={T.textMuted} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                <input
-                  value={dfsNewStageInput}
-                  onChange={(e) => setDfsNewStageInput(e.target.value)}
-                  placeholder="New stage name"
-                  style={{ ...S.input, flex: 1 }}
-                />
-                <button
-                  onClick={() => {
-                    if (!dfsNewStageInput.trim()) return;
-                    saveDfsPipelineStages([...dfsPipelineStages, dfsNewStageInput.trim()]);
-                    setDfsNewStageInput("");
-                  }}
-                  style={S.ghostBtn}
-                >
-                  <Plus size={13} /> Add stage
-                </button>
-              </div>
-
-              <div style={{ ...S.dashboardSectionLabel, marginTop: 28 }}>System Settings</div>
-              <div style={{ maxWidth: 320, marginTop: 10 }}>
-                <Field label="Company name">
-                  <input
-                    value={dfsSettings.companyName || ""}
-                    onChange={(e) => setDfsSettings({ ...dfsSettings, companyName: e.target.value })}
-                    onBlur={() => saveDfsSettings(dfsSettings)}
-                    style={S.input}
-                  />
-                </Field>
-              </div>
-            </div>
-          )}
-
-          {dfsSection === "calendar" && (
-            <div style={S.dashboardWrap}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <button onClick={() => setDfsCalendarMonthOffset((m) => m - 1)} style={S.weekNavBtn} aria-label="Previous month">
-                    ‹
-                  </button>
-                  <div style={{ fontFamily: T.display, fontSize: 16, fontWeight: 600, color: T.ink, minWidth: 170, textAlign: "center" }}>
-                    {dfsCalendarMonthLabel}
-                  </div>
-                  <button onClick={() => setDfsCalendarMonthOffset((m) => m + 1)} style={S.weekNavBtn} aria-label="Next month">
-                    ›
-                  </button>
-                  {dfsCalendarMonthOffset !== 0 && (
-                    <button onClick={() => setDfsCalendarMonthOffset(0)} style={S.ghostBtn}>
-                      Today
-                    </button>
-                  )}
-                </div>
-                <button onClick={() => setDfsEventModal(dfsNewEventDefaults(dfsTodayStr))} style={S.primaryBtn}>
-                  <Plus size={14} /> Event
-                </button>
-              </div>
-
-              <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 12, fontSize: 11.5 }}>
-                {DFS_EVENT_TYPES.map((t) => (
-                  <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    <span>{t.icon}</span>
-                    <span style={{ color: T.textMuted }}>{t.label}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 1, background: T.border, border: `1px solid ${T.border}`, borderRadius: 8, overflow: "hidden" }}>
-                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-                  <div key={d} style={{ background: T.paperRaised, padding: "8px 6px", fontSize: 10.5, fontWeight: 600, color: T.textMuted, textAlign: "center" }}>
-                    {d}
-                  </div>
-                ))}
-                {dfsCalendarCells.map((cell, idx) =>
-                  cell === null ? (
-                    <div key={idx} style={{ background: T.paper, minHeight: 90 }} />
-                  ) : (
-                    <div
-                      key={idx}
-                      style={{
-                        background: cell.dateStr === dfsTodayStr ? "#EAF3EC" : T.paper,
-                        minHeight: 90,
-                        padding: 6,
-                        cursor: "pointer",
-                      }}
-                      onClick={() => setDfsEventModal(dfsNewEventDefaults(cell.dateStr))}
-                    >
-                      <div style={{ fontSize: 11, color: cell.dateStr === dfsTodayStr ? T.pineDark : T.textMuted, fontWeight: cell.dateStr === dfsTodayStr ? 700 : 500, marginBottom: 4 }}>
-                        {cell.day}
-                      </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                        {cell.events.slice(0, 3).map((ev) => {
-                          const typeInfo = DFS_EVENT_TYPES.find((t) => t.id === ev.type) || DFS_EVENT_TYPES[DFS_EVENT_TYPES.length - 1];
-                          return (
-                            <div
-                              key={ev.id}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDfsEventDetailModal(ev);
-                              }}
-                              style={{
-                                fontSize: 10,
-                                padding: "2px 4px",
-                                borderRadius: 4,
-                                background: typeInfo.color,
-                                color: "#fff",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
-                              }}
-                              title={ev.title}
-                            >
-                              {typeInfo.icon} {ev.time ? `${ev.time} ` : ""}
-                              {ev.title}
-                            </div>
-                          );
-                        })}
-                        {cell.events.length > 3 && (
-                          <div style={{ fontSize: 10, color: T.textMuted }}>+{cell.events.length - 3} more</div>
-                        )}
-                      </div>
-                    </div>
-                  )
-                )}
-              </div>
-            </div>
-          )}
-
-          {dfsSection === "leads" && (
-            <div style={S.dashboardWrap}>
-              <div style={S.contactsToolbar}>
-                <div style={{ position: "relative", flex: 1, maxWidth: 320 }}>
-                  <Search size={14} color={T.textMuted} style={S.searchIcon} />
-                  <input
-                    value={dfsLeadsSearch}
-                    onChange={(e) => setDfsLeadsSearch(e.target.value)}
-                    placeholder="Search leads"
-                    style={S.searchInput}
-                  />
-                </div>
-                <button onClick={() => setDfsLeadModal(dfsNewLeadDefaults())} style={S.primaryBtn}>
-                  <Plus size={14} /> Lead
-                </button>
-              </div>
-              {dfsFilteredLeads.length === 0 ? (
-                <div style={S.emptyState}>
-                  <ClipboardList size={22} color={T.borderStrong} />
-                  <div style={{ marginTop: 8, fontSize: 13, color: T.textMuted }}>No leads yet — add your first one</div>
-                </div>
-              ) : (
-                <div style={S.contactGrid}>
-                  {dfsFilteredLeads.map((l) => {
-                    const totalDebt = (l.debts || []).reduce((s, d) => s + (Number(d.currentBalance) || 0), 0);
-                    const notWorked = dfsIsLeadNotWorked(l);
-                    return (
-                      <div key={l.id} style={S.contactCard} onClick={() => setDfsLeadModal({ ...l, isNew: false })}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                          <div style={S.contactName}>{dfsClientDisplayName(l)}</div>
-                          <span style={{ ...S.leadBadge, background: "#F0EFE9", color: T.textMuted, flexShrink: 0 }}>
-                            {l.leadStage || "New Lead"}
-                          </span>
-                        </div>
-                        {notWorked && (
-                          <div style={{ ...S.contactMetaRow, color: "#A32D2D", fontWeight: 600 }}>
-                            <AlertTriangle size={12} /> Not worked in {DFS_LEAD_NOT_WORKED_HOURS}+ hours
-                          </div>
-                        )}
-                        {l.businessName && (
-                          <div style={S.contactMetaRow}>
-                            <Building2 size={12} /> {l.businessName}
-                          </div>
-                        )}
-                        {l.phone && (
-                          <div style={S.contactMetaRow}>
-                            <Phone size={12} /> {l.phone}
-                          </div>
-                        )}
-                        {l.callbackDate && (
-                          <div style={S.contactMetaRow}>
-                            <CalendarDays size={12} /> Callback: {l.callbackDate}
-                          </div>
-                        )}
-                        <div style={S.contactMetaRow}>
-                          <Wallet size={12} /> {(l.debts || []).length} position{(l.debts || []).length === 1 ? "" : "s"} · {money(totalDebt)}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
-          {!["dashboard", "clients", "creditors", "admin", "calendar", "leads"].includes(dfsSection) && (
-            <div style={S.dashboardWrap}>
-              <div style={S.emptyState}>
-                <ClipboardList size={22} color={T.borderStrong} />
-                <div style={{ marginTop: 8, fontSize: 13, color: T.textMuted }}>
-                  {DFS_NAV_ITEMS.find((n) => n.id === dfsSection)?.label} hasn't been built yet — this is a
-
-                  placeholder for a future session.
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {dfsClientModal && (
-        <Modal onClose={() => setDfsClientModal(null)} fullScreen>
-          <DfsClientForm
-            initial={dfsClientModal}
-            error={dfsSaveError}
-            pipelineStages={dfsPipelineStages}
-            currentUser={currentUser}
-            onCancel={() => setDfsClientModal(null)}
-            onSave={saveDfsClient}
-            onDelete={
-              !dfsClientModal.isNew
-                ? async () => {
-                    await deleteDfsClient(dfsClientModal.id);
-                    setDfsClientModal(null);
-                  }
-                : null
-            }
-          />
-        </Modal>
-      )}
-      {dfsCreditorModal && (
-        <Modal onClose={() => setDfsCreditorModal(null)} wide>
-          <DfsCreditorForm
-            initial={dfsCreditorModal}
-            error={dfsCreditorSaveError}
-            onCancel={() => setDfsCreditorModal(null)}
-            onSave={saveDfsCreditor}
-            onDelete={
-              !dfsCreditorModal.isNew
-                ? async () => {
-                    await deleteDfsCreditor(dfsCreditorModal.id);
-                    setDfsCreditorModal(null);
-                  }
-                : null
-            }
-          />
-        </Modal>
-      )}
-      {dfsUserModal && (
-        <Modal onClose={() => setDfsUserModal(null)} narrow>
-          <UserForm
-            initial={dfsUserModal}
-            currentUserId={currentUser ? currentUser.id : null}
-            userCount={dfsUsers.length}
-            serverError={dfsUserFormError}
-            roleOptions={DFS_ROLES}
-            onCancel={() => setDfsUserModal(null)}
-            onSave={async (form) => {
-              try {
-                if (form.id) {
-                  const body = { name: form.name, username: form.username, role: form.role, campaign: form.campaign };
-                  if (form.password) body.password = form.password;
-                  const res = await fetch(`/api/users/${form.id}`, {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    credentials: "include",
-                    body: JSON.stringify(body),
-                  });
-                  if (!res.ok) {
-                    const err = await res.json().catch(() => ({}));
-                    setDfsUserFormError(err.error || "Couldn't save that user.");
-                    return;
-                  }
-                } else {
-                  const res = await fetch("/api/users", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    credentials: "include",
-                    body: JSON.stringify(form),
-                  });
-                  if (!res.ok) {
-                    const err = await res.json().catch(() => ({}));
-                    setDfsUserFormError(err.error || "Couldn't create that user.");
-                    return;
-                  }
-                }
-                setDfsUserFormError("");
-                setDfsUserModal(null);
-                refreshDfsUsers();
-              } catch (e) {
-                setDfsUserFormError("Couldn't reach the server. Try again.");
-              }
-            }}
-            onDelete={
-              dfsUserModal.id
-                ? async () => {
-                    try {
-                      const res = await fetch(`/api/users/${dfsUserModal.id}`, { method: "DELETE", credentials: "include" });
-                      if (!res.ok) {
-                        const err = await res.json().catch(() => ({}));
-                        setDfsUserFormError(err.error || "Couldn't delete that user.");
-                        return;
-                      }
-                      setDfsUserFormError("");
-                      setDfsUserModal(null);
-                      refreshDfsUsers();
-                    } catch (e) {
-                      setDfsUserFormError("Couldn't reach the server. Try again.");
-                    }
-                  }
-                : null
-            }
-          />
-        </Modal>
-      )}
-      {dfsEventModal && (
-        <Modal onClose={() => setDfsEventModal(null)}>
-          <DfsEventForm
-            initial={dfsEventModal}
-            clients={dfsClients}
-            onCancel={() => setDfsEventModal(null)}
-            onSave={saveDfsEvent}
-            onDelete={
-              !dfsEventModal.isNew
-                ? async () => {
-                    await deleteDfsEvent(dfsEventModal.id);
-                    setDfsEventModal(null);
-                  }
-                : null
-            }
-          />
-        </Modal>
-      )}
-      {dfsEventDetailModal && (
-        <Modal onClose={() => setDfsEventDetailModal(null)} narrow>
-          <DfsEventDetail
-            event={dfsEventDetailModal}
-            clients={dfsClients}
-            onClose={() => setDfsEventDetailModal(null)}
-            onEdit={() => {
-              setDfsEventModal({ ...dfsEventDetailModal, isNew: false });
-              setDfsEventDetailModal(null);
-            }}
-            onMarkComplete={async () => {
-              await saveDfsEvent({ ...dfsEventDetailModal, status: "Completed" });
-              setDfsEventDetailModal(null);
-            }}
-            onOpenClient={() => {
-              const client = dfsClients.find((c) => c.id === dfsEventDetailModal.clientId);
-              if (client) {
-                setDfsEventDetailModal(null);
-                setDfsSection("clients");
-                setDfsClientModal({ ...client, isNew: false });
-              }
-            }}
-          />
-        </Modal>
-      )}
-      {dfsLeadModal && (
-        <Modal onClose={() => setDfsLeadModal(null)} fullScreen>
-          <DfsLeadForm
-            initial={dfsLeadModal}
-            error={dfsConvertError}
-            onCancel={() => {
-              setDfsLeadModal(null);
-              setDfsConvertError("");
-            }}
-            onSave={saveDfsLead}
-            onDelete={
-              !dfsLeadModal.isNew
-                ? async () => {
-                    await deleteDfsLead(dfsLeadModal.id);
-                    setDfsLeadModal(null);
-                  }
-                : null
-            }
-            onSendToCloser={(lead) => setDfsSendToCloserModal(lead)}
-            onConvert={(lead) => convertDfsLeadToClient(lead)}
-          />
-        </Modal>
-      )}
-      {dfsSendToCloserModal && (
-        <Modal onClose={() => setDfsSendToCloserModal(null)}>
-          <DfsSendToCloserForm
-            lead={dfsSendToCloserModal}
-            onCancel={() => setDfsSendToCloserModal(null)}
-            onSend={(closerData) => sendDfsLeadToCloser(dfsSendToCloserModal, closerData)}
-          />
         </Modal>
       )}
     </div>
   );
 }
 
-function DfsClientForm({ initial, error: saveError, pipelineStages, currentUser, onCancel, onSave, onDelete }) {
-  const [form, setForm] = useState(initial);
-  const [error, setError] = useState("");
-  const [tab, setTab] = useState("overview");
-  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
-  const isAdmin = currentUser && currentUser.role === "admin";
+function Modal({ children, onClose, narrow, wide, disableBackdropClose, printable, onMinimize }) {
+  return (
+    <div
+      style={S.modalBackdrop}
+      onClick={disableBackdropClose ? undefined : onClose}
+    >
+      <div
+        id={printable ? "print-area" : undefined}
+        style={{ ...S.modalCard, ...(narrow ? { maxWidth: 420 } : {}), ...(wide ? { maxWidth: 760 } : {}) }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={S.modalCloseRow} className="no-print">
+          {printable && (
+            <button onClick={() => window.print()} style={S.modalIconBtn} aria-label="Print">
+              <Printer size={15} />
+            </button>
+          )}
+          {onMinimize && (
+            <button onClick={onMinimize} style={S.modalIconBtn} aria-label="Minimize">
+              <Minus size={15} />
+            </button>
+          )}
+          <button onClick={onClose} style={S.modalIconBtn} aria-label="Close">
+            <X size={16} />
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
 
-  function updateDebt(id, patch) {
-    setForm({ ...form, debts: (form.debts || []).map((d) => (d.id === id ? { ...d, ...patch } : d)) });
-  }
-  function addDebt() {
-    setForm({
-      ...form,
-      debts: [
-        ...(form.debts || []),
-        {
-          id: dfsUid(),
-          creditorName: "",
-          originalBalance: "",
-          currentBalance: "",
-          paymentAmount: "",
-          paymentFrequency: "",
-          dateFunded: "",
-          position: "",
-          status: "Active",
-          amountPastDue: "",
-          collectionsCompany: "",
-          attorneyLawFirm: "",
-          lawsuitJudgmentStatus: "",
-          lastPaymentDate: "",
-          settlementOffer: "",
-          negotiatedAmount: "",
-          settlementPercent: "",
-        },
-      ],
-    });
-  }
-  function removeDebt(id) {
-    setForm({ ...form, debts: (form.debts || []).filter((d) => d.id !== id) });
+function Field({ label, children, required }) {
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={S.fieldLabel}>
+        {label}
+        {required && <span style={{ color: "#A32D2D" }}> *</span>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ExpenseFileButton({ expenseKey }) {
+  return null;
+}
+
+function SaleForm({ initial, employees, settings, dncList, sales, syncingToEpg, onCancel, onMinimize, onSave, onDelete }) {
+  const [form, setForm] = useState({ ...blankSale(), ...initial });
+  const [saving, setSaving] = useState(false);
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const addressDebounce = useRef(null);
+
+  function set(key, value) {
+    setForm((f) => ({ ...f, [key]: value }));
   }
 
-  function submit() {
-    const displayName = `${form.firstName || ""} ${form.lastName || ""}`.trim() || form.name;
-    if (!displayName || !displayName.trim()) {
-      setError("Enter the client's first and last name first");
+  useEffect(() => {
+    const pkg = Number(form.packagePrice) || 0;
+    const flex = Number(form.dateFlex) || 0;
+    const total = pkg + flex;
+    setForm((f) => ({ ...f, totalPrice: total ? String(total) : "" }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.packagePrice, form.dateFlex]);
+
+  function fetchAddressSuggestions(query) {
+    if (addressDebounce.current) clearTimeout(addressDebounce.current);
+    if (!query || query.length < 4) {
+      setAddressSuggestions([]);
       return;
     }
-    setError("");
-    onSave(form);
+    addressDebounce.current = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&countrycodes=us&limit=5&q=${encodeURIComponent(query)}`
+        );
+        const data = await res.json();
+        setAddressSuggestions(data || []);
+      } catch (e) {
+        setAddressSuggestions([]);
+      }
+    }, 350);
   }
 
-  const debts = form.debts || [];
-  const snapMcaDebt = debts.reduce((s, d) => s + (Number(d.currentBalance) || 0), 0);
-  const snapEnrolled = debts.reduce((s, d) => s + (Number(d.originalBalance) || 0), 0);
-  const snapSettledDebts = debts.filter((d) => d.status === "Settled");
-  const snapSettled = snapSettledDebts.reduce((s, d) => s + (Number(d.originalBalance) || 0), 0);
-  const snapSavings = snapSettledDebts.reduce(
-    (s, d) => s + Math.max(0, (Number(d.originalBalance) || 0) - (Number(d.negotiatedAmount) || 0)),
-    0
-  );
-  const snapWeeklyPayments = debts.reduce((s, d) => s + (Number(d.paymentAmount) || 0), 0);
-  const displayName = `${form.firstName || ""} ${form.lastName || ""}`.trim() || form.name || "New Client";
+  function selectAddressSuggestion(sug) {
+    const addr = sug.address || {};
+    const houseNumber = addr.house_number || "";
+    const road = addr.road || "";
+    const streetLine = [houseNumber, road].filter(Boolean).join(" ");
+    const city = addr.city || addr.town || addr.village || addr.hamlet || "";
+    const stateFull = addr.state || "";
+    const stateAbbr = US_STATE_ABBREVIATIONS[stateFull] || stateFull;
+    const zip = addr.postcode ? addr.postcode.split("-")[0] : "";
+    setForm((f) => ({
+      ...f,
+      address: streetLine || f.address,
+      city: city || f.city,
+      state: stateAbbr || f.state,
+      zip: zip || f.zip,
+    }));
+    setAddressSuggestions([]);
+    setShowSuggestions(false);
+  }
 
-  const DFS_TABS = [
-    { id: "overview", label: "Overview" },
-    { id: "mca", label: "MCA Accounts" },
-    { id: "documents", label: "Documents" },
-    { id: "negotiations", label: "Negotiations" },
-    { id: "payments", label: "Payments" },
-    { id: "communications", label: "Communications" },
-    { id: "tasks", label: "Tasks" },
-    { id: "notes", label: "Notes" },
-    { id: "activity", label: "Activity" },
-  ];
+  const dncMatch =
+    matchingDncEntryHelper(dncList, form.phone) ||
+    matchingDncEntryHelper(dncList, form.phone2) ||
+    matchingDncEntryHelper(dncList, form.email, true);
+
+  function matchingDncEntryHelper(list, value, isEmail) {
+    if (!value) return null;
+    if (isEmail) {
+      const v = value.trim().toLowerCase();
+      return list.find((d) => (d.email || "").trim().toLowerCase() === v) || null;
+    }
+    const normalized = value.replace(/\D/g, "");
+    if (!normalized) return null;
+    return list.find((d) => (d.phone || "").replace(/\D/g, "") === normalized) || null;
+  }
+
+  const missingFields = SALE_REQUIRED_FIELDS.filter((f) => !String(form[f.key] || "").trim());
+  const [showValidation, setShowValidation] = useState(false);
+
+  async function handleSave() {
+    if (missingFields.length > 0) {
+      setShowValidation(true);
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave(form);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      {/* Client Snapshot */}
-      <div style={{ borderBottom: `1px solid ${T.border}`, paddingBottom: 14, marginBottom: 14 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            <div style={{ fontFamily: T.display, fontSize: 20, fontWeight: 600, color: T.ink }}>
-              {form.businessName || displayName}
-              {form.businessStatus && (
-                <span style={{ ...S.leadBadge, marginLeft: 10, background: "#EAF3EC", color: T.pineDark }}>
-                  {form.businessStatus}
-                </span>
-              )}
-            </div>
-            <div style={{ fontSize: 13, color: T.textMuted, marginTop: 2 }}>
-              {displayName}
-              {form.phone ? ` · ${form.phone}` : ""}
-            </div>
-          </div>
-          <button onClick={onCancel} style={S.iconBtnGhost}>
-            <X size={16} color={T.textMuted} />
-          </button>
+    <div>
+      <div style={S.modalTitle}>{form.id ? "Edit sale" : "New sale"}</div>
+      {dncMatch && (
+        <div style={S.dncWarning}>
+          <ShieldAlert size={15} />
+          This contact is on the DNC list{dncMatch.notes ? `: ${dncMatch.notes}` : ""}.
         </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 18, marginTop: 12, fontSize: 12.5 }}>
-          <div>
-            <span style={{ color: T.textMuted }}>MCA Debt: </span>
-            <strong>{money(snapMcaDebt)}</strong>
-          </div>
-          <div>
-            <span style={{ color: T.textMuted }}>Positions: </span>
-            <strong>{debts.length}</strong>
-          </div>
-          <div>
-            <span style={{ color: T.textMuted }}>Payments: </span>
-            <strong>{money(snapWeeklyPayments)}</strong>
-          </div>
-          <div>
-            <span style={{ color: T.textMuted }}>Enrolled: </span>
-            <strong>{money(snapEnrolled)}</strong>
-          </div>
-          <div>
-            <span style={{ color: T.textMuted }}>Settled: </span>
-            <strong>{money(snapSettled)}</strong>
-          </div>
-          <div>
-            <span style={{ color: T.textMuted }}>Savings: </span>
-            <strong>{money(snapSavings)}</strong>
-          </div>
-          <div>
-            <span style={{ color: T.textMuted }}>Stage: </span>
-            <strong>{form.pipelineStage || "New Lead"}</strong>
-          </div>
-          {form.assignedRep && (
-            <div>
-              <span style={{ color: T.textMuted }}>Assigned: </span>
-              <strong>{form.assignedRep}</strong>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div style={{ display: "flex", gap: 4, borderBottom: `1px solid ${T.border}`, marginBottom: 16, flexWrap: "wrap" }}>
-        {DFS_TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            style={{
-              padding: "8px 12px",
-              fontSize: 12.5,
-              fontWeight: 500,
-              background: "none",
-              border: "none",
-              borderBottom: tab === t.id ? `2px solid ${T.pineDark}` : "2px solid transparent",
-              color: tab === t.id ? T.pineDark : T.textMuted,
-            }}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ flex: 1, overflowY: "auto", paddingRight: 4 }} className="crm-scroll">
-        {tab === "overview" && (
-          <>
-            <div style={S.dfsSubHeader}>Contact Information</div>
-            <div style={S.dfsFieldGrid3}>
-              <Field label="First Name *">
-                <input value={form.firstName || ""} onChange={set("firstName")} style={S.input} autoFocus />
-              </Field>
-              <Field label="Last Name *">
-                <input value={form.lastName || ""} onChange={set("lastName")} style={S.input} />
-              </Field>
-              <Field label="Business Name / DBA">
-                <input value={form.businessName || ""} onChange={set("businessName")} style={S.input} />
-              </Field>
-              <Field label="Phone">
-                <input value={form.phone || ""} onChange={set("phone")} style={S.input} />
-              </Field>
-              <Field label="Alternate Phone">
-                <input value={form.altPhone || ""} onChange={set("altPhone")} style={S.input} />
-              </Field>
-              <Field label="Email">
-                <input value={form.email || ""} onChange={set("email")} style={S.input} />
-              </Field>
-              <Field label="Preferred Contact Method">
-                <div style={{ position: "relative" }}>
-                  <select value={form.preferredContactMethod || ""} onChange={set("preferredContactMethod")} style={S.select}>
-                    <option value="">—</option>
-                    {["Phone", "Text", "Email"].map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
-                </div>
-              </Field>
-              <Field label="Time Zone">
-                <input value={form.timeZone || ""} onChange={set("timeZone")} style={S.input} placeholder="e.g. Eastern" />
-              </Field>
-            </div>
-            <Field label="Business Address">
-              <input value={form.businessAddress || ""} onChange={set("businessAddress")} style={S.input} />
-            </Field>
-            <div style={S.dfsFieldGrid3}>
-              <Field label="City">
-                <input value={form.city || ""} onChange={set("city")} style={S.input} />
-              </Field>
-              <Field label="State">
-                <input value={form.state || ""} onChange={set("state")} style={S.input} />
-              </Field>
-              <Field label="ZIP">
-                <input value={form.zip || ""} onChange={set("zip")} style={S.input} />
-              </Field>
-            </div>
-
-            <div style={{ ...S.dfsSubHeader, marginTop: 20 }}>Business Information</div>
-            <div style={S.dfsFieldGrid3}>
-              <Field label="Legal Business Name">
-                <input value={form.legalBusinessName || ""} onChange={set("legalBusinessName")} style={S.input} />
-              </Field>
-              <Field label="Entity Type">
-                <div style={{ position: "relative" }}>
-                  <select value={form.entityType || ""} onChange={set("entityType")} style={S.select}>
-                    <option value="">—</option>
-                    {["LLC", "Corporation", "Sole Proprietor", "Partnership", "Other"].map((t2) => (
-                      <option key={t2} value={t2}>
-                        {t2}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
-                </div>
-              </Field>
-              <Field label="Industry">
-                <input value={form.industry || ""} onChange={set("industry")} style={S.input} />
-              </Field>
-              <Field label="Years in Business">
-                <input type="number" value={form.yearsInBusiness || ""} onChange={set("yearsInBusiness")} style={S.input} />
-              </Field>
-              {isAdmin ? (
-                <Field label="EIN (admin only)">
-                  <input value={form.ein || ""} onChange={set("ein")} style={S.input} />
-                </Field>
-              ) : (
-                <Field label="EIN">
-                  <div style={{ ...S.input, color: T.textMuted, display: "flex", alignItems: "center" }}>Restricted</div>
-                </Field>
-              )}
-              <Field label="State of Incorporation">
-                <input value={form.stateOfIncorporation || ""} onChange={set("stateOfIncorporation")} style={S.input} />
-              </Field>
-              <Field label="Monthly Gross Revenue">
-                <input
-                  type="number"
-                  value={form.monthlyGrossRevenue || ""}
-                  onChange={set("monthlyGrossRevenue")}
-                  style={{ ...S.input, fontFamily: T.mono }}
-                />
-              </Field>
-              <Field label="Avg Monthly Bank Deposits">
-                <input
-                  type="number"
-                  value={form.avgMonthlyBankDeposits || ""}
-                  onChange={set("avgMonthlyBankDeposits")}
-                  style={{ ...S.input, fontFamily: T.mono }}
-                />
-              </Field>
-              <Field label="Business Status">
-                <div style={{ position: "relative" }}>
-                  <select value={form.businessStatus || ""} onChange={set("businessStatus")} style={S.select}>
-                    <option value="">—</option>
-                    {["Open", "Closed", "Struggling", "Seasonal"].map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
-                </div>
-              </Field>
-            </div>
-
-            <div style={{ ...S.dfsSubHeader, marginTop: 20 }}>Sales / Enrollment</div>
-            <div style={S.dfsFieldGrid3}>
-              <Field label="Lead Source">
-                <input value={form.leadSource || ""} onChange={set("leadSource")} style={S.input} />
-              </Field>
-              <Field label="Campaign">
-                <input value={form.dfsCampaign || ""} onChange={set("dfsCampaign")} style={S.input} />
-              </Field>
-              <Field label="Assigned Sales Rep">
-                <input value={form.assignedRep || ""} onChange={set("assignedRep")} style={S.input} />
-              </Field>
-              <Field label="Assigned Closer">
-                <input value={form.assignedCloser || ""} onChange={set("assignedCloser")} style={S.input} />
-              </Field>
-              <Field label="Lead Status">
-                <input value={form.leadStatus || ""} onChange={set("leadStatus")} style={S.input} />
-              </Field>
-              <Field label="Pipeline Stage">
-                <div style={{ position: "relative" }}>
-                  <select value={form.pipelineStage || "New Lead"} onChange={set("pipelineStage")} style={S.select}>
-                    {(pipelineStages || DFS_PIPELINE_STAGES).map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
-                </div>
-              </Field>
-              <Field label="Date Lead Received">
-                <input type="date" value={form.dateLeadReceived || ""} onChange={set("dateLeadReceived")} style={S.input} />
-              </Field>
-              <Field label="Date Contacted">
-                <input type="date" value={form.dateContacted || ""} onChange={set("dateContacted")} style={S.input} />
-              </Field>
-              <Field label="Enrollment Date">
-                <input type="date" value={form.enrollmentDate || ""} onChange={set("enrollmentDate")} style={S.input} />
-              </Field>
-              <Field label="Total Debt Enrolled">
-                <input
-                  type="number"
-                  value={form.totalDebtEnrolled || ""}
-                  onChange={set("totalDebtEnrolled")}
-                  style={{ ...S.input, fontFamily: T.mono }}
-                />
-              </Field>
-              <Field label="Program Length">
-                <input value={form.programLength || ""} onChange={set("programLength")} style={S.input} placeholder="e.g. 24 months" />
-              </Field>
-              <Field label="Client Deposit Amount">
-                <input
-                  type="number"
-                  value={form.clientDepositAmount || ""}
-                  onChange={set("clientDepositAmount")}
-                  style={{ ...S.input, fontFamily: T.mono }}
-                />
-              </Field>
-              <Field label="Deposit Frequency">
-                <div style={{ position: "relative" }}>
-                  <select value={form.depositFrequency || ""} onChange={set("depositFrequency")} style={S.select}>
-                    <option value="">—</option>
-                    {["Weekly", "Bi-weekly", "Monthly"].map((f) => (
-                      <option key={f} value={f}>
-                        {f}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
-                </div>
-              </Field>
-              <Field label="Company Fee">
-                <input
-                  type="number"
-                  value={form.companyFee || ""}
-                  onChange={set("companyFee")}
-                  style={{ ...S.input, fontFamily: T.mono }}
-                />
-              </Field>
-              <Field label="Estimated Settlement Amount">
-                <input
-                  type="number"
-                  value={form.estimatedSettlementAmount || ""}
-                  onChange={set("estimatedSettlementAmount")}
-                  style={{ ...S.input, fontFamily: T.mono }}
-                />
-              </Field>
-              <Field label="Estimated Client Savings">
-                <input
-                  type="number"
-                  value={form.estimatedClientSavings || ""}
-                  onChange={set("estimatedClientSavings")}
-                  style={{ ...S.input, fontFamily: T.mono }}
-                />
-              </Field>
-            </div>
-          </>
-        )}
-
-        {tab === "mca" && (
-          <>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <div style={S.dfsSubHeader}>MCA Debts / Positions</div>
-              <button onClick={addDebt} style={S.ghostBtn}>
-                <Plus size={13} /> Add debt
-              </button>
-            </div>
-            <div style={{ display: "flex", gap: 18, fontSize: 12.5, marginBottom: 12, color: T.textMuted }}>
-              <div>
-                Total MCA Balance: <strong style={{ color: T.ink }}>{money(snapMcaDebt)}</strong>
-              </div>
-              <div>
-                Total Payments: <strong style={{ color: T.ink }}>{money(snapWeeklyPayments)}</strong>
-              </div>
-              <div>
-                Number of Positions: <strong style={{ color: T.ink }}>{debts.length}</strong>
-              </div>
-            </div>
-            {debts.length === 0 ? (
-              <div style={{ fontSize: 12.5, color: T.textMuted }}>No debts added yet.</div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {debts.map((d, idx) => (
-                  <div key={d.id} style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: 12, background: T.paper }}>
-                    <div style={{ fontSize: 11.5, color: T.textMuted, marginBottom: 6 }}>Position {idx + 1}</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
-                      <input
-                        value={d.creditorName}
-                        onChange={(e) => updateDebt(d.id, { creditorName: e.target.value })}
-                        style={S.input}
-                        placeholder="Creditor / funder name"
-                      />
-                      <input
-                        type="number"
-                        value={d.originalBalance}
-                        onChange={(e) => updateDebt(d.id, { originalBalance: e.target.value })}
-                        style={{ ...S.input, fontFamily: T.mono }}
-                        placeholder="Original balance"
-                      />
-                      <input
-                        type="number"
-                        value={d.currentBalance}
-                        onChange={(e) => updateDebt(d.id, { currentBalance: e.target.value })}
-                        style={{ ...S.input, fontFamily: T.mono }}
-                        placeholder="Current balance"
-                      />
-                      <input
-                        value={d.position || ""}
-                        onChange={(e) => updateDebt(d.id, { position: e.target.value })}
-                        style={S.input}
-                        placeholder="Position (1st, 2nd…)"
-                      />
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
-                      <input
-                        type="number"
-                        value={d.paymentAmount}
-                        onChange={(e) => updateDebt(d.id, { paymentAmount: e.target.value })}
-                        style={{ ...S.input, fontFamily: T.mono }}
-                        placeholder="Payment amount"
-                      />
-                      <div style={{ position: "relative" }}>
-                        <select
-                          value={d.paymentFrequency || ""}
-                          onChange={(e) => updateDebt(d.id, { paymentFrequency: e.target.value })}
-                          style={S.select}
-                        >
-                          <option value="">Payment freq.</option>
-                          {["Daily", "Weekly", "Bi-weekly", "Monthly"].map((f) => (
-                            <option key={f} value={f}>
-                              {f}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
-                      </div>
-                      <input
-                        type="date"
-                        value={d.dateFunded || ""}
-                        onChange={(e) => updateDebt(d.id, { dateFunded: e.target.value })}
-                        style={S.input}
-                        title="Date funded"
-                      />
-                      <input
-                        type="number"
-                        value={d.amountPastDue || ""}
-                        onChange={(e) => updateDebt(d.id, { amountPastDue: e.target.value })}
-                        style={{ ...S.input, fontFamily: T.mono }}
-                        placeholder="Amount past due"
-                      />
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
-                      <input
-                        value={d.collectionsCompany || ""}
-                        onChange={(e) => updateDebt(d.id, { collectionsCompany: e.target.value })}
-                        style={S.input}
-                        placeholder="Collections company"
-                      />
-                      <input
-                        value={d.attorneyLawFirm || ""}
-                        onChange={(e) => updateDebt(d.id, { attorneyLawFirm: e.target.value })}
-                        style={S.input}
-                        placeholder="Attorney / law firm"
-                      />
-                      <input
-                        value={d.lawsuitJudgmentStatus || ""}
-                        onChange={(e) => updateDebt(d.id, { lawsuitJudgmentStatus: e.target.value })}
-                        style={S.input}
-                        placeholder="Lawsuit / judgment status"
-                      />
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
-                      <input
-                        type="date"
-                        value={d.lastPaymentDate || ""}
-                        onChange={(e) => updateDebt(d.id, { lastPaymentDate: e.target.value })}
-                        style={S.input}
-                        title="Last payment date"
-                      />
-                      <input
-                        type="number"
-                        value={d.settlementOffer}
-                        onChange={(e) => updateDebt(d.id, { settlementOffer: e.target.value })}
-                        style={{ ...S.input, fontFamily: T.mono }}
-                        placeholder="Settlement offer"
-                      />
-                      <input
-                        type="number"
-                        value={d.negotiatedAmount}
-                        onChange={(e) => updateDebt(d.id, { negotiatedAmount: e.target.value })}
-                        style={{ ...S.input, fontFamily: T.mono }}
-                        placeholder="Negotiated amount"
-                      />
-                      <input
-                        type="number"
-                        value={d.settlementPercent}
-                        onChange={(e) => updateDebt(d.id, { settlementPercent: e.target.value })}
-                        style={{ ...S.input, fontFamily: T.mono }}
-                        placeholder="Settlement %"
-                      />
-                    </div>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      <div style={{ position: "relative", flex: 1 }}>
-                        <select value={d.status} onChange={(e) => updateDebt(d.id, { status: e.target.value })} style={S.select}>
-                          {["Active", "In Default", "In Collections", "Negotiating", "Settled", "Paid Off"].map((s) => (
-                            <option key={s} value={s}>
-                              {s}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
-                      </div>
-                      <button onClick={() => removeDebt(d.id)} style={S.iconBtnGhost}>
-                        <Trash2 size={13} color={T.textMuted} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        )}
-
-        {tab === "notes" && (
-          <Field label="Notes">
-            <textarea
-              value={form.notes || ""}
-              onChange={set("notes")}
-              style={{ ...S.input, minHeight: 200, resize: "vertical" }}
-              autoFocus
+      )}
+      <div style={S.formGrid2}>
+        <Field label="Timestamp">
+          <input type="datetime-local" value={form.timestamp} onChange={(e) => set("timestamp", e.target.value)} style={S.input} />
+        </Field>
+        <Field label="Genie #" required>
+          <input value={form.genieNumber} onChange={(e) => set("genieNumber", e.target.value)} style={S.input} />
+        </Field>
+        <Field label="Name" required>
+          <input value={form.name} onChange={(e) => set("name", e.target.value)} style={S.input} autoFocus />
+        </Field>
+        <Field label="Spouse name">
+          <input value={form.spouseName} onChange={(e) => set("spouseName", e.target.value)} style={S.input} />
+        </Field>
+        <Field label="Phone" required>
+          <input value={form.phone} onChange={(e) => set("phone", e.target.value)} style={S.input} />
+        </Field>
+        <Field label="Secondary phone">
+          <input value={form.phone2} onChange={(e) => set("phone2", e.target.value)} style={S.input} />
+        </Field>
+        <Field label="Email" required>
+          <input value={form.email} onChange={(e) => set("email", e.target.value)} style={S.input} />
+        </Field>
+        <Field label="Password" required>
+          <input value={form.password} onChange={(e) => set("password", e.target.value)} style={S.input} />
+        </Field>
+        <div style={{ gridColumn: "1 / -1", position: "relative" }}>
+          <Field label="Address" required>
+            <input
+              value={form.address}
+              onChange={(e) => {
+                set("address", e.target.value);
+                fetchAddressSuggestions(e.target.value);
+                setShowSuggestions(true);
+              }}
+              onFocus={() => setShowSuggestions(true)}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+              style={S.input}
+              autoComplete="off"
             />
           </Field>
-        )}
-
-        {!["overview", "mca", "notes"].includes(tab) && (
-          <div style={S.emptyState}>
-            <ClipboardList size={22} color={T.borderStrong} />
-            <div style={{ marginTop: 8, fontSize: 13, color: T.textMuted }}>
-              {DFS_TABS.find((t) => t.id === tab)?.label} hasn't been built yet — this is a placeholder for a
-              future session.
-            </div>
-          </div>
-        )}
-      </div>
-
-      {error && <div style={{ ...S.errorText, marginTop: 12 }}>{error}</div>}
-      {saveError && <div style={S.errorText}>{saveError}</div>}
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          justifyContent: onDelete ? "space-between" : "flex-end",
-          marginTop: 16,
-          paddingTop: 12,
-          borderTop: `1px solid ${T.border}`,
-        }}
-      >
-        {onDelete && (
-          <button onClick={onDelete} style={S.dangerGhostBtn}>
-            <Trash2 size={13} /> Delete
-          </button>
-        )}
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={onCancel} style={S.ghostBtn}>
-            Cancel
-          </button>
-          <button onClick={submit} style={S.primaryBtn}>
-            {form.isNew ? "New Client" : "Save"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DfsLeadForm({ initial, error: saveError, onCancel, onSave, onDelete, onSendToCloser, onConvert }) {
-  const [form, setForm] = useState(initial);
-  const [error, setError] = useState("");
-  const [tab, setTab] = useState("overview");
-  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
-
-  function updateDebt(id, patch) {
-    setForm({ ...form, debts: (form.debts || []).map((d) => (d.id === id ? { ...d, ...patch } : d)) });
-  }
-  function addDebt() {
-    setForm({
-      ...form,
-      debts: [
-        ...(form.debts || []),
-        { id: dfsUid(), creditorName: "", originalBalance: "", currentBalance: "", paymentAmount: "", status: "Active" },
-      ],
-    });
-  }
-  function removeDebt(id) {
-    setForm({ ...form, debts: (form.debts || []).filter((d) => d.id !== id) });
-  }
-  function toggleDoc(item) {
-    const nextChecklist = { ...(form.documentChecklist || {}), [item]: !((form.documentChecklist || {})[item]) };
-    const action = nextChecklist[item] ? "received" : "removed";
-    setForm({
-      ...form,
-      documentChecklist: nextChecklist,
-      activityLog: dfsLogActivity(form.activityLog, `${item} marked ${action}`),
-    });
-  }
-
-  function submit() {
-    const displayName = `${form.firstName || ""} ${form.lastName || ""}`.trim();
-    if (!displayName) {
-      setError("Enter the lead's first and last name first");
-      return;
-    }
-    setError("");
-    onSave(form);
-  }
-
-  const debts = form.debts || [];
-  const totalDebt = debts.reduce((s, d) => s + (Number(d.currentBalance) || 0), 0);
-  const displayName = `${form.firstName || ""} ${form.lastName || ""}`.trim() || "New Lead";
-  const docsChecked = DFS_DOCUMENT_CHECKLIST_ITEMS.filter((d) => (form.documentChecklist || {})[d]);
-  const requiredDocs = DFS_DOCUMENT_CHECKLIST_ITEMS.filter((d) => d !== "Signed Enrollment Agreement");
-  const readyToConvert =
-    requiredDocs.every((d) => (form.documentChecklist || {})[d]) &&
-    (form.documentChecklist || {})["Signed Enrollment Agreement"] &&
-    debts.length > 0 &&
-    form.requestedAmount &&
-    form.assignedCloser;
-
-  const LEAD_TABS = [
-    { id: "overview", label: "Overview" },
-    { id: "mca", label: "MCA Accounts" },
-    { id: "documents", label: "Documents" },
-    { id: "activity", label: "Activity" },
-    { id: "notes", label: "Notes" },
-  ];
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div style={{ borderBottom: `1px solid ${T.border}`, paddingBottom: 14, marginBottom: 14 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            <div style={{ fontFamily: T.display, fontSize: 20, fontWeight: 600, color: T.ink }}>
-              {form.businessName || displayName}
-              <span style={{ ...S.leadBadge, marginLeft: 10, background: "#F0EFE9", color: T.textMuted }}>
-                {form.leadStage || "New Lead"}
-              </span>
-            </div>
-            <div style={{ fontSize: 13, color: T.textMuted, marginTop: 2 }}>
-              {displayName}
-              {form.phone ? ` · ${form.phone}` : ""}
-              {form.assignedRep ? ` · Opener: ${form.assignedRep}` : ""}
-              {form.assignedCloser ? ` · Closer: ${form.assignedCloser}` : ""}
-            </div>
-          </div>
-          <button onClick={onCancel} style={S.iconBtnGhost}>
-            <X size={16} color={T.textMuted} />
-          </button>
-        </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 18, marginTop: 12, fontSize: 12.5 }}>
-          <div>
-            <span style={{ color: T.textMuted }}>MCA Debt: </span>
-            <strong>{money(totalDebt)}</strong>
-          </div>
-          <div>
-            <span style={{ color: T.textMuted }}>Positions: </span>
-            <strong>{debts.length}</strong>
-          </div>
-          <div>
-            <span style={{ color: T.textMuted }}>Documents: </span>
-            <strong>
-              {docsChecked.length}/{DFS_DOCUMENT_CHECKLIST_ITEMS.length}
-            </strong>
-          </div>
-          {form.callbackDate && (
-            <div>
-              <span style={{ color: T.textMuted }}>Callback: </span>
-              <strong>{form.callbackDate}</strong>
-            </div>
-          )}
-        </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-          {!form.isNew && (
-            <button onClick={() => onSendToCloser(form)} style={S.ghostBtn}>
-              <Users size={13} /> Send to Closer
-            </button>
-          )}
-          {!form.isNew && readyToConvert && (
-            <button onClick={() => onConvert(form)} style={{ ...S.primaryBtn, background: T.pineDark }}>
-              <CheckCircle size={13} /> 🟢 Convert to Client
-            </button>
-          )}
-          {!form.isNew && !readyToConvert && (
-            <div style={{ ...S.hint, display: "flex", alignItems: "center" }}>Not ready to convert yet</div>
-          )}
-        </div>
-        {saveError && <div style={{ ...S.errorText, marginTop: 8 }}>{saveError}</div>}
-      </div>
-
-      <div style={{ display: "flex", gap: 4, borderBottom: `1px solid ${T.border}`, marginBottom: 16, flexWrap: "wrap" }}>
-        {LEAD_TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            style={{
-              padding: "8px 12px",
-              fontSize: 12.5,
-              fontWeight: 500,
-              background: "none",
-              border: "none",
-              borderBottom: tab === t.id ? `2px solid ${T.pineDark}` : "2px solid transparent",
-              color: tab === t.id ? T.pineDark : T.textMuted,
-            }}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ flex: 1, overflowY: "auto", paddingRight: 4 }} className="crm-scroll">
-        {tab === "overview" && (
-          <>
-            <div style={S.dfsFieldGrid3}>
-              <Field label="First Name *">
-                <input value={form.firstName || ""} onChange={set("firstName")} style={S.input} autoFocus />
-              </Field>
-              <Field label="Last Name *">
-                <input value={form.lastName || ""} onChange={set("lastName")} style={S.input} />
-              </Field>
-              <Field label="Business Name / DBA">
-                <input value={form.businessName || ""} onChange={set("businessName")} style={S.input} />
-              </Field>
-              <Field label="Phone">
-                <input value={form.phone || ""} onChange={set("phone")} style={S.input} />
-              </Field>
-              <Field label="Email">
-                <input value={form.email || ""} onChange={set("email")} style={S.input} />
-              </Field>
-              <Field label="Lead Source">
-                <input value={form.leadSource || ""} onChange={set("leadSource")} style={S.input} />
-              </Field>
-            </div>
-            <Field label="Business Address">
-              <input value={form.businessAddress || ""} onChange={set("businessAddress")} style={S.input} />
-            </Field>
-            <div style={S.dfsFieldGrid3}>
-              <Field label="City">
-                <input value={form.city || ""} onChange={set("city")} style={S.input} />
-              </Field>
-              <Field label="State">
-                <input value={form.state || ""} onChange={set("state")} style={S.input} />
-              </Field>
-              <Field label="ZIP">
-                <input value={form.zip || ""} onChange={set("zip")} style={S.input} />
-              </Field>
-            </div>
-
-            <div style={{ ...S.dfsSubHeader, marginTop: 20 }}>Pipeline & Assignment</div>
-            <div style={S.dfsFieldGrid3}>
-              <Field label="Assigned Rep (Opener)">
-                <input value={form.assignedRep || ""} onChange={set("assignedRep")} style={S.input} />
-              </Field>
-              <Field label="Assigned Closer">
-                <input value={form.assignedCloser || ""} onChange={set("assignedCloser")} style={S.input} placeholder="Set via Send to Closer" />
-              </Field>
-              <Field label="Lead Stage">
-                <div style={{ position: "relative" }}>
-                  <select value={form.leadStage || "New Lead"} onChange={set("leadStage")} style={S.select}>
-                    {DFS_LEAD_STAGES.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+          {showSuggestions && addressSuggestions.length > 0 && (
+            <div style={S.addressSuggestions}>
+              {addressSuggestions.map((sug, i) => (
+                <div key={i} style={S.addressSuggestionItem} onMouseDown={() => selectAddressSuggestion(sug)}>
+                  {sug.display_name}
                 </div>
-              </Field>
-              <Field label="Lead Temperature">
-                <div style={{ position: "relative" }}>
-                  <select value={form.leadTemperature || ""} onChange={set("leadTemperature")} style={S.select}>
-                    <option value="">—</option>
-                    <option value="🔥 Hot">🔥 Hot</option>
-                    <option value="🌤️ Warm">🌤️ Warm</option>
-                    <option value="❄️ Cold">❄️ Cold</option>
-                  </select>
-                  <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
-                </div>
-              </Field>
-              <Field label="Requested Amount">
-                <input
-                  type="number"
-                  value={form.requestedAmount || ""}
-                  onChange={set("requestedAmount")}
-                  style={{ ...S.input, fontFamily: T.mono }}
-                />
-              </Field>
-              <Field label="Callback Date">
-                <input type="date" value={form.callbackDate || ""} onChange={set("callbackDate")} style={S.input} />
-              </Field>
-            </div>
-            {form.notesForCloser && (
-              <Field label="Notes for Closer">
-                <div style={{ ...S.input, minHeight: 50, color: T.textMuted }}>{form.notesForCloser}</div>
-              </Field>
-            )}
-          </>
-        )}
-
-        {tab === "mca" && (
-          <>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <div style={S.dfsSubHeader}>MCA Debts / Positions</div>
-              <button onClick={addDebt} style={S.ghostBtn}>
-                <Plus size={13} /> Add debt
-              </button>
-            </div>
-            {debts.length === 0 ? (
-              <div style={{ fontSize: 12.5, color: T.textMuted }}>No debts added yet.</div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {debts.map((d) => (
-                  <div key={d.id} style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: 12, background: T.paper }}>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
-                      <input
-                        value={d.creditorName}
-                        onChange={(e) => updateDebt(d.id, { creditorName: e.target.value })}
-                        style={S.input}
-                        placeholder="Creditor / funder name"
-                      />
-                      <input
-                        type="number"
-                        value={d.originalBalance}
-                        onChange={(e) => updateDebt(d.id, { originalBalance: e.target.value })}
-                        style={{ ...S.input, fontFamily: T.mono }}
-                        placeholder="Original balance"
-                      />
-                      <input
-                        type="number"
-                        value={d.currentBalance}
-                        onChange={(e) => updateDebt(d.id, { currentBalance: e.target.value })}
-                        style={{ ...S.input, fontFamily: T.mono }}
-                        placeholder="Current balance"
-                      />
-                    </div>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      <input
-                        type="number"
-                        value={d.paymentAmount}
-                        onChange={(e) => updateDebt(d.id, { paymentAmount: e.target.value })}
-                        style={{ ...S.input, fontFamily: T.mono, flex: 1 }}
-                        placeholder="Payment amount"
-                      />
-                      <button onClick={() => removeDebt(d.id)} style={S.iconBtnGhost}>
-                        <Trash2 size={13} color={T.textMuted} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        )}
-
-        {tab === "documents" && (
-          <>
-            <div style={S.dfsSubHeader}>
-              Document Status — {docsChecked.length}/{DFS_DOCUMENT_CHECKLIST_ITEMS.length} Received
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
-              {DFS_DOCUMENT_CHECKLIST_ITEMS.map((item) => {
-                const checked = !!(form.documentChecklist || {})[item];
-                return (
-                  <label
-                    key={item}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      toggleDoc(item);
-                    }}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      padding: "10px 12px",
-                      background: T.paperRaised,
-                      border: `1px solid ${T.border}`,
-                      borderRadius: 8,
-                      cursor: "pointer",
-                    }}
-                  >
-                    <span style={{ fontSize: 16 }}>{checked ? "✅" : "❌"}</span>
-                    <span style={{ fontSize: 13, color: T.ink }}>{item}</span>
-                  </label>
-                );
-              })}
-            </div>
-            {readyToConvert ? (
-              <div style={{ background: "#EAF3EC", border: `1px solid ${T.pineDark}`, borderRadius: 8, padding: 12, fontSize: 13, fontWeight: 600, color: T.pineDark }}>
-                🟢 READY TO CONVERT
-              </div>
-            ) : (
-              <div style={{ ...S.hint }}>
-                Once all documents are received, the agreement is signed, MCA accounts are entered, a requested
-                amount is set, and a closer is assigned, this lead becomes eligible to convert.
-              </div>
-            )}
-          </>
-        )}
-
-        {tab === "activity" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {(form.activityLog || []).length === 0 ? (
-              <div style={{ fontSize: 12.5, color: T.textMuted }}>No activity recorded yet.</div>
-            ) : (
-              [...(form.activityLog || [])]
-                .sort((a, b) => a.timestamp - b.timestamp)
-                .map((entry) => (
-                  <div key={entry.id} style={{ fontSize: 12.5, display: "flex", gap: 10 }}>
-                    <span style={{ color: T.textMuted, fontFamily: T.mono, flexShrink: 0 }}>
-                      {new Date(entry.timestamp).toLocaleDateString("en-US", { month: "numeric", day: "numeric" })}{" "}
-                      {new Date(entry.timestamp).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
-                    </span>
-                    <span style={{ color: T.ink }}>{entry.description}</span>
-                  </div>
-                ))
-            )}
-          </div>
-        )}
-
-        {tab === "notes" && (
-          <Field label="Notes">
-            <textarea value={form.notes || ""} onChange={set("notes")} style={{ ...S.input, minHeight: 200, resize: "vertical" }} />
-          </Field>
-        )}
-      </div>
-
-      {error && <div style={{ ...S.errorText, marginTop: 12 }}>{error}</div>}
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          justifyContent: onDelete ? "space-between" : "flex-end",
-          marginTop: 16,
-          paddingTop: 12,
-          borderTop: `1px solid ${T.border}`,
-        }}
-      >
-        {onDelete && (
-          <button onClick={onDelete} style={S.dangerGhostBtn}>
-            <Trash2 size={13} /> Delete
-          </button>
-        )}
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={onCancel} style={S.ghostBtn}>
-            Cancel
-          </button>
-          <button onClick={submit} style={S.primaryBtn}>
-            {form.isNew ? "New Lead" : "Save"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DfsSendToCloserForm({ lead, onCancel, onSend }) {
-  const [assignedCloser, setAssignedCloser] = useState(lead.assignedCloser || "");
-  const [leadTemperature, setLeadTemperature] = useState(lead.leadTemperature || "");
-  const [requestedAmount, setRequestedAmount] = useState(lead.requestedAmount || "");
-  const [notesForCloser, setNotesForCloser] = useState(lead.notesForCloser || "");
-  const [error, setError] = useState("");
-
-  const totalDebt = (lead.debts || []).reduce((s, d) => s + (Number(d.currentBalance) || 0), 0);
-  const docsChecked = DFS_DOCUMENT_CHECKLIST_ITEMS.filter((d) => (lead.documentChecklist || {})[d]);
-
-  function submit() {
-    if (!assignedCloser.trim()) {
-      setError("Enter who this lead is going to first");
-      return;
-    }
-    setError("");
-    onSend({ assignedCloser, leadTemperature, requestedAmount, notesForCloser });
-  }
-
-  return (
-    <div>
-      <div style={S.modalTitle}>Send to Closer</div>
-      <div style={{ ...S.hint, marginBottom: 12 }}>
-        {dfsClientDisplayName(lead)} stays credited as the opener — this only assigns who takes it from here.
-      </div>
-      <Field label="Assign Closer *">
-        <input value={assignedCloser} onChange={(e) => setAssignedCloser(e.target.value)} style={S.input} autoFocus />
-      </Field>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Field label="Lead Temperature">
-          <div style={{ position: "relative" }}>
-            <select value={leadTemperature} onChange={(e) => setLeadTemperature(e.target.value)} style={S.select}>
-              <option value="">—</option>
-              <option value="🔥 Hot">🔥 Hot</option>
-              <option value="🌤️ Warm">🌤️ Warm</option>
-              <option value="❄️ Cold">❄️ Cold</option>
-            </select>
-            <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
-          </div>
-        </Field>
-        <Field label="Requested Amount">
-          <input
-            type="number"
-            value={requestedAmount}
-            onChange={(e) => setRequestedAmount(e.target.value)}
-            style={{ ...S.input, fontFamily: T.mono }}
-          />
-        </Field>
-      </div>
-      <div style={{ display: "flex", gap: 18, fontSize: 12.5, color: T.textMuted, margin: "4px 0 12px" }}>
-        <div>
-          Total MCA Debt: <strong style={{ color: T.ink }}>{money(totalDebt)}</strong>
-        </div>
-        <div>
-          Documents Received:{" "}
-          <strong style={{ color: T.ink }}>
-            {docsChecked.length}/{DFS_DOCUMENT_CHECKLIST_ITEMS.length}
-          </strong>
-        </div>
-      </div>
-      <Field label="Notes for Closer">
-        <textarea
-          value={notesForCloser}
-          onChange={(e) => setNotesForCloser(e.target.value)}
-          style={{ ...S.input, minHeight: 70, resize: "vertical" }}
-        />
-      </Field>
-      {error && <div style={S.errorText}>{error}</div>}
-      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
-        <button onClick={onCancel} style={S.ghostBtn}>
-          Cancel
-        </button>
-        <button onClick={submit} style={S.primaryBtn}>
-          Send to Closer
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function DfsCreditorForm({ initial, error: saveError, onCancel, onSave, onDelete }) {
-  const [form, setForm] = useState(initial);
-  const [error, setError] = useState("");
-  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
-
-  function submit() {
-    if (!form.name || !form.name.trim()) {
-      setError("Enter the creditor/funder's name first");
-      return;
-    }
-    setError("");
-    onSave(form);
-  }
-
-  return (
-    <div>
-      <div style={S.modalTitle}>{form.isNew ? "New Creditor" : "Edit creditor"}</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Field label="Creditor / Funder Name *">
-          <input value={form.name || ""} onChange={set("name")} style={S.input} autoFocus />
-        </Field>
-        <Field label="Contact Name">
-          <input value={form.contactName || ""} onChange={set("contactName")} style={S.input} />
-        </Field>
-        <Field label="Phone">
-          <input value={form.phone || ""} onChange={set("phone")} style={S.input} />
-        </Field>
-        <Field label="Email">
-          <input value={form.email || ""} onChange={set("email")} style={S.input} />
-        </Field>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Field label="Attorney Name">
-          <input value={form.attorneyName || ""} onChange={set("attorneyName")} style={S.input} />
-        </Field>
-        <Field label="Attorney Contact">
-          <input value={form.attorneyContact || ""} onChange={set("attorneyContact")} style={S.input} placeholder="Phone or email" />
-        </Field>
-        <Field label="Collection Agency">
-          <input value={form.collectionAgency || ""} onChange={set("collectionAgency")} style={S.input} />
-        </Field>
-        <Field label="Collection Agency Contact">
-          <input
-            value={form.collectionAgencyContact || ""}
-            onChange={set("collectionAgencyContact")}
-            style={S.input}
-            placeholder="Phone or email"
-          />
-        </Field>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Field label="Typical Settlement Range">
-          <input
-            value={form.typicalSettlementRange || ""}
-            onChange={set("typicalSettlementRange")}
-            style={S.input}
-            placeholder="e.g. 30-50%"
-          />
-        </Field>
-        <Field label="Preferred Payment Arrangement">
-          <input
-            value={form.preferredPaymentArrangement || ""}
-            onChange={set("preferredPaymentArrangement")}
-            style={S.input}
-            placeholder="e.g. Lump sum, 6-month plans"
-          />
-        </Field>
-      </div>
-      <Field label="Previous Settlements">
-        <textarea
-          value={form.previousSettlements || ""}
-          onChange={set("previousSettlements")}
-          style={{ ...S.input, minHeight: 60, resize: "vertical" }}
-          placeholder="History of past settlements with this creditor"
-        />
-      </Field>
-      <Field label="Negotiation Notes">
-        <textarea
-          value={form.negotiationNotes || ""}
-          onChange={set("negotiationNotes")}
-          style={{ ...S.input, minHeight: 60, resize: "vertical" }}
-        />
-      </Field>
-      {error && <div style={S.errorText}>{error}</div>}
-      {saveError && <div style={S.errorText}>{saveError}</div>}
-      <div style={{ display: "flex", gap: 8, justifyContent: onDelete ? "space-between" : "flex-end", marginTop: 16 }}>
-        {onDelete && (
-          <button onClick={onDelete} style={S.dangerGhostBtn}>
-            <Trash2 size={13} /> Delete
-          </button>
-        )}
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={onCancel} style={S.ghostBtn}>
-            Cancel
-          </button>
-          <button onClick={submit} style={S.primaryBtn}>
-            {form.isNew ? "New Creditor" : "Save"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DfsEventForm({ initial, clients, onCancel, onSave, onDelete }) {
-  const [form, setForm] = useState(initial);
-  const [error, setError] = useState("");
-  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
-  const typeInfo = DFS_EVENT_TYPES.find((t) => t.id === form.type) || DFS_EVENT_TYPES[0];
-  const linkedClient = (clients || []).find((c) => c.id === form.clientId);
-  const linkedClientDebts = linkedClient ? linkedClient.debts || [] : [];
-
-  function submit() {
-    if (!form.title || !form.title.trim()) {
-      setError("Enter a title first");
-      return;
-    }
-    if (!form.date) {
-      setError("Pick a date first");
-      return;
-    }
-    setError("");
-    onSave(form);
-  }
-
-  return (
-    <div>
-      <div style={S.modalTitle}>{form.isNew ? "New Event" : "Edit event"}</div>
-      <Field label="Title *">
-        <input value={form.title || ""} onChange={set("title")} style={S.input} autoFocus />
-      </Field>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Field label="Type">
-          <div style={{ position: "relative" }}>
-            <select value={form.type || "appointment"} onChange={set("type")} style={S.select}>
-              {DFS_EVENT_TYPES.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.icon} {t.label}
-                </option>
               ))}
-            </select>
-            <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
-          </div>
+            </div>
+          )}
+        </div>
+        <Field label="City" required>
+          <input value={form.city} onChange={(e) => set("city", e.target.value)} style={S.input} />
         </Field>
-        <Field label="Date *">
-          <input type="date" value={form.date || ""} onChange={set("date")} style={S.input} />
+        <Field label="State" required>
+          <input value={form.state} onChange={(e) => set("state", e.target.value)} style={S.input} maxLength={2} />
         </Field>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Field label="Time">
-          <input type="time" value={form.time || ""} onChange={set("time")} style={S.input} />
+        <Field label="Zip code" required>
+          <input value={form.zip} onChange={(e) => set("zip", e.target.value)} style={S.input} />
         </Field>
-        <Field label="Related Client">
+        <Field label="Package price" required>
+          <input type="number" value={form.packagePrice} onChange={(e) => set("packagePrice", e.target.value)} style={{ ...S.input, fontFamily: T.mono }} />
+        </Field>
+        <Field label="Date flex price" required>
+          <input type="number" value={form.dateFlex} onChange={(e) => set("dateFlex", e.target.value)} style={{ ...S.input, fontFamily: T.mono }} />
+        </Field>
+        <Field label="Total price">
+          <input type="number" value={form.totalPrice} readOnly style={{ ...S.input, fontFamily: T.mono, background: T.paper }} />
+        </Field>
+        <Field label="Source" required>
           <div style={{ position: "relative" }}>
-            <select
-              value={form.clientId || ""}
-              onChange={(e) => setForm({ ...form, clientId: e.target.value, relatedDebtId: "" })}
-              style={S.select}
-            >
-              <option value="">— None —</option>
-              {(clients || []).map((c) => (
-                <option key={c.id} value={c.id}>
-                  {dfsClientDisplayName(c)}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
-          </div>
-        </Field>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Field label="Assigned To">
-          <input value={form.assignedTo || ""} onChange={set("assignedTo")} style={S.input} />
-        </Field>
-        <Field label="Department">
-          <input value={form.department || ""} onChange={set("department")} style={S.input} placeholder="e.g. Negotiations" />
-        </Field>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Field label="Priority">
-          <div style={{ position: "relative" }}>
-            <select value={form.priority || "Normal"} onChange={set("priority")} style={S.select}>
-              {DFS_PRIORITIES.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
-          </div>
-        </Field>
-        <Field label="Status">
-          <div style={{ position: "relative" }}>
-            <select value={form.status || "Scheduled"} onChange={set("status")} style={S.select}>
-              {["Scheduled", "Completed", "Rescheduled", "Cancelled"].map((s) => (
+            <select value={form.source} onChange={(e) => set("source", e.target.value)} style={S.select}>
+              <option value="">Choose</option>
+              {settings.sources.map((s) => (
                 <option key={s} value={s}>
                   {s}
                 </option>
@@ -9101,97 +6460,64 @@ function DfsEventForm({ initial, clients, onCancel, onSave, onDelete }) {
             <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
           </div>
         </Field>
-      </div>
-
-      {typeInfo.showMcaFields && (
-        <>
-          <div style={{ ...S.dfsSubHeader, marginTop: 16 }}>MCA / Settlement Details</div>
-          <Field label="Related MCA">
-            <div style={{ position: "relative" }}>
-              <select value={form.relatedDebtId || ""} onChange={set("relatedDebtId")} style={S.select}>
-                <option value="">— None —</option>
-                {linkedClientDebts.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.creditorName || "Unnamed creditor"}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
-            </div>
-          </Field>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-            <Field label="Settlement Amount">
-              <input
-                type="number"
-                value={form.settlementAmount || ""}
-                onChange={set("settlementAmount")}
-                style={{ ...S.input, fontFamily: T.mono }}
-              />
-            </Field>
-            <Field label="Original Balance">
-              <input
-                type="number"
-                value={form.originalBalance || ""}
-                onChange={set("originalBalance")}
-                style={{ ...S.input, fontFamily: T.mono }}
-              />
-            </Field>
-            <Field label="Required Payment">
-              <input
-                type="number"
-                value={form.requiredPayment || ""}
-                onChange={set("requiredPayment")}
-                style={{ ...S.input, fontFamily: T.mono }}
-              />
-            </Field>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <Field label="Offer Expiration">
-              <input type="date" value={form.offerExpiration || ""} onChange={set("offerExpiration")} style={S.input} />
-            </Field>
-            <Field label="Payment Status">
-              <div style={{ position: "relative" }}>
-                <select value={form.paymentStatus || ""} onChange={set("paymentStatus")} style={S.select}>
-                  <option value="">—</option>
-                  {["Pending", "Received", "Failed"].map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
-              </div>
-            </Field>
-          </div>
-        </>
-      )}
-
-      {typeInfo.showCallbackFields && (
-        <Field label="Reason for callback">
-          <input value={form.reason || ""} onChange={set("reason")} style={S.input} placeholder="e.g. Follow up on enrollment" />
-        </Field>
-      )}
-
-      <div style={{ ...S.dfsSubHeader, marginTop: 16 }}>Reminders</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Field label="Reminder">
+        <Field label="Submitted to" required>
           <div style={{ position: "relative" }}>
-            <select value={form.reminder || "None"} onChange={set("reminder")} style={S.select}>
-              {DFS_REMINDER_OPTIONS.map((r) => (
-                <option key={r} value={r}>
-                  {r}
+            <select value={form.leadSubmittedTo} onChange={(e) => set("leadSubmittedTo", e.target.value)} style={S.select}>
+              <option value="">Choose</option>
+              {settings.leadSources.map((s) => (
+                <option key={s} value={s}>
+                  {s}
                 </option>
               ))}
             </select>
             <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
           </div>
         </Field>
-        <Field label="Second Reminder">
+        <Field label="Status" required>
           <div style={{ position: "relative" }}>
-            <select value={form.secondReminder || "None"} onChange={set("secondReminder")} style={S.select}>
-              {DFS_REMINDER_OPTIONS.map((r) => (
-                <option key={r} value={r}>
-                  {r}
+            <select value={form.status} onChange={(e) => set("status", e.target.value)} style={S.select}>
+              {SALE_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+          </div>
+        </Field>
+        <Field label="Opener" required>
+          <div style={{ position: "relative" }}>
+            <select value={form.openerId} onChange={(e) => set("openerId", e.target.value)} style={S.select}>
+              <option value="">Choose</option>
+              {employees.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.name}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+          </div>
+        </Field>
+        <Field label="Closer" required>
+          <div style={{ position: "relative" }}>
+            <select value={form.closerId} onChange={(e) => set("closerId", e.target.value)} style={S.select}>
+              <option value="">Choose</option>
+              {employees.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.name}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+          </div>
+        </Field>
+        <Field label="Verification" required>
+          <div style={{ position: "relative" }}>
+            <select value={form.verificationId} onChange={(e) => set("verificationId", e.target.value)} style={S.select}>
+              <option value="">Choose</option>
+              {employees.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.name}
                 </option>
               ))}
             </select>
@@ -9199,376 +6525,289 @@ function DfsEventForm({ initial, clients, onCancel, onSave, onDelete }) {
           </div>
         </Field>
       </div>
-
       <Field label="Notes">
-        <textarea value={form.notes || ""} onChange={set("notes")} style={{ ...S.input, minHeight: 60, resize: "vertical" }} />
+        <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} style={{ ...S.input, minHeight: 70, resize: "vertical" }} />
       </Field>
-      {error && <div style={S.errorText}>{error}</div>}
-      <div style={{ display: "flex", gap: 8, justifyContent: onDelete ? "space-between" : "flex-end", marginTop: 16 }}>
+      {showValidation && missingFields.length > 0 && (
+        <div style={S.errorText}>
+          Missing: {missingFields.map((f) => f.label).join(", ")}
+        </div>
+      )}
+      {syncingToEpg && (
+        <div style={{ ...S.hint, color: "#8A5A1E", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+          Syncing to EPG…
+        </div>
+      )}
+      <div style={S.modalFooter} className="no-print">
         {onDelete && (
-          <button onClick={onDelete} style={S.dangerGhostBtn}>
-            <Trash2 size={13} /> Delete
+          <button onClick={onDelete} style={S.dangerBtnGhost}>
+            <Trash2 size={14} /> Delete
           </button>
         )}
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={onCancel} style={S.ghostBtn}>
-            Cancel
+        <div style={{ flex: 1 }} />
+        {onMinimize && (
+          <button onClick={onMinimize} style={S.ghostBtn} disabled={saving}>
+            Minimize
           </button>
-          <button onClick={submit} style={S.primaryBtn}>
-            {form.isNew ? "New Event" : "Save"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Read-only summary shown when clicking an existing event, matching a
-// lightweight "what does an employee actually need to see" view — not
-// every field, just what's relevant for that event's type, plus quick
-// actions instead of forcing a full edit every time.
-function DfsEventDetail({ event, clients, onClose, onEdit, onMarkComplete, onOpenClient }) {
-  const typeInfo = DFS_EVENT_TYPES.find((t) => t.id === event.type) || DFS_EVENT_TYPES[0];
-  const client = (clients || []).find((c) => c.id === event.clientId);
-  const debt = client ? (client.debts || []).find((d) => d.id === event.relatedDebtId) : null;
-  const timeLabel = event.time
-    ? new Date(`2000-01-01T${event.time}`).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
-    : "";
-
-  return (
-    <div>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
-        <div>
-          <div style={{ fontSize: 12.5, color: T.textMuted }}>
-            {timeLabel && `${timeLabel} — `}
-            {typeInfo.icon} {typeInfo.label}
-            {event.priority === "Urgent" && <span style={{ color: "#A32D2D", fontWeight: 700 }}> · Urgent</span>}
-          </div>
-          <div style={{ fontFamily: T.display, fontSize: 17, fontWeight: 600, color: T.ink, marginTop: 2 }}>{event.title}</div>
-        </div>
-        <button onClick={onClose} style={S.iconBtnGhost}>
-          <X size={16} color={T.textMuted} />
+        )}
+        <button onClick={onCancel} style={S.ghostBtn} disabled={saving}>
+          Cancel
         </button>
-      </div>
-
-      <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 6, fontSize: 13 }}>
-        {client && (
-          <div>
-            {client.businessName || dfsClientDisplayName(client)}
-            {client.businessName ? ` — ${dfsClientDisplayName(client)}` : ""}
-          </div>
-        )}
-        {debt && (
-          <div>
-            {debt.creditorName}
-            {event.settlementAmount ? ` — ${money(Number(event.settlementAmount))} Settlement` : ""}
-          </div>
-        )}
-        {event.assignedTo && <div style={{ color: T.textMuted }}>Assigned: {event.assignedTo}</div>}
-        {typeInfo.showCallbackFields && event.reason && <div style={{ color: T.textMuted }}>Reason: {event.reason}</div>}
-        {typeInfo.showCallbackFields && client && (
-          <div style={{ color: T.textMuted }}>
-            MCA Debt: {money((client.debts || []).reduce((s, d) => s + (Number(d.currentBalance) || 0), 0))}
-          </div>
-        )}
-        {typeInfo.showMcaFields && event.paymentStatus && (
-          <div style={{ color: T.textMuted }}>Payment: {event.paymentStatus}</div>
-        )}
-        {event.status && event.status !== "Scheduled" && (
-          <div>
-            <span style={{ ...S.leadBadge, background: "#F0EFE9", color: T.textMuted }}>{event.status}</span>
-          </div>
-        )}
-        {event.notes && <div style={{ color: T.textMuted, marginTop: 4 }}>{event.notes}</div>}
-      </div>
-
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 18 }}>
-        {client && client.phone && (
-          <a href={`tel:${client.phone}`} style={{ ...S.ghostBtn, textDecoration: "none" }}>
-            <Phone size={13} /> Call Client
-          </a>
-        )}
-        {client && (
-          <button onClick={onOpenClient} style={S.ghostBtn}>
-            <Users size={13} /> Open Client
-          </button>
-        )}
-        {event.status !== "Completed" && (
-          <button onClick={onMarkComplete} style={S.ghostBtn}>
-            <CheckCircle size={13} /> Mark Complete
-          </button>
-        )}
-        <button onClick={onEdit} style={S.ghostBtn}>
-          <CalendarDays size={13} /> Reschedule
+        <button
+          onClick={handleSave}
+          disabled={saving || syncingToEpg}
+          style={{ ...S.primaryBtn, ...(saving || syncingToEpg ? { opacity: 0.6, cursor: "not-allowed" } : {}) }}
+        >
+          {saving || syncingToEpg ? "Saving…" : "Save sale"}
         </button>
       </div>
     </div>
   );
 }
 
-function Modal({ children, onClose, narrow, wide, disableBackdropClose, fullScreen, printable }) {
-  return (
-    <div
-      style={{ ...S.overlay, ...(fullScreen ? S.overlayFullScreen : {}) }}
-      onClick={disableBackdropClose ? undefined : onClose}
-    >
-      <div
-        id={printable ? "print-area" : undefined}
-        style={{
-          ...S.modal,
-          ...(narrow ? { maxWidth: 360 } : {}),
-          ...(wide ? { maxWidth: 760 } : {}),
-          ...(fullScreen ? S.modalFullScreen : {}),
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function ExpenseTransactionForm({ initial, categories, error: saveError, onCancel, onSave, onDelete }) {
-  const [form, setForm] = useState(initial);
-  const [error, setError] = useState("");
-  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
-
-  function submit() {
-    if (!form.category) {
-      setError("Choose a category first");
-      return;
-    }
-    if (!form.amount || Number(form.amount) <= 0) {
-      setError("Enter an amount first");
-      return;
-    }
-    if (!form.date) {
-      setError("Choose a date first");
-      return;
-    }
-    setError("");
-    onSave({ ...form, amount: Number(form.amount) });
+function ContactForm({ initial, onCancel, onSave, onDelete }) {
+  const [form, setForm] = useState({ name: "", company: "", email: "", phone: "", owner: "", notes: "", ...initial });
+  function set(key, value) {
+    setForm((f) => ({ ...f, [key]: value }));
   }
-
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-        <div style={{ ...S.modalTitle, marginBottom: 0 }}>{form.isNew ? "New Expense" : "Edit expense"}</div>
-        <ExpenseFileButton expenseKey={`txn_${form.id}`} />
-      </div>
-      <Field label="Date">
-        <input type="date" value={form.date || ""} onChange={set("date")} style={S.input} />
+      <div style={S.modalTitle}>{form.id ? "Edit contact" : "New contact"}</div>
+      <Field label="Name" required>
+        <input value={form.name} onChange={(e) => set("name", e.target.value)} style={S.input} autoFocus />
       </Field>
-      <Field label="Category">
+      <Field label="Company">
+        <input value={form.company} onChange={(e) => set("company", e.target.value)} style={S.input} />
+      </Field>
+      <Field label="Email">
+        <input value={form.email} onChange={(e) => set("email", e.target.value)} style={S.input} />
+      </Field>
+      <Field label="Phone">
+        <input value={form.phone} onChange={(e) => set("phone", e.target.value)} style={S.input} />
+      </Field>
+      <Field label="Owner">
+        <input value={form.owner} onChange={(e) => set("owner", e.target.value)} style={S.input} />
+      </Field>
+      <Field label="Notes">
+        <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} style={{ ...S.input, minHeight: 70 }} />
+      </Field>
+      <div style={S.modalFooter}>
+        {onDelete && (
+          <button onClick={onDelete} style={S.dangerBtnGhost}>
+            <Trash2 size={14} /> Delete
+          </button>
+        )}
+        <div style={{ flex: 1 }} />
+        <button onClick={onCancel} style={S.ghostBtn}>
+          Cancel
+        </button>
+        <button onClick={() => onSave(form)} disabled={!form.name.trim()} style={S.primaryBtn}>
+          Save
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function UserForm({ initial, currentUserId, userCount, onCancel, onSave, serverError }) {
+  const [form, setForm] = useState({ name: "", username: "", password: "", role: "rep", campaign: "rrg", ...initial });
+  const [localError, setLocalError] = useState("");
+  const isSelf = form.id && form.id === currentUserId;
+  const isLastAdmin = form.id && form.role === "admin" && userCount <= 1;
+  function set(key, value) {
+    setForm((f) => ({ ...f, [key]: value }));
+  }
+  const roleOptions = form.campaign === "dfs" ? DFS_ROLES : ROLES;
+  function handleSave() {
+    if (!form.name.trim() || !form.username.trim()) {
+      setLocalError("Name and username are required.");
+      return;
+    }
+    if (!form.id && !form.password.trim()) {
+      setLocalError("Password is required for a new user.");
+      return;
+    }
+    setLocalError("");
+    onSave(form);
+  }
+  return (
+    <div>
+      <div style={S.modalTitle}>{form.id ? "Edit user" : "New user"}</div>
+      <Field label="Name" required>
+        <input value={form.name} onChange={(e) => set("name", e.target.value)} style={S.input} autoFocus />
+      </Field>
+      <Field label="Username" required>
+        <input value={form.username} onChange={(e) => set("username", e.target.value)} style={S.input} />
+      </Field>
+      <Field label={form.id ? "New password (leave blank to keep current)" : "Password"} required={!form.id}>
+        <input type="password" value={form.password} onChange={(e) => set("password", e.target.value)} style={S.input} />
+      </Field>
+      <Field label="Campaign">
         <div style={{ position: "relative" }}>
-          <select value={form.category || ""} onChange={set("category")} style={S.select}>
-            <option value="">Choose category</option>
-            {categories.map((c) => (
-              <option key={c} value={c}>
-                {c}
+          <select
+            value={form.campaign || "rrg"}
+            onChange={(e) => {
+              const nextCampaign = e.target.value;
+              const validRoles = (nextCampaign === "dfs" ? DFS_ROLES : ROLES).map((r) => r.id);
+              setForm((f) => ({ ...f, campaign: nextCampaign, role: validRoles.includes(f.role) ? f.role : validRoles[0] }));
+            }}
+            style={S.select}
+          >
+            <option value="rrg">RRG</option>
+            <option value="dfs">DFS</option>
+          </select>
+          <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+        </div>
+      </Field>
+      <Field label="Role">
+        <div style={{ position: "relative" }}>
+          <select value={form.role} onChange={(e) => set("role", e.target.value)} disabled={isLastAdmin} style={S.select}>
+            {roleOptions.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+          <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+        </div>
+        {isLastAdmin && <div style={S.hint}>This is the last admin account, so its role can't be changed.</div>}
+      </Field>
+      {(localError || serverError) && <div style={S.errorText}>{localError || serverError}</div>}
+      <div style={S.modalFooter}>
+        <div style={{ flex: 1 }} />
+        <button onClick={onCancel} style={S.ghostBtn}>
+          Cancel
+        </button>
+        <button onClick={handleSave} style={S.primaryBtn}>
+          Save
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function EmployeeForm({ initial, attendance, onCancel, onSave, onDelete, onToggleActive }) {
+  const [form, setForm] = useState({
+    name: "",
+    role: "rep",
+    phone: "",
+    email: "",
+    commissionRate: "",
+    basePay: "",
+    startDate: "",
+    active: true,
+    notes: "",
+    ...initial,
+  });
+  function set(key, value) {
+    setForm((f) => ({ ...f, [key]: value }));
+  }
+  return (
+    <div>
+      <div style={S.modalTitle}>{form.id ? "Edit employee" : "New employee"}</div>
+      <Field label="Name" required>
+        <input value={form.name} onChange={(e) => set("name", e.target.value)} style={S.input} autoFocus />
+      </Field>
+      <Field label="Role">
+        <div style={{ position: "relative" }}>
+          <select value={form.role} onChange={(e) => set("role", e.target.value)} style={S.select}>
+            {ROLES.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.label}
               </option>
             ))}
           </select>
           <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
         </div>
       </Field>
-      <Field label="Amount">
-        <input
-          type="number"
-          value={form.amount ?? ""}
-          onChange={set("amount")}
-          style={{ ...S.input, fontFamily: T.mono }}
-          placeholder="0.00"
-        />
-      </Field>
-      <Field label="Notes">
-        <input
-          value={form.notes || ""}
-          onChange={set("notes")}
-          style={S.input}
-          placeholder="e.g. Olive Garden — client lunch"
-        />
-      </Field>
-      {error && <div style={S.errorText}>{error}</div>}
-      {saveError && <div style={S.errorText}>{saveError}</div>}
-      <div style={{ display: "flex", gap: 8, justifyContent: onDelete ? "space-between" : "flex-end", marginTop: 4 }}>
-        {onDelete && (
-          <button onClick={onDelete} style={S.dangerGhostBtn}>
-            <Trash2 size={13} /> Delete
-          </button>
-        )}
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={onCancel} style={S.ghostBtn}>
-            Cancel
-          </button>
-          <button onClick={submit} style={S.primaryBtn}>
-            {form.isNew ? "New Expense" : "Save"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function NoteForm({ initial, error: saveError, onCancel, onSave, onDelete }) {
-  const [form, setForm] = useState(initial);
-  const [error, setError] = useState("");
-  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
-
-  function submit() {
-    if (!form.title || !form.title.trim()) {
-      setError("Give this note a title first");
-      return;
-    }
-    setError("");
-    onSave(form);
-  }
-
-  return (
-    <div>
-      <div style={S.modalTitle}>{form.isNew ? "New Note" : "Edit note"}</div>
-      <Field label="Date">
-        <input type="date" value={form.date || ""} onChange={set("date")} style={S.input} />
-      </Field>
-      <Field label="Title">
-        <input autoFocus value={form.title || ""} onChange={set("title")} style={S.input} placeholder="e.g. Landlord contact info" />
-      </Field>
-      <Field label="Notes">
-        <textarea
-          value={form.body || ""}
-          onChange={set("body")}
-          style={{ ...S.input, minHeight: 140, resize: "vertical" }}
-          placeholder="Type whatever you need to remember here…"
-        />
-      </Field>
-      {error && <div style={S.errorText}>{error}</div>}
-      {saveError && <div style={S.errorText}>{saveError}</div>}
-      <div style={{ display: "flex", gap: 8, justifyContent: onDelete ? "space-between" : "flex-end", marginTop: 4 }}>
-        {onDelete && (
-          <button onClick={onDelete} style={S.dangerGhostBtn}>
-            <Trash2 size={13} /> Delete
-          </button>
-        )}
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={onCancel} style={S.ghostBtn}>
-            Cancel
-          </button>
-          <button onClick={submit} style={S.primaryBtn}>
-            {form.isNew ? "New Note" : "Save"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DncEntryForm({ initial, onCancel, onSave, onDelete }) {
-  const [form, setForm] = useState(initial);
-  const [error, setError] = useState("");
-  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
-
-  function submit() {
-    if (!form.name?.trim() && !form.phone?.trim() && !form.email?.trim()) {
-      setError("Fill in at least one field first");
-      return;
-    }
-    setError("");
-    onSave(form);
-  }
-
-  return (
-    <div>
-      <div style={S.modalTitle}>{form.isNew ? "New DNC" : "Edit DNC entry"}</div>
       <Field label="Phone">
-        <input value={form.phone || ""} onChange={set("phone")} style={S.input} placeholder="555-123-4567" autoFocus />
-      </Field>
-      <Field label="Name">
-        <input value={form.name || ""} onChange={set("name")} style={S.input} placeholder="Optional" />
+        <input value={form.phone} onChange={(e) => set("phone", e.target.value)} style={S.input} />
       </Field>
       <Field label="Email">
-        <input value={form.email || ""} onChange={set("email")} style={S.input} placeholder="Optional" />
+        <input value={form.email} onChange={(e) => set("email", e.target.value)} style={S.input} />
+      </Field>
+      <Field label="Commission rate (%)">
+        <input type="number" value={form.commissionRate} onChange={(e) => set("commissionRate", e.target.value)} style={{ ...S.input, fontFamily: T.mono }} />
+      </Field>
+      <Field label={basePayLabel(form.name)}>
+        <input type="number" value={form.basePay} onChange={(e) => set("basePay", e.target.value)} style={{ ...S.input, fontFamily: T.mono }} />
+      </Field>
+      <Field label="Start date">
+        <input type="date" value={form.startDate || ""} onChange={(e) => set("startDate", e.target.value)} style={S.input} />
       </Field>
       <Field label="Notes">
-        <input value={form.notes || ""} onChange={set("notes")} style={S.input} placeholder="Why they're on the list, optional" />
+        <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} style={{ ...S.input, minHeight: 60 }} />
       </Field>
-      {error && <div style={S.errorText}>{error}</div>}
-      <div style={{ display: "flex", gap: 8, justifyContent: onDelete ? "space-between" : "flex-end", marginTop: 4 }}>
+      <div style={S.modalFooter}>
         {onDelete && (
-          <button onClick={onDelete} style={S.dangerGhostBtn}>
-            <Trash2 size={13} /> Delete
+          <button onClick={onDelete} style={S.dangerBtnGhost}>
+            <Trash2 size={14} /> Delete
           </button>
         )}
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={onCancel} style={S.ghostBtn}>
-            Cancel
+        {onToggleActive && (
+          <button onClick={onToggleActive} style={S.ghostBtn}>
+            {form.active === false ? "Reactivate" : "Deactivate"}
           </button>
-          <button onClick={submit} style={S.primaryBtn}>
-            {form.isNew ? "New DNC" : "Save"}
-          </button>
-        </div>
+        )}
+        <div style={{ flex: 1 }} />
+        <button onClick={onCancel} style={S.ghostBtn}>
+          Cancel
+        </button>
+        <button onClick={() => onSave(form)} disabled={!form.name.trim()} style={S.primaryBtn}>
+          Save
+        </button>
       </div>
     </div>
   );
 }
 
 function CandidateForm({ initial, onCancel, onSave, onDelete, onConvert }) {
-  const [form, setForm] = useState(initial);
-  const [error, setError] = useState("");
-  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
-
-  function submit() {
-    if (!form.name || !form.name.trim()) {
-      setError("Enter the candidate's name first");
-      return;
-    }
-    setError("");
-    onSave(form);
+  const [form, setForm] = useState({
+    name: "",
+    phone: "",
+    email: "",
+    interviewDate: "",
+    experience: "",
+    notes: "",
+    position: "",
+    leadSource: "",
+    status: "pending",
+    ...initial,
+  });
+  function set(key, value) {
+    setForm((f) => ({ ...f, [key]: value }));
   }
-
   return (
     <div>
-      <div style={S.modalTitle}>{form.isNew ? "New Candidate" : "Edit candidate"}</div>
-      <Field label="Candidate Name *">
-        <input value={form.name || ""} onChange={set("name")} style={S.input} autoFocus />
+      <div style={S.modalTitle}>{form.isNew ? "New candidate" : "Edit candidate"}</div>
+      <Field label="Name" required>
+        <input value={form.name} onChange={(e) => set("name", e.target.value)} style={S.input} autoFocus />
       </Field>
       <Field label="Phone">
-        <input value={form.phone || ""} onChange={set("phone")} style={S.input} />
+        <input value={form.phone} onChange={(e) => set("phone", e.target.value)} style={S.input} />
       </Field>
       <Field label="Email">
-        <input value={form.email || ""} onChange={set("email")} style={S.input} />
-      </Field>
-      <Field label="Interview Date">
-        <input type="date" value={form.interviewDate || ""} onChange={set("interviewDate")} style={S.input} />
+        <input value={form.email} onChange={(e) => set("email", e.target.value)} style={S.input} />
       </Field>
       <Field label="Position">
         <div style={{ position: "relative" }}>
-          <select value={form.position || ""} onChange={set("position")} style={S.select}>
-            <option value="">Choose position</option>
+          <select value={form.position} onChange={(e) => set("position", e.target.value)} style={S.select}>
+            <option value="">Choose</option>
             <option value="opener">Opener</option>
             <option value="closer">Closer</option>
           </select>
           <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
         </div>
       </Field>
-      <Field label="Lead Source">
-        <input
-          value={form.leadSource || ""}
-          onChange={set("leadSource")}
-          style={S.input}
-          placeholder="e.g. Indeed, referral, walk-in"
-        />
+      <Field label="Interview date">
+        <input type="date" value={form.interviewDate} onChange={(e) => set("interviewDate", e.target.value)} style={S.input} />
       </Field>
-      <Field label="Experience">
-        <textarea
-          value={form.experience || ""}
-          onChange={set("experience")}
-          style={{ ...S.input, minHeight: 70, resize: "vertical" }}
-          placeholder="Relevant background, prior sales experience, etc."
-        />
+      <Field label="Lead source">
+        <input value={form.leadSource} onChange={(e) => set("leadSource", e.target.value)} style={S.input} />
       </Field>
       <Field label="Status">
         <div style={{ position: "relative" }}>
-          <select value={form.status || "pending"} onChange={set("status")} style={S.select}>
+          <select value={form.status} onChange={(e) => set("status", e.target.value)} style={S.select}>
             <option value="pending">Pending</option>
             <option value="hired">Hired</option>
             <option value="noshow">No Show</option>
@@ -9578,1140 +6817,739 @@ function CandidateForm({ initial, onCancel, onSave, onDelete, onConvert }) {
         </div>
       </Field>
       <Field label="Notes">
-        <textarea
-          value={form.notes || ""}
-          onChange={set("notes")}
-          style={{ ...S.input, minHeight: 70, resize: "vertical" }}
-        />
+        <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} style={{ ...S.input, minHeight: 70 }} />
       </Field>
-      {error && <div style={S.errorText}>{error}</div>}
-      <div style={{ display: "flex", gap: 8, justifyContent: "space-between", marginTop: 4, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", gap: 8 }}>
-          {onDelete && (
-            <button onClick={onDelete} style={S.dangerGhostBtn}>
-              <Trash2 size={13} /> Delete
-            </button>
-          )}
-          {onConvert && form.status === "hired" && (
-            <button onClick={onConvert} style={{ ...S.ghostBtn, color: T.pineDark, borderColor: T.pineDark }}>
-              <Users size={13} /> Convert to Employee
-            </button>
-          )}
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={onCancel} style={S.ghostBtn}>
-            Cancel
+      <div style={S.modalFooter}>
+        {onDelete && (
+          <button onClick={onDelete} style={S.dangerBtnGhost}>
+            <Trash2 size={14} /> Delete
           </button>
-          <button onClick={submit} style={S.primaryBtn}>
-            {form.isNew ? "New Candidate" : "Save"}
+        )}
+        {onConvert && (
+          <button onClick={onConvert} style={S.ghostBtn}>
+            <Users size={14} /> Convert to employee
           </button>
-        </div>
+        )}
+        <div style={{ flex: 1 }} />
+        <button onClick={onCancel} style={S.ghostBtn}>
+          Cancel
+        </button>
+        <button onClick={() => onSave(form)} disabled={!form.name.trim()} style={S.primaryBtn}>
+          Save
+        </button>
       </div>
     </div>
   );
 }
 
-function ContactForm({ initial, onCancel, onSave, onDelete }) {
-  const [form, setForm] = useState(initial);
-  const [error, setError] = useState("");
-  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
-
-  function submit() {
-    if (!form.name || !form.name.trim()) {
-      setError("Enter a name first");
-      return;
-    }
-    onSave(form);
+function NoteForm({ initial, error, onCancel, onSave, onDelete }) {
+  const [form, setForm] = useState({ date: todayDateStr(), title: "", body: "", ...initial });
+  function set(key, value) {
+    setForm((f) => ({ ...f, [key]: value }));
   }
-
   return (
     <div>
-      <div style={S.modalTitle}>{form.id ? "Edit contact" : "New contact"}</div>
-      <Field label="Name">
-        <input autoFocus value={form.name} onChange={set("name")} style={S.input} placeholder="Jordan Lee" />
+      <div style={S.modalTitle}>{form.isNew ? "New note" : "Edit note"}</div>
+      <Field label="Title" required>
+        <input value={form.title} onChange={(e) => set("title", e.target.value)} style={S.input} autoFocus />
+      </Field>
+      <Field label="Date">
+        <input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} style={S.input} />
+      </Field>
+      <Field label="Notes">
+        <textarea value={form.body} onChange={(e) => set("body", e.target.value)} style={{ ...S.input, minHeight: 140, resize: "vertical" }} />
       </Field>
       {error && <div style={S.errorText}>{error}</div>}
-      <Field label="Company">
-        <input value={form.company || ""} onChange={set("company")} style={S.input} placeholder="Acme Co" />
-      </Field>
-      <Field label="Email">
-        <input value={form.email || ""} onChange={set("email")} style={S.input} placeholder="jordan@acme.com" />
+      <div style={S.modalFooter}>
+        {onDelete && (
+          <button onClick={onDelete} style={S.dangerBtnGhost}>
+            <Trash2 size={14} /> Delete
+          </button>
+        )}
+        <div style={{ flex: 1 }} />
+        <button onClick={onCancel} style={S.ghostBtn}>
+          Cancel
+        </button>
+        <button onClick={() => onSave(form)} disabled={!form.title.trim()} style={S.primaryBtn}>
+          Save
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function DncEntryForm({ initial, onCancel, onSave, onDelete }) {
+  const [form, setForm] = useState({ name: "", phone: "", email: "", notes: "", ...initial });
+  function set(key, value) {
+    setForm((f) => ({ ...f, [key]: value }));
+  }
+  return (
+    <div>
+      <div style={S.modalTitle}>{form.isNew ? "New DNC entry" : "Edit DNC entry"}</div>
+      <Field label="Name">
+        <input value={form.name} onChange={(e) => set("name", e.target.value)} style={S.input} autoFocus />
       </Field>
       <Field label="Phone">
-        <input value={form.phone || ""} onChange={set("phone")} style={S.input} placeholder="+1 415 555 0100" />
+        <input value={form.phone} onChange={(e) => set("phone", e.target.value)} style={S.input} />
+      </Field>
+      <Field label="Email">
+        <input value={form.email} onChange={(e) => set("email", e.target.value)} style={S.input} />
       </Field>
       <Field label="Notes">
-        <textarea
-          value={form.notes || ""}
-          onChange={set("notes")}
-          style={{ ...S.input, minHeight: 64, resize: "vertical" }}
-          placeholder="Context, how you met, preferences…"
-        />
+        <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} style={{ ...S.input, minHeight: 60 }} />
       </Field>
-      <div style={{ display: "flex", gap: 10 }}>
-        <div style={{ flex: 1 }}>
-          <Field label="Owner">
-            <input value={form.owner || ""} onChange={set("owner")} style={S.input} placeholder="Who owns this" />
-          </Field>
-        </div>
-        <div style={{ flex: 1 }}>
-          <Field label="Owner role">
-            <div style={{ position: "relative" }}>
-              <select value={form.ownerRole || "rep"} onChange={set("ownerRole")} style={S.select}>
-                {ROLES.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.label}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
-            </div>
-          </Field>
-        </div>
-      </div>
       <div style={S.modalFooter}>
-        {onDelete ? (
-          <button style={S.dangerGhostBtn} onClick={onDelete}>
-            <Trash2 size={13} /> Delete
+        {onDelete && (
+          <button onClick={onDelete} style={S.dangerBtnGhost}>
+            <Trash2 size={14} /> Delete
           </button>
-        ) : (
-          <span />
         )}
-        <div style={{ display: "flex", gap: 8 }}>
-          <button style={S.ghostBtn} onClick={onCancel}>
-            Cancel
-          </button>
-          <button style={S.primaryBtn} onClick={submit}>
-            Save contact
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function UserForm({ initial, currentUserId, userCount, onCancel, onSave, onDelete, serverError, roleOptions }) {
-  const [form, setForm] = useState(initial);
-  const [error, setError] = useState("");
-  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
-  const isSelf = form.id && form.id === currentUserId;
-  const isLastAdmin = form.role === "admin" && userCount <= 1;
-  const isEdit = !!form.id;
-
-  function submit() {
-    if (!form.name || !form.name.trim()) {
-      setError("Enter a name first");
-      return;
-    }
-    if (!form.username || !form.username.trim()) {
-      setError("Enter a username first");
-      return;
-    }
-    if (!isEdit && (!form.password || !form.password.trim())) {
-      setError("Enter a password first");
-      return;
-    }
-    setError("");
-    onSave(form);
-  }
-
-  return (
-    <div>
-      <div style={S.modalTitle}>{form.id ? "Edit user" : "New user"}</div>
-      <Field label="Name">
-        <input autoFocus value={form.name} onChange={set("name")} style={S.input} placeholder="Jordan Lee" />
-      </Field>
-      {(error || serverError) && <div style={S.errorText}>{error || serverError}</div>}
-      <Field label="Username">
-        <input value={form.username} onChange={set("username")} style={S.input} placeholder="jordan" />
-      </Field>
-      <Field label={isEdit ? "New password (leave blank to keep current)" : "Password"}>
-        <input
-          value={form.password}
-          onChange={set("password")}
-          style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }}
-          placeholder={isEdit ? "Leave blank to keep current password" : "Password"}
-        />
-      </Field>
-      <Field label="Role">
-        <div style={{ position: "relative" }}>
-          <select value={form.role || "rep"} onChange={set("role")} style={S.select} disabled={isSelf && isLastAdmin}>
-            {(roleOptions || ROLES).map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.label}
-              </option>
-            ))}
-          </select>
-          <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
-        </div>
-      </Field>
-      {isSelf && isLastAdmin && (
-        <div style={S.hint}>You're the only admin, so this role can't be changed until another admin exists.</div>
-      )}
-      <Field label="Campaign">
-        <div style={{ position: "relative" }}>
-          <select value={form.campaign || "rrg"} onChange={set("campaign")} style={S.select}>
-            <option value="rrg">RRG only</option>
-            <option value="dfs">DFS only</option>
-            <option value="both">Both — sees the campaign picker</option>
-          </select>
-          <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
-        </div>
-      </Field>
-      <div style={S.hint}>
-        A single-campaign account signs straight into that campaign, skipping the picker entirely.
-      </div>
-      <div style={S.hint}>
-        Passwords are hashed on the server and never stored or displayed in plain text.
-      </div>
-      <div style={S.modalFooter}>
-        {onDelete && !isSelf ? (
-          <button style={S.dangerGhostBtn} onClick={onDelete}>
-            <Trash2 size={13} /> Delete
-          </button>
-        ) : (
-          <span />
-        )}
-        <div style={{ display: "flex", gap: 8 }}>
-          <button style={S.ghostBtn} onClick={onCancel}>
-            Cancel
-          </button>
-          <button style={S.primaryBtn} onClick={submit}>
-            Save user
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function EmployeeForm({ initial, attendance, onCancel, onSave, onDelete, onToggleActive }) {
-  const [form, setForm] = useState(initial);
-  const [error, setError] = useState("");
-  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
-  const isInactive = form.active === false;
-  const [files, setFiles] = useState([]);
-  const [filesLoading, setFilesLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [fileError, setFileError] = useState("");
-
-  // All-time attendance tally for this employee — attendance is stored as
-  // { "employeeId__YYYY-MM-DD": "late" | "absent" | "left_early" }.
-  const attendanceCounts = { late: 0, absent: 0, left_early: 0 };
-  if (form.id && attendance) {
-    const prefix = form.id + "__";
-    Object.keys(attendance).forEach((key) => {
-      if (!key.startsWith(prefix)) return;
-      const status = attendance[key];
-      if (attendanceCounts[status] !== undefined) attendanceCounts[status] += 1;
-    });
-  }
-  const attendanceTotal = attendanceCounts.late + attendanceCounts.absent + attendanceCounts.left_early;
-
-  async function refreshFiles() {
-    if (!form.id) return;
-    setFilesLoading(true);
-    try {
-      const res = await fetch(`/api/employees/${form.id}/files`, { credentials: "include" });
-      const data = await res.json();
-      setFiles(data.files || []);
-    } catch (e) {
-      // leave the list as-is on a transient error
-    }
-    setFilesLoading(false);
-  }
-
-  useEffect(() => {
-    refreshFiles();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.id]);
-
-  async function handleFileSelect(e) {
-    const file = e.target.files && e.target.files[0];
-    e.target.value = "";
-    if (!file) return;
-    if (file.size > 15 * 1024 * 1024) {
-      setFileError("That file is over 15MB — try a smaller scan or a compressed PDF.");
-      return;
-    }
-    setFileError("");
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch(`/api/employees/${form.id}/files`, {
-        method: "POST",
-        credentials: "include",
-        body: formData,
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        setFileError(err.error || "Upload failed. Try again.");
-      } else {
-        await refreshFiles();
-      }
-    } catch (e) {
-      setFileError("Couldn't reach the server. Try again.");
-    }
-    setUploading(false);
-  }
-
-  async function handleFileDelete(fileId) {
-    try {
-      await fetch(`/api/employees/${form.id}/files/${fileId}`, { method: "DELETE", credentials: "include" });
-      setFiles((prev) => prev.filter((f) => f.id !== fileId));
-    } catch (e) {
-      setFileError("Couldn't delete that file. Try again.");
-    }
-  }
-
-  function formatFileSize(bytes) {
-    if (!bytes) return "";
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  }
-
-  function submit() {
-    if (!form.name || !form.name.trim()) {
-      setError("Enter a name first");
-      return;
-    }
-    onSave({
-      ...form,
-      commissionRate: form.commissionRate === "" ? "" : Number(form.commissionRate) || 0,
-      basePay: form.basePay === "" ? "" : Number(form.basePay) || 0,
-    });
-  }
-
-  return (
-    <div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-        <div style={S.modalTitle}>{form.id ? "Edit employee" : "New employee"}</div>
-        {isInactive && <span style={S.refundedBadge}>Deactivated</span>}
-      </div>
-      <Field label="Name">
-        <input autoFocus value={form.name} onChange={set("name")} style={S.input} placeholder="Jordan Lee" />
-      </Field>
-      {error && <div style={S.errorText}>{error}</div>}
-      <div style={{ display: "flex", gap: 10 }}>
-        <div style={{ flex: 1 }}>
-          <Field label="Role">
-            <div style={{ position: "relative" }}>
-              <select value={form.role || "rep"} onChange={set("role")} style={S.select}>
-                {ROLES.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.label}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
-            </div>
-          </Field>
-        </div>
-        <div style={{ flex: 1 }}>
-          <Field label="Commission %">
-            <input
-              value={form.commissionRate}
-              onChange={set("commissionRate")}
-              type="number"
-              min="0"
-              max="100"
-              step="1"
-              style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }}
-              placeholder="e.g. 35"
-            />
-          </Field>
-        </div>
-        <div style={{ flex: 1 }}>
-          <Field label={`${basePayLabel(form.name)} / week`}>
-            <input
-              value={form.basePay}
-              onChange={set("basePay")}
-              type="number"
-              min="0"
-              step="1"
-              style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }}
-              placeholder="Leave blank if none"
-            />
-          </Field>
-        </div>
-      </div>
-      <div style={{ display: "flex", gap: 10 }}>
-        <div style={{ flex: 1 }}>
-          <Field label="Phone">
-            <input value={form.phone || ""} onChange={set("phone")} style={S.input} placeholder="+1 415 555 0100" />
-          </Field>
-        </div>
-        <div style={{ flex: 1 }}>
-          <Field label="Email">
-            <input value={form.email || ""} onChange={set("email")} style={S.input} placeholder="jordan@company.com" />
-          </Field>
-        </div>
-      </div>
-      <Field label="Start date">
-        <input type="date" value={form.startDate || ""} onChange={set("startDate")} style={S.input} />
-      </Field>
-      {form.id && (
-        <div style={S.attendanceSummaryBox}>
-          <div style={S.fieldLabel}>Attendance history (all-time)</div>
-          {attendanceTotal === 0 ? (
-            <div style={{ fontSize: 12.5, color: T.textMuted }}>No late, absent, or left-early days recorded yet.</div>
-          ) : (
-            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-              <div style={S.attendanceSummaryItem}>
-                <span style={{ ...S.attendanceSummaryDot, background: "#B8763E" }} />
-                Late <strong>{attendanceCounts.late}</strong>
-              </div>
-              <div style={S.attendanceSummaryItem}>
-                <span style={{ ...S.attendanceSummaryDot, background: "#A32D2D" }} />
-                Absent <strong>{attendanceCounts.absent}</strong>
-              </div>
-              <div style={S.attendanceSummaryItem}>
-                <span style={{ ...S.attendanceSummaryDot, background: "#8A5A1E" }} />
-                Left early <strong>{attendanceCounts.left_early}</strong>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-      <Field label="Notes">
-        <textarea
-          value={form.notes || ""}
-          onChange={set("notes")}
-          style={{ ...S.input, minHeight: 56, resize: "vertical" }}
-        />
-      </Field>
-
-      <div style={S.fieldLabel}>Attachments (ID, work agreement, etc.)</div>
-      {!form.id ? (
-        <div style={{ ...S.hint, marginBottom: 12 }}>Save this employee first — then you can attach files here.</div>
-      ) : (
-        <div style={S.attachmentsBox}>
-          {filesLoading ? (
-            <div style={{ ...S.hint, margin: 0 }}>Loading attachments…</div>
-          ) : files.length === 0 ? (
-            <div style={{ ...S.hint, margin: 0 }}>No files attached yet.</div>
-          ) : (
-            <div style={S.attachmentList}>
-              {files.map((f) => (
-                <div key={f.id} style={S.attachmentRow}>
-                  <a
-                    href={`/api/employees/${form.id}/files/${f.id}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={S.attachmentLink}
-                  >
-                    {f.filename}
-                  </a>
-                  <span style={S.attachmentMeta}>{formatFileSize(f.size)}</span>
-                  <button
-                    type="button"
-                    onClick={() => handleFileDelete(f.id)}
-                    style={S.attachmentDeleteBtn}
-                    aria-label="Remove file"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-          {fileError && <div style={{ ...S.errorText, marginTop: 8 }}>{fileError}</div>}
-          <label style={S.attachmentUploadBtn}>
-            {uploading ? "Uploading…" : "+ Add file"}
-            <input type="file" onChange={handleFileSelect} disabled={uploading} style={{ display: "none" }} />
-          </label>
-        </div>
-      )}
-
-      <div style={S.hint}>
-        Sales are attributed to this employee when they're selected as Opener, Closer, or Verification on a sale record.
-      </div>
-      {onToggleActive && (
-        <button style={isInactive ? S.reactivateBtn : S.deactivateBtn} onClick={onToggleActive}>
-          {isInactive ? "Reactivate employee" : "Deactivate employee"}
+        <div style={{ flex: 1 }} />
+        <button onClick={onCancel} style={S.ghostBtn}>
+          Cancel
         </button>
-      )}
-      <div style={S.modalFooter}>
-        {onDelete ? (
-          <button style={S.dangerGhostBtn} onClick={onDelete}>
-            <Trash2 size={13} /> Delete
-          </button>
-        ) : (
-          <span />
-        )}
-        <div style={{ display: "flex", gap: 8 }}>
-          <button style={S.ghostBtn} onClick={onCancel}>
-            Cancel
-          </button>
-          <button style={S.primaryBtn} onClick={submit}>
-            Save employee
-          </button>
-        </div>
+        <button
+          onClick={() => onSave(form)}
+          disabled={!form.name.trim() && !form.phone.trim() && !form.email.trim()}
+          style={S.primaryBtn}
+        >
+          Save
+        </button>
       </div>
     </div>
   );
 }
 
-function SaleForm({ initial, employees, settings, dncList, sales, syncingToEpg, onCancel, onMinimize, onSave, onDelete }) {
-  const [form, setForm] = useState(initial);
-  const [error, setError] = useState("");
-  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
-  const [addressSuggestions, setAddressSuggestions] = useState([]);
-  const [showAddressSuggestions, setShowAddressSuggestions] = useState(false);
-  const [addressLookupBusy, setAddressLookupBusy] = useState(false);
-  const [zipLookupBusy, setZipLookupBusy] = useState(false);
-  const normalizedFormPhone = (form.phone || "").replace(/\D/g, "");
-  const dncMatch = (dncList || []).find((d) => {
-    const dPhone = (d.phone || "").replace(/\D/g, "");
-    if (normalizedFormPhone && dPhone && dPhone === normalizedFormPhone) return true;
-    if (form.email && d.email && form.email.trim().toLowerCase() === d.email.trim().toLowerCase()) return true;
-    if (form.name && d.name && form.name.trim().toLowerCase() === d.name.trim().toLowerCase()) return true;
-    return false;
-  });
-  // Surfaces the most recent prior sale for this same customer, so a rep
-  // filling out a new sale can see right away that this person has bought
-  // before — matched by phone first (more reliable), falling back to name.
-  const repeatCustomerSale = (sales || [])
-    .filter((s) => s.id !== form.id)
-    .filter((s) => {
-      const sPhone = (s.phone || "").replace(/\D/g, "");
-      if (normalizedFormPhone && sPhone && sPhone === normalizedFormPhone) return true;
-      if (form.name && s.name && form.name.trim().toLowerCase() === s.name.trim().toLowerCase()) return true;
-      return false;
-    })
-    .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0))[0];
-  const addressDebounceRef = useRef(null);
-  const zipDebounceRef = useRef(null);
-  const blacklistDebounceRef = useRef(null);
-  const lastCheckedPhone = useRef("");
-  const [blacklistResult, setBlacklistResult] = useState(null); // null | { message, code } | { error }
-  const lastLookedUpZip = useRef("");
-
-  useEffect(() => {
-    const pkg = Number(form.packagePrice) || 0;
-    const flex = Number(form.dateFlex) || 0;
-    const computed = pkg + flex;
-    if (computed !== Number(form.totalPrice)) {
-      setForm((f) => ({ ...f, totalPrice: computed }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.packagePrice, form.dateFlex]);
-
-  // ZIP code -> city/state autofill, via the free Zippopotam.us API (no key needed).
-  useEffect(() => {
-    const zip = (form.zip || "").trim();
-    clearTimeout(zipDebounceRef.current);
-    if (!/^\d{5}$/.test(zip) || zip === lastLookedUpZip.current) return;
-    zipDebounceRef.current = setTimeout(async () => {
-      try {
-        setZipLookupBusy(true);
-        const res = await fetch(`https://api.zippopotam.us/us/${zip}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        const place = data.places && data.places[0];
-        if (!place) return;
-        lastLookedUpZip.current = zip;
-        setForm((f) =>
-          f.zip === zip ? { ...f, city: place["place name"], state: place["state abbreviation"] } : f
-        );
-      } catch (e) {
-        // Silently ignore — this is a convenience autofill, not a required step.
-      } finally {
-        setZipLookupBusy(false);
-      }
-    }, 500);
-    return () => clearTimeout(zipDebounceRef.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.zip]);
-
-  // Litigation risk check via Blacklist Alliance — only fires once the phone
-  // number looks complete (10 digits) and only re-checks if it actually
-  // changes, since each lookup has a small real cost on their end.
-  useEffect(() => {
-    const cleanPhone = (form.phone || "").replace(/\D/g, "");
-    clearTimeout(blacklistDebounceRef.current);
-    if (cleanPhone.length !== 10 || cleanPhone === lastCheckedPhone.current) return;
-    blacklistDebounceRef.current = setTimeout(async () => {
-      try {
-        lastCheckedPhone.current = cleanPhone;
-        const res = await fetch("/api/blacklist/check", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ phone: cleanPhone }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          setBlacklistResult({ error: data.error || "Couldn't check litigation risk." });
-          return;
-        }
-        setBlacklistResult(data);
-      } catch (e) {
-        setBlacklistResult({ error: "Network error checking litigation risk." });
-      }
-    }, 800);
-    return () => clearTimeout(blacklistDebounceRef.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.phone]);
-
-  // Address suggestions as you type, via OpenStreetMap's free Nominatim search
-  // (no API key needed). Debounced and limited to respect their usage policy.
-  useEffect(() => {
-    const q = (form.address || "").trim();
-    clearTimeout(addressDebounceRef.current);
-    if (q.length < 5) {
-      setAddressSuggestions([]);
-      return;
-    }
-    addressDebounceRef.current = setTimeout(async () => {
-      try {
-        setAddressLookupBusy(true);
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&countrycodes=us&limit=5&q=${encodeURIComponent(q)}`
-        );
-        if (!res.ok) return;
-        const data = await res.json();
-        setAddressSuggestions(Array.isArray(data) ? data : []);
-      } catch (e) {
-        // Silently ignore — suggestions are a convenience, typing the address manually always works.
-      } finally {
-        setAddressLookupBusy(false);
-      }
-    }, 500);
-    return () => clearTimeout(addressDebounceRef.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.address]);
-
-  function selectAddressSuggestion(s) {
-    const a = s.address || {};
-    const houseNumber = a.house_number || "";
-    const road = a.road || a.pedestrian || a.footway || "";
-    const streetLine = [houseNumber, road].filter(Boolean).join(" ") || s.display_name.split(",")[0];
-    const city = a.city || a.town || a.village || a.hamlet || form.city;
-    const state = a.state ? US_STATE_ABBREVIATIONS[a.state] || a.state : form.state;
-    const zip = a.postcode || form.zip;
-    lastLookedUpZip.current = zip || "";
-    setForm((f) => ({ ...f, address: streetLine, city: city || f.city, state: state || f.state, zip: zip || f.zip }));
-    setAddressSuggestions([]);
-    setShowAddressSuggestions(false);
+function ExpenseTransactionForm({ initial, categories, error, onCancel, onSave, onDelete }) {
+  const [form, setForm] = useState({ date: todayDateStr(), category: categories[0] || "", amount: "", notes: "", ...initial });
+  function set(key, value) {
+    setForm((f) => ({ ...f, [key]: value }));
   }
-
-  function submit() {
-    if (blacklistResult && blacklistResult.message && blacklistResult.message !== "Good") {
-      setError("This lead cannot be entered — it was flagged by litigation risk screening. See the warning above.");
-      return;
-    }
-    const missing = SALE_REQUIRED_FIELDS.filter((f) => {
-      const v = form[f.key];
-      return v === undefined || v === null || (typeof v === "string" ? v.trim() === "" : false);
-    });
-    if (missing.length > 0) {
-      setError(`Please fill out: ${missing.map((f) => f.label).join(", ")}`);
-      return;
-    }
-    setError("");
-    const packagePrice = form.packagePrice === "" ? 0 : Number(form.packagePrice) || 0;
-    const dateFlex = form.dateFlex === "" ? 0 : Number(form.dateFlex) || 0;
-    onSave({
-      ...form,
-      packagePrice,
-      dateFlex,
-      totalPrice: packagePrice + dateFlex,
-    });
-  }
-
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-        <div style={S.modalTitle}>{form.id ? "Edit sale" : "New sale"}</div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button type="button" onClick={() => window.print()} style={S.minimizeBtn} title="Print this lead">
-            <Printer size={14} /> Print
-          </button>
-          {onMinimize && (
-            <button type="button" onClick={onMinimize} style={S.minimizeBtn} title="Minimize — come back to this later">
-              <Minus size={14} /> Minimize
-            </button>
-          )}
-        </div>
-      </div>
-      <div style={{ ...S.hint, marginBottom: 10 }}>All fields marked * are required to save.</div>
-      {repeatCustomerSale && (
-        <div style={S.repeatCustomerBanner}>
-          <RotateCcw size={16} color={T.pineDark} style={{ flexShrink: 0 }} />
-          <div>
-            Last sold{" "}
-            {repeatCustomerSale.timestamp
-              ? new Date(repeatCustomerSale.timestamp).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
-              : "an earlier date"}
-            {repeatCustomerSale.leadSubmittedTo ? ` — submitted to ${repeatCustomerSale.leadSubmittedTo}` : ""}
-          </div>
-        </div>
-      )}
-      {dncMatch && (
-        <div style={S.dncWarningBanner}>
-          <ShieldAlert size={16} color="#A32D2D" style={{ flexShrink: 0 }} />
-          <div>
-            <div style={{ fontWeight: 700 }}>This person is on your Do Not Call list</div>
-            <div style={{ fontSize: 11.5, marginTop: 2 }}>
-              {dncMatch.name ? `${dncMatch.name} — ` : ""}
-              {dncMatch.phone || dncMatch.email}
-              {dncMatch.notes ? ` — ${dncMatch.notes}` : ""}
-            </div>
-          </div>
-        </div>
-      )}
-      {blacklistResult && blacklistResult.message && blacklistResult.message !== "Good" && (
-        <div style={S.dncWarningBanner}>
-          <ShieldAlert size={16} color="#A32D2D" style={{ flexShrink: 0 }} />
-          <div>
-            <div style={{ fontWeight: 700 }}>
-              {(() => {
-                // The API's docs show the "code" example as a comma-separated
-                // string even though the schema says array — normalize
-                // either shape so this never crashes on a mismatch.
-                const raw = blacklistResult.code;
-                const codes = Array.isArray(raw) ? raw : typeof raw === "string" ? raw.split(",").map((c) => c.trim()) : [];
-                if (codes.some((c) => c.startsWith("plaintiff"))) return "This lead cannot be entered — flagged as a professional TCPA plaintiff";
-                if (codes.some((c) => c.startsWith("attorney"))) return "This lead cannot be entered — flagged as a litigator attorney";
-                if (codes.some((c) => c.startsWith("prelitigation"))) return "This lead cannot be entered — flagged as a pre-litigation complainer";
-                if (codes.includes("anti-telemarketing")) return "This lead cannot be entered — flagged as anti-telemarketing";
-                if (codes.some((c) => c.endsWith("-dnc"))) return "This lead cannot be entered — this number is on a Do Not Call registry";
-                return "This lead cannot be entered — flagged by litigation risk screening";
-              })()}
-            </div>
-            <div style={{ fontSize: 11.5, marginTop: 2 }}>
-              Blacklist Alliance: {blacklistResult.message}
-              {(() => {
-                const raw = blacklistResult.code;
-                const codes = Array.isArray(raw) ? raw : typeof raw === "string" ? raw.split(",").map((c) => c.trim()) : [];
-                return codes.length > 0 ? ` (${codes.join(", ")})` : "";
-              })()}
-            </div>
-          </div>
-        </div>
-      )}
-      {blacklistResult && blacklistResult.error && (
-        <div style={{ ...S.hint, color: "#8A5A1E" }}>Litigation risk check: {blacklistResult.error}</div>
-      )}
-      <Field label="Timestamp">
-        <input type="datetime-local" value={form.timestamp || ""} onChange={set("timestamp")} style={S.input} />
+      <div style={S.modalTitle}>{form.isNew ? "New expense" : "Edit expense"}</div>
+      <Field label="Date" required>
+        <input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} style={S.input} />
       </Field>
-      {form.submittedBy && (
-        <div style={{ ...S.hint, marginTop: -8, marginBottom: 12 }}>Submitted by {form.submittedBy}</div>
-      )}
-      <Field label="Name *">
-        <input
-          autoFocus
-          value={form.name}
-          onChange={set("name")}
-          onBlur={() => form.name && setForm((f) => ({ ...f, name: toTitleCase(f.name) }))}
-          style={S.input}
-          placeholder="Customer name"
-        />
-      </Field>
-      <Field label="Spouse name">
-        <input
-          value={form.spouseName || ""}
-          onChange={set("spouseName")}
-          onBlur={() => form.spouseName && setForm((f) => ({ ...f, spouseName: toTitleCase(f.spouseName) }))}
-          style={S.input}
-          placeholder="Optional"
-        />
-      </Field>
-      {error && <div style={S.errorText}>{error}</div>}
-      <div style={{ display: "flex", gap: 10 }}>
-        <div style={{ flex: 1 }}>
-          <Field label="Phone number *">
-            <input value={form.phone || ""} onChange={set("phone")} style={S.input} placeholder="+1 415 555 0100" />
-          </Field>
-        </div>
-        <div style={{ flex: 1 }}>
-          <Field label="Secondary phone number">
-            <input
-              value={form.phone2 || ""}
-              onChange={set("phone2")}
-              style={S.input}
-              placeholder="Optional"
-            />
-          </Field>
-        </div>
-      </div>
-      <Field label="Email address *">
-        <input value={form.email || ""} onChange={set("email")} style={S.input} placeholder="name@email.com" />
-      </Field>
-      <Field label="Address *">
+      <Field label="Category" required>
         <div style={{ position: "relative" }}>
-          <input
-            value={form.address || ""}
-            onChange={set("address")}
-            onFocus={() => setShowAddressSuggestions(true)}
-            onBlur={() => setTimeout(() => setShowAddressSuggestions(false), 150)}
-            style={S.input}
-            placeholder="123 Main St"
-            autoComplete="off"
-          />
-          {addressLookupBusy && <div style={S.addressLookupSpinner}>Searching…</div>}
-          {showAddressSuggestions && addressSuggestions.length > 0 && (
-            <div style={S.addressSuggestionsBox}>
-              {addressSuggestions.map((s) => (
-                <div
-                  key={s.place_id}
-                  style={S.addressSuggestionRow}
-                  onMouseDown={() => selectAddressSuggestion(s)}
-                >
-                  {s.display_name}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </Field>
-      <div style={{ display: "flex", gap: 10 }}>
-        <div style={{ flex: 2 }}>
-          <Field label="City *">
-            <input value={form.city || ""} onChange={set("city")} style={S.input} />
-          </Field>
-        </div>
-        <div style={{ flex: 1 }}>
-          <Field label="State *">
-            <input value={form.state || ""} onChange={set("state")} style={S.input} placeholder="FL" />
-          </Field>
-        </div>
-        <div style={{ flex: 1 }}>
-          <Field label="Zip code *">
-            <div style={{ position: "relative" }}>
-              <input value={form.zip || ""} onChange={set("zip")} style={S.input} />
-              {zipLookupBusy && <div style={S.zipLookupSpinner}>…</div>}
-            </div>
-          </Field>
-        </div>
-      </div>
-      <div style={{ display: "flex", gap: 10 }}>
-        <div style={{ flex: 1 }}>
-          <Field label="Package price *">
-            <input value={form.packagePrice} onChange={set("packagePrice")} type="number" style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }} placeholder="0" />
-          </Field>
-        </div>
-        <div style={{ flex: 1 }}>
-          <Field label="Date flex price *">
-            <input value={form.dateFlex} onChange={set("dateFlex")} type="number" style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }} placeholder="0" />
-          </Field>
-        </div>
-      </div>
-      <Field label="Total price (auto-calculated)">
-        <input
-          value={form.totalPrice || 0}
-          readOnly
-          disabled
-          type="number"
-          style={{ ...S.input, fontFamily: T.mono, fontSize: 14, fontWeight: 600, color: T.pineDark, background: T.border, cursor: "not-allowed" }}
-        />
-      </Field>
-      <div style={S.hint}>
-        Package price splits 50/50 between the opener and closer. Date flex price is credited entirely to verification.
-      </div>
-      <div style={{ display: "flex", gap: 10 }}>
-        <div style={{ flex: 1 }}>
-          <Field label="Password *">
-            <input value={form.password || ""} onChange={set("password")} style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }} placeholder="Customer Password" />
-          </Field>
-        </div>
-        <div style={{ flex: 1 }}>
-          <Field label="Genie # *">
-            <input value={form.genieNumber || ""} onChange={set("genieNumber")} style={S.input} />
-          </Field>
-        </div>
-      </div>
-      <div style={S.roleFieldGrid}>
-        <div>
-          <Field label="Opener *">
-            <div style={{ position: "relative" }}>
-              <select value={form.openerId || ""} onChange={set("openerId")} style={{ ...S.select, borderColor: SALE_TYPES[0].color }}>
-                <option value="">Unassigned</option>
-                {(employees || []).map((emp) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
-            </div>
-          </Field>
-        </div>
-        <div>
-          <Field label="Closer *">
-            <div style={{ position: "relative" }}>
-              <select value={form.closerId || ""} onChange={set("closerId")} style={{ ...S.select, borderColor: SALE_TYPES[1].color }}>
-                <option value="">Unassigned</option>
-                {(employees || []).map((emp) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
-            </div>
-          </Field>
-        </div>
-        <div>
-          <Field label="Verification *">
-            <div style={{ position: "relative" }}>
-              <select value={form.verificationId || ""} onChange={set("verificationId")} style={{ ...S.select, borderColor: SALE_TYPES[2].color }}>
-                <option value="">Unassigned</option>
-                {(employees || []).map((emp) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
-            </div>
-          </Field>
-        </div>
-      </div>
-      <div style={{ display: "flex", gap: 10 }}>
-        <div style={{ flex: 1 }}>
-          <Field label="Source *">
-            <div style={{ position: "relative" }}>
-              <select value={form.source || ""} onChange={set("source")} style={S.select}>
-                <option value="">Not set</option>
-                {settings.sources.map((src) => (
-                  <option key={src} value={src}>
-                    {src}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
-            </div>
-          </Field>
-        </div>
-        <div style={{ flex: 1 }}>
-          <Field label="Submitted to *">
-            <div style={{ position: "relative" }}>
-              <select value={form.leadSubmittedTo || ""} onChange={set("leadSubmittedTo")} style={S.select}>
-                <option value="">Not submitted yet</option>
-                {settings.leadSources.map((src) => (
-                  <option key={src} value={src}>
-                    {src}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
-            </div>
-          </Field>
-        </div>
-      </div>
-      <Field label="Status *">
-        <div style={{ position: "relative" }}>
-          <select value={form.status || ""} onChange={set("status")} style={S.select}>
-            <option value="" disabled>
-              Select status…
-            </option>
-            {SALE_STATUSES.map((st) => (
-              <option key={st} value={st}>
-                {st}
+          <select value={form.category} onChange={(e) => set("category", e.target.value)} style={S.select}>
+            {categories.map((c) => (
+              <option key={c} value={c}>
+                {c}
               </option>
             ))}
           </select>
           <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
         </div>
       </Field>
-      <Field label="Notes">
-        <textarea
-          value={form.notes || ""}
-          onChange={set("notes")}
-          style={{ ...S.input, minHeight: 64, resize: "vertical" }}
-        />
+      <Field label="Amount" required>
+        <input type="number" value={form.amount} onChange={(e) => set("amount", e.target.value)} style={{ ...S.input, fontFamily: T.mono }} autoFocus />
       </Field>
+      <Field label="Notes">
+        <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} style={{ ...S.input, minHeight: 60 }} />
+      </Field>
+      {error && <div style={S.errorText}>{error}</div>}
       <div style={S.modalFooter}>
-        {onDelete ? (
-          <button style={S.dangerGhostBtn} onClick={onDelete}>
-            <Trash2 size={13} /> Delete
+        {onDelete && (
+          <button onClick={onDelete} style={S.dangerBtnGhost}>
+            <Trash2 size={14} /> Delete
           </button>
-        ) : (
-          <span />
         )}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {syncingToEpg && <span style={{ fontSize: 11.5, color: T.textMuted }}>Syncing to EPG…</span>}
-          <button style={S.ghostBtn} onClick={onCancel} disabled={syncingToEpg}>
-            Cancel
-          </button>
-          <button
-            style={{
-              ...S.primaryBtn,
-              ...(blacklistResult && blacklistResult.message && blacklistResult.message !== "Good"
-                ? { opacity: 0.5, cursor: "not-allowed" }
-                : {}),
-              ...(syncingToEpg ? { opacity: 0.6, cursor: "not-allowed" } : {}),
-            }}
-            disabled={!!(blacklistResult && blacklistResult.message && blacklistResult.message !== "Good") || syncingToEpg}
-            onClick={submit}
-          >
-            {syncingToEpg ? "Saving…" : "Save sale"}
-          </button>
-        </div>
+        <div style={{ flex: 1 }} />
+        <button onClick={onCancel} style={S.ghostBtn}>
+          Cancel
+        </button>
+        <button onClick={() => onSave(form)} disabled={!form.amount || !form.category} style={S.primaryBtn}>
+          Save
+        </button>
       </div>
     </div>
   );
 }
 
-// Small paperclip button that opens a popover for attaching receipts/invoices
-// to a specific expense category + month. expenseKey should be something like
-// "2026-08_Rent" so files stay tied to the exact month and category.
-function ExpenseFileButton({ expenseKey, disabled }) {
-  const [open, setOpen] = useState(false);
-  const [files, setFiles] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState("");
+const DFS_NAV_ITEMS = [
+  { id: "leads", label: "Leads", icon: ClipboardList },
+  { id: "clients", label: "Clients", icon: Users },
+  { id: "calendar", label: "Calendar", icon: CalendarDays },
+  { id: "documents", label: "Documents", icon: FileText },
+  { id: "reports", label: "Reports", icon: BarChart3 },
+  { id: "admin", label: "Admin", icon: Settings },
+];
+const DFS_ROLE_PERMISSIONS = {
+  opener: ["leads"],
+  closer: ["clients", "calendar", "documents"],
+  manager: ["leads", "clients", "calendar", "documents", "reports"],
+};
+function getDfsAllowedSections(role) {
+  if (DFS_ROLE_PERMISSIONS[role]) return DFS_ROLE_PERMISSIONS[role];
+  return DFS_NAV_ITEMS.map((n) => n.id);
+}
+const DFS_PIPELINE_STAGES = [
+  "New Lead",
+  "Contacted",
+  "Qualifying",
+  "Documents Requested",
+  "Documents Received",
+  "Ready to Convert",
+];
+const DFS_DOCUMENT_CHECKLIST = ["Bank statements", "Debt schedule", "Business license", "Voided check", "ID"];
 
-  async function refreshFiles() {
-    setLoading(true);
+function dfsBlankLead() {
+  return {
+    id: uid(),
+    name: "",
+    businessName: "",
+    phone: "",
+    email: "",
+    debtAmount: "",
+    creditors: [],
+    documents: {},
+    stage: "New Lead",
+    callbackDate: "",
+    notes: "",
+    activityLog: [],
+    createdAt: Date.now(),
+    lastTouched: Date.now(),
+  };
+}
+
+function DfsApp({ currentUser, onSwitchCampaign, onLogout }) {
+  const [dfsSection, setDfsSection] = useState("leads");
+  const [leads, setLeads] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [leadModal, setLeadModal] = useState(null);
+  const [sendToCloserModal, setSendToCloserModal] = useState(null);
+  const [clientModal, setClientModal] = useState(null);
+  const [eventModal, setEventModal] = useState(null);
+  const [eventDetail, setEventDetail] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [search, setSearch] = useState("");
+  const [users, setUsers] = useState([]);
+  const saveTimer = useRef(null);
+
+  async function loadData() {
     try {
-      const res = await fetch(`/api/expenses/${encodeURIComponent(expenseKey)}/files`, { credentials: "include" });
-      if (!res.ok) {
-        console.error("Expense files list failed:", res.status);
-        throw new Error("status " + res.status);
-      }
-      const data = await res.json();
-      setFiles(data.files || []);
-      setError("");
-    } catch (err) {
-      console.error("Expense files list error:", err);
-      setError("Couldn't load files: " + (err.message || "unknown error"));
-    } finally {
-      setLoading(false);
+      const l = await window.storage.get("dfs:leads", true);
+      setLeads(l && l.value ? JSON.parse(l.value) : []);
+    } catch (e) {
+      setLeads([]);
     }
+    try {
+      const c = await window.storage.get("dfs:clients", true);
+      setClients(c && c.value ? JSON.parse(c.value) : []);
+    } catch (e) {
+      setClients([]);
+    }
+    try {
+      const ev = await window.storage.get("dfs:events", true);
+      setEvents(ev && ev.value ? JSON.parse(ev.value) : []);
+    } catch (e) {
+      setEvents([]);
+    }
+    setLoaded(true);
   }
-
-  // Fetch on mount too (not just when opened) so the badge below is
-  // accurate from the moment the page loads — otherwise there's no way to
-  // tell at a glance whether a category already has something attached.
   useEffect(() => {
-    refreshFiles();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    loadData();
+  }, []);
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/users", { credentials: "include" });
+        if (res.ok) {
+          const data = await res.json();
+          setUsers((data.users || []).filter((u) => u.campaign === "dfs"));
+        }
+      } catch (e) {
+        // ignore
+      }
+    })();
   }, []);
 
   useEffect(() => {
-    if (open) refreshFiles();
+    const allowed = getDfsAllowedSections(currentUser.role);
+    if (!allowed.includes(dfsSection)) setDfsSection(allowed[0] || "leads");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [currentUser.role]);
 
-  async function handleFileSelect(e) {
-    const file = e.target.files && e.target.files[0];
-    e.target.value = "";
-    if (!file) return;
-    setUploading(true);
-    setError("");
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch(`/api/expenses/${encodeURIComponent(expenseKey)}/files`, {
-        method: "POST",
-        credentials: "include",
-        body: formData,
-      });
-      if (!res.ok) {
-        let detail = `status ${res.status}`;
-        try {
-          const body = await res.json();
-          if (body && body.error) detail = body.error;
-        } catch (parseErr) {
-          // response wasn't JSON — keep the status code as the detail
-        }
-        console.error("Expense file upload failed:", detail);
-        throw new Error(detail);
+  function persist(nextLeads, nextClients, nextEvents) {
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      try {
+        if (nextLeads) await window.storage.set("dfs:leads", JSON.stringify(nextLeads), true);
+        if (nextClients) await window.storage.set("dfs:clients", JSON.stringify(nextClients), true);
+        if (nextEvents) await window.storage.set("dfs:events", JSON.stringify(nextEvents), true);
+      } catch (e) {
+        console.error("DFS save failed", e);
       }
-      await refreshFiles();
-    } catch (err) {
-      console.error("Expense file upload error:", err);
-      setError("Upload failed: " + (err.message || "unknown error"));
-    } finally {
-      setUploading(false);
-    }
+    }, 250);
+  }
+  function updateLeads(next) {
+    setLeads(next);
+    persist(next, null, null);
+  }
+  function updateClients(next) {
+    setClients(next);
+    persist(null, next, null);
+  }
+  function updateEvents(next) {
+    setEvents(next);
+    persist(null, null, next);
   }
 
-  async function handleDelete(fileId) {
-    try {
-      await fetch(`/api/expenses/${encodeURIComponent(expenseKey)}/files/${fileId}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      setFiles((prev) => prev.filter((f) => f.id !== fileId));
-    } catch (e) {
-      setError("Couldn't delete that file");
-    }
+  function logActivity(lead, message) {
+    return {
+      ...lead,
+      lastTouched: Date.now(),
+      activityLog: [...(lead.activityLog || []), { id: uid(), message, at: Date.now(), by: currentUser.name }],
+    };
   }
+
+  function saveLead(form) {
+    const exists = leads.some((l) => l.id === form.id);
+    let next;
+    if (exists) {
+      const prev = leads.find((l) => l.id === form.id);
+      let updated = { ...prev, ...form };
+      if (prev.stage !== form.stage) {
+        updated = logActivity(updated, `Stage changed: ${prev.stage} → ${form.stage}`);
+      } else {
+        updated = { ...updated, lastTouched: Date.now() };
+      }
+      next = leads.map((l) => (l.id === form.id ? updated : l));
+    } else {
+      const newLead = logActivity({ ...dfsBlankLead(), ...form }, "Lead created");
+      next = [...leads, newLead];
+    }
+    updateLeads(next);
+    setLeadModal(null);
+  }
+  function deleteLead(id) {
+    updateLeads(leads.filter((l) => l.id !== id));
+    setConfirmDelete(null);
+    setLeadModal(null);
+  }
+  function sendToCloser(lead, closerName) {
+    const updated = logActivity({ ...lead, stage: "Ready to Convert" }, `Sent to closer: ${closerName}`);
+    updateLeads(leads.map((l) => (l.id === lead.id ? updated : l)));
+    setSendToCloserModal(null);
+    setLeadModal(null);
+  }
+  function convertToClient(lead) {
+    if (!lead.name || !lead.phone) return;
+    const newClient = {
+      id: uid(),
+      name: lead.name,
+      businessName: lead.businessName,
+      phone: lead.phone,
+      email: lead.email,
+      debtAmount: lead.debtAmount,
+      creditors: lead.creditors,
+      documents: lead.documents,
+      notes: lead.notes,
+      convertedFrom: lead.id,
+      createdAt: Date.now(),
+    };
+    updateClients([...clients, newClient]);
+    updateLeads(leads.filter((l) => l.id !== lead.id));
+    setLeadModal(null);
+  }
+  function saveClient(form) {
+    const exists = clients.some((c) => c.id === form.id);
+    const next = exists ? clients.map((c) => (c.id === form.id ? { ...c, ...form } : c)) : [...clients, { ...form, id: uid() }];
+    updateClients(next);
+    setClientModal(null);
+  }
+  function deleteClient(id) {
+    updateClients(clients.filter((c) => c.id !== id));
+    setConfirmDelete(null);
+    setClientModal(null);
+  }
+  function saveEvent(form) {
+    const exists = events.some((e) => e.id === form.id);
+    const next = exists ? events.map((e) => (e.id === form.id ? { ...e, ...form } : e)) : [...events, { ...form, id: uid() }];
+    updateEvents(next);
+    setEventModal(null);
+  }
+  function deleteEvent(id) {
+    updateEvents(events.filter((e) => e.id !== id));
+    setEventModal(null);
+    setEventDetail(null);
+  }
+
+  const NOT_WORKED_HOURS = 24;
+  function isLeadNotWorked(lead) {
+    if (lead.stage === "Ready to Convert") return false;
+    const hoursSince = (Date.now() - (lead.lastTouched || lead.createdAt || Date.now())) / 3600000;
+    return hoursSince >= NOT_WORKED_HOURS;
+  }
+
+  if (!loaded) {
+    return (
+      <div style={{ ...S.app, minHeight: 400 }}>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ color: T.textMuted, fontFamily: T.mono, fontSize: 13 }}>loading DFS…</div>
+        </div>
+      </div>
+    );
+  }
+
+  const q = search.trim().toLowerCase();
+  const filteredLeads = leads.filter((l) => !q || (l.name || "").toLowerCase().includes(q) || (l.businessName || "").toLowerCase().includes(q));
+  const filteredClients = clients.filter((c) => !q || (c.name || "").toLowerCase().includes(q) || (c.businessName || "").toLowerCase().includes(q));
+  const allowedDfsSections = getDfsAllowedSections(currentUser.role);
 
   return (
-    <div style={{ position: "relative", display: "inline-block" }}>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        disabled={disabled}
-        style={{
-          ...S.iconBtnGhost,
-          ...(files.length > 0 ? { background: "#EAF3EC" } : {}),
-          ...(disabled ? { opacity: 0.4, cursor: "not-allowed" } : {}),
-        }}
-        title={files.length > 0 ? `${files.length} file${files.length === 1 ? "" : "s"} attached` : "Attach a receipt or invoice"}
-      >
-        <Paperclip size={14} color={files.length > 0 ? T.pineDark : T.textMuted} />
-      </button>
-      {files.length > 0 && (
-        <span style={S.expenseFileBadge}>{files.length}</span>
-      )}
-      {open && (
-        <Modal onClose={() => setOpen(false)} narrow>
-          <div style={{ fontFamily: T.display, fontSize: 16, fontWeight: 500, color: T.ink, marginBottom: 10 }}>
-            Attachments
+    <div style={S.app}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+        * { box-sizing: border-box; }
+        button { font-family: inherit; cursor: pointer; }
+        input, textarea, select { font-family: inherit; }
+      `}</style>
+      <div style={S.sidebar}>
+        <div>
+          <div style={S.brand}>DFS</div>
+          <div style={S.brandSub}>debt settlement</div>
+          <div style={S.navList}>
+            {DFS_NAV_ITEMS.filter((item) => allowedDfsSections.includes(item.id)).map((item) => {
+              const Icon = item.icon;
+              const active = dfsSection === item.id;
+              return (
+                <button key={item.id} onClick={() => setDfsSection(item.id)} style={{ ...S.navItem, ...(active ? S.navItemActive : {}) }}>
+                  <Icon size={15} />
+                  {item.label}
+                </button>
+              );
+            })}
           </div>
-          {loading ? (
-            <div style={{ fontSize: 12.5, color: T.textMuted }}>Loading…</div>
-          ) : files.length === 0 ? (
-            <div style={{ fontSize: 12.5, color: T.textMuted, marginBottom: 12 }}>No files attached yet.</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
-              {files.map((f) => (
-                <div
-                  key={f.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    fontSize: 12.5,
-                    background: T.paper,
-                    border: `1px solid ${T.border}`,
-                    borderRadius: 7,
-                    padding: "6px 10px",
-                  }}
-                >
-                  <a
-                    href={`/api/expenses/${encodeURIComponent(expenseKey)}/files/${f.id}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{ color: T.ink, flex: 1, textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                  >
-                    {f.filename}
-                  </a>
-                  <button onClick={() => handleDelete(f.id)} style={S.iconBtnGhost}>
-                    <Trash2 size={12} color={T.textMuted} />
-                  </button>
+        </div>
+        <div style={S.viewerBtnSidebar}>
+          <div style={S.avatarSm}>{initials(currentUser.name)}</div>
+          <div style={{ minWidth: 0, flex: 1, textAlign: "left" }}>
+            <div style={{ fontSize: 12.5, color: T.ink, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {currentUser.name}
+            </div>
+          </div>
+        </div>
+        {currentUser.role === "admin" && (
+          <button style={S.logOutLink} onClick={onSwitchCampaign}>
+            Switch Campaign
+          </button>
+        )}
+        <button style={S.logOutLink} onClick={onLogout}>
+          Log out
+        </button>
+      </div>
+      <div style={S.main}>
+        <div style={S.topbar}>
+          <div style={S.topbarTitle}>{DFS_NAV_ITEMS.find((n) => n.id === dfsSection)?.label}</div>
+          {(dfsSection === "leads" || dfsSection === "clients") && (
+            <div style={S.searchWrap}>
+              <Search size={14} color={T.textMuted} style={{ flexShrink: 0 }} />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search" style={S.searchInput} />
+              {search && (
+                <button onClick={() => setSearch("")} style={S.iconBtnGhost}>
+                  <X size={13} color={T.textMuted} />
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {dfsSection === "leads" && (
+          <div style={S.contactsWrap}>
+            <div style={S.contactsToolbar}>
+              <span style={S.contactsCount}>{filteredLeads.length} lead{filteredLeads.length === 1 ? "" : "s"}</span>
+              <button onClick={() => setLeadModal(dfsBlankLead())} style={S.primaryBtn}>
+                <Plus size={14} /> New lead
+              </button>
+            </div>
+            {filteredLeads.length === 0 ? (
+              <div style={S.emptyState}>
+                <ClipboardList size={22} color={T.borderStrong} />
+                <div style={{ marginTop: 8, fontSize: 13, color: T.textMuted }}>No leads yet — add your first one</div>
+              </div>
+            ) : (
+              <div style={S.leadList}>
+                {[...filteredLeads]
+                  .sort((a, b) => (b.lastTouched || 0) - (a.lastTouched || 0))
+                  .map((l) => {
+                    const notWorked = isLeadNotWorked(l);
+                    return (
+                      <div key={l.id} style={{ ...S.leadCard, ...(notWorked ? { borderColor: "#E5A03B" } : {}) }} onClick={() => setLeadModal({ ...l })}>
+                        <div style={S.leadCardHeader}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                            <span style={S.leadName}>{l.name || l.businessName || "Unnamed lead"}</span>
+                            <span style={{ ...S.leadBadge, background: "#F0EFE9", color: T.textMuted }}>{l.stage}</span>
+                            {notWorked && (
+                              <span style={{ ...S.leadBadge, background: "#FBF3E6", color: "#8A5A1E" }}>
+                                <AlertTriangle size={11} style={{ marginRight: 3 }} /> Not worked 24h+
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div style={S.leadInfoGrid}>
+                          <div style={S.leadInfoItem}>
+                            <span style={S.leadInfoLabel}>Business</span>
+                            <span>{l.businessName || "—"}</span>
+                          </div>
+                          <div style={S.leadInfoItem}>
+                            <span style={S.leadInfoLabel}>Phone</span>
+                            <span>{l.phone || "—"}</span>
+                          </div>
+                          <div style={S.leadInfoItem}>
+                            <span style={S.leadInfoLabel}>Debt amount</span>
+                            <span style={{ fontFamily: T.mono }}>{l.debtAmount ? money(l.debtAmount) : "—"}</span>
+                          </div>
+                          <div style={S.leadInfoItem}>
+                            <span style={S.leadInfoLabel}>Callback</span>
+                            <span>{l.callbackDate ? new Date(l.callbackDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {dfsSection === "clients" && (
+          <div style={S.contactsWrap}>
+            <div style={S.contactsToolbar}>
+              <span style={S.contactsCount}>{filteredClients.length} client{filteredClients.length === 1 ? "" : "s"}</span>
+              <button
+                onClick={() => setClientModal({ name: "", businessName: "", phone: "", email: "", debtAmount: "", notes: "" })}
+                style={S.primaryBtn}
+              >
+                <Plus size={14} /> New client
+              </button>
+            </div>
+            {filteredClients.length === 0 ? (
+              <div style={S.emptyState}>
+                <Users size={22} color={T.borderStrong} />
+                <div style={{ marginTop: 8, fontSize: 13, color: T.textMuted }}>No clients yet</div>
+              </div>
+            ) : (
+              <div style={S.contactGrid}>
+                {filteredClients.map((c) => (
+                  <div key={c.id} style={S.contactCard} onClick={() => setClientModal({ ...c })}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={S.avatar}>{initials(c.name)}</div>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={S.contactName}>{c.name}</div>
+                        {c.businessName && <div style={S.contactOwner}>{c.businessName}</div>}
+                      </div>
+                    </div>
+                    <div style={S.contactMeta}>
+                      {c.phone && (
+                        <div style={S.contactMetaRow}>
+                          <Phone size={11} color={T.textMuted} /> {c.phone}
+                        </div>
+                      )}
+                      {c.debtAmount && (
+                        <div style={S.contactMetaRow}>
+                          <Wallet size={11} color={T.textMuted} /> {money(c.debtAmount)}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {dfsSection === "calendar" && (
+          <div style={S.dashboardWrap}>
+            <div style={S.contactsToolbar}>
+              <span style={S.contactsCount}>{events.length} event{events.length === 1 ? "" : "s"}</span>
+              <button
+                onClick={() => setEventModal({ title: "", date: todayDateStr(), time: "", notes: "" })}
+                style={S.primaryBtn}
+              >
+                <Plus size={14} /> New event
+              </button>
+            </div>
+            {events.length === 0 ? (
+              <div style={S.emptyState}>
+                <CalendarDays size={22} color={T.borderStrong} />
+                <div style={{ marginTop: 8, fontSize: 13, color: T.textMuted }}>No events scheduled</div>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
+                {[...events]
+                  .sort((a, b) => new Date(a.date + "T" + (a.time || "00:00")) - new Date(b.date + "T" + (b.time || "00:00")))
+                  .map((ev) => (
+                    <div key={ev.id} style={S.recentRow} onClick={() => setEventDetail(ev)}>
+                      <div style={{ flex: 1 }}>
+                        <div style={S.recentTitle}>{ev.title}</div>
+                        <div style={S.recentSub}>
+                          {ev.date ? new Date(ev.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""}
+                          {ev.time ? ` at ${ev.time}` : ""}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {dfsSection === "documents" && (
+          <div style={S.dashboardWrap}>
+            <div style={S.dashboardSectionLabel}>Documents by client</div>
+            {clients.length === 0 ? (
+              <div style={S.emptyState}>
+                <FileText size={22} color={T.borderStrong} />
+                <div style={{ marginTop: 8, fontSize: 13, color: T.textMuted }}>No clients yet</div>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
+                {clients.map((c) => (
+                  <div key={c.id} style={S.contactCard} onClick={() => setClientModal({ ...c })}>
+                    <div style={S.contactName}>{c.name}</div>
+                    <div style={S.adminChipRow}>
+                      {DFS_DOCUMENT_CHECKLIST.map((doc) => (
+                        <span
+                          key={doc}
+                          style={{
+                            ...S.adminChip,
+                            background: (c.documents || {})[doc] ? "#EAF3EC" : "#F0EFE9",
+                            color: (c.documents || {})[doc] ? T.pineDark : T.textMuted,
+                          }}
+                        >
+                          {(c.documents || {})[doc] ? "✓ " : ""}
+                          {doc}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {dfsSection === "reports" && (
+          <div style={S.dashboardWrap}>
+            <div style={S.sourceGrid}>
+              <div style={S.sourceCard}>
+                <div style={S.reportsCardLabel}>Total leads</div>
+                <div style={S.sourceValue}>{leads.length}</div>
+              </div>
+              <div style={S.sourceCard}>
+                <div style={S.reportsCardLabel}>Total clients</div>
+                <div style={S.sourceValue}>{clients.length}</div>
+              </div>
+              <div style={S.sourceCard}>
+                <div style={S.reportsCardLabel}>Total debt managed</div>
+                <div style={S.sourceValue}>{money(clients.reduce((s, c) => s + (Number(c.debtAmount) || 0), 0))}</div>
+              </div>
+            </div>
+            <div style={{ ...S.dashboardSectionLabel, marginTop: 20 }}>Leads by stage</div>
+            <div style={S.sourceGrid}>
+              {DFS_PIPELINE_STAGES.map((stage) => (
+                <div key={stage} style={S.sourceCard}>
+                  <div style={S.reportsCardLabel}>{stage}</div>
+                  <div style={S.sourceValue}>{leads.filter((l) => l.stage === stage).length}</div>
                 </div>
               ))}
             </div>
-          )}
-          {error && <div style={{ fontSize: 11.5, color: "#A32D2D", marginBottom: 8 }}>{error}</div>}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <label style={{ ...S.ghostBtn, display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
-              <Upload size={14} /> {uploading ? "Uploading…" : "Add file"}
-              <input type="file" onChange={handleFileSelect} disabled={uploading} style={{ display: "none" }} />
-            </label>
-            <button onClick={() => setOpen(false)} style={S.primaryBtn}>
-              Done
+          </div>
+        )}
+
+        {dfsSection === "admin" && (
+          <div style={S.dashboardWrap}>
+            <div style={S.dashboardSectionLabel}>DFS Users</div>
+            <div className="crm-scroll" style={{ ...S.tableScroll, marginTop: 12 }}>
+              <table style={{ ...S.table, minWidth: 480 }}>
+                <thead>
+                  <tr>
+                    <th style={S.th}>Name</th>
+                    <th style={S.th}>Username</th>
+                    <th style={S.th}>Role</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((u) => (
+                    <tr key={u.id} style={S.tr}>
+                      <td style={{ ...S.td, fontWeight: 500 }}>{u.name}</td>
+                      <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14 }}>@{u.username}</td>
+                      <td style={S.td}>
+                        <RoleBadge role={u.role} size="sm" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ ...S.hint, marginTop: 10 }}>Manage DFS users from RRG Admin → Users (choose DFS as the campaign).</div>
+          </div>
+        )}
+      </div>
+
+      {leadModal && (
+        <Modal onClose={() => setLeadModal(null)} wide>
+          <DfsLeadForm
+            initial={leadModal}
+            onCancel={() => setLeadModal(null)}
+            onSave={saveLead}
+            onDelete={leads.some((l) => l.id === leadModal.id) ? () => setConfirmDelete({ type: "lead", id: leadModal.id, label: leadModal.name }) : null}
+            onSendToCloser={() => setSendToCloserModal(leadModal)}
+            onConvert={() => convertToClient(leadModal)}
+          />
+        </Modal>
+      )}
+      {sendToCloserModal && (
+        <DfsSendToCloserForm
+          lead={sendToCloserModal}
+          closers={users.filter((u) => u.role === "closer")}
+          onCancel={() => setSendToCloserModal(null)}
+          onSend={sendToCloser}
+        />
+      )}
+      {clientModal && (
+        <Modal onClose={() => setClientModal(null)} wide>
+          <DfsClientForm
+            initial={clientModal}
+            onCancel={() => setClientModal(null)}
+            onSave={saveClient}
+            onDelete={clientModal.id ? () => setConfirmDelete({ type: "client", id: clientModal.id, label: clientModal.name }) : null}
+          />
+        </Modal>
+      )}
+      {eventModal && (
+        <Modal onClose={() => setEventModal(null)}>
+          <DfsEventForm initial={eventModal} onCancel={() => setEventModal(null)} onSave={saveEvent} />
+        </Modal>
+      )}
+      {eventDetail && (
+        <Modal onClose={() => setEventDetail(null)} narrow>
+          <DfsEventDetail event={eventDetail} onEdit={() => { setEventModal(eventDetail); setEventDetail(null); }} onDelete={() => deleteEvent(eventDetail.id)} />
+        </Modal>
+      )}
+      {confirmDelete && (
+        <Modal onClose={() => setConfirmDelete(null)} narrow>
+          <div style={{ fontFamily: T.display, fontSize: 17, fontWeight: 500, color: T.ink, marginBottom: 6 }}>
+            Delete {confirmDelete.label || "this"}?
+          </div>
+          <div style={{ fontSize: 12.5, color: T.textMuted, marginBottom: 18 }}>This can't be undone.</div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button style={S.ghostBtn} onClick={() => setConfirmDelete(null)}>
+              Cancel
+            </button>
+            <button
+              style={S.dangerBtn}
+              onClick={() => {
+                if (confirmDelete.type === "lead") deleteLead(confirmDelete.id);
+                else if (confirmDelete.type === "client") deleteClient(confirmDelete.id);
+              }}
+            >
+              Delete
             </button>
           </div>
         </Modal>
@@ -10720,859 +7558,577 @@ function ExpenseFileButton({ expenseKey, disabled }) {
   );
 }
 
-function Field({ label, children }) {
+function DfsLeadForm({ initial, onCancel, onSave, onDelete, onSendToCloser, onConvert }) {
+  const [form, setForm] = useState({ ...dfsBlankLead(), ...initial });
+  function set(key, value) {
+    setForm((f) => ({ ...f, [key]: value }));
+  }
+  function toggleDoc(doc) {
+    setForm((f) => ({ ...f, documents: { ...(f.documents || {}), [doc]: !(f.documents || {})[doc] } }));
+  }
+  function addCreditor() {
+    setForm((f) => ({ ...f, creditors: [...(f.creditors || []), { id: uid(), name: "", amount: "" }] }));
+  }
+  function updateCreditor(id, key, value) {
+    setForm((f) => ({ ...f, creditors: (f.creditors || []).map((c) => (c.id === id ? { ...c, [key]: value } : c)) }));
+  }
+  function removeCreditor(id) {
+    setForm((f) => ({ ...f, creditors: (f.creditors || []).filter((c) => c.id !== id) }));
+  }
   return (
-    <div style={{ marginBottom: 12 }}>
-      <div style={S.fieldLabel}>{label}</div>
-      {children}
+    <div>
+      <div style={S.modalTitle}>{form.name || "New lead"}</div>
+      <div style={S.formGrid2}>
+        <Field label="Contact name" required>
+          <input value={form.name} onChange={(e) => set("name", e.target.value)} style={S.input} autoFocus />
+        </Field>
+        <Field label="Business name">
+          <input value={form.businessName} onChange={(e) => set("businessName", e.target.value)} style={S.input} />
+        </Field>
+        <Field label="Phone">
+          <input value={form.phone} onChange={(e) => set("phone", e.target.value)} style={S.input} />
+        </Field>
+        <Field label="Email">
+          <input value={form.email} onChange={(e) => set("email", e.target.value)} style={S.input} />
+        </Field>
+        <Field label="Debt amount (MCA)">
+          <input type="number" value={form.debtAmount} onChange={(e) => set("debtAmount", e.target.value)} style={{ ...S.input, fontFamily: T.mono }} />
+        </Field>
+        <Field label="Pipeline stage">
+          <div style={{ position: "relative" }}>
+            <select value={form.stage} onChange={(e) => set("stage", e.target.value)} style={S.select}>
+              {DFS_PIPELINE_STAGES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+          </div>
+        </Field>
+        <Field label="Callback date">
+          <input type="date" value={form.callbackDate} onChange={(e) => set("callbackDate", e.target.value)} style={S.input} />
+        </Field>
+      </div>
+
+      <Field label="Creditors">
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {(form.creditors || []).map((c) => (
+            <div key={c.id} style={{ display: "flex", gap: 6 }}>
+              <input value={c.name} onChange={(e) => updateCreditor(c.id, "name", e.target.value)} placeholder="Creditor name" style={S.input} />
+              <input
+                type="number"
+                value={c.amount}
+                onChange={(e) => updateCreditor(c.id, "amount", e.target.value)}
+                placeholder="Amount"
+                style={{ ...S.input, width: 110, fontFamily: T.mono }}
+              />
+              <button onClick={() => removeCreditor(c.id)} style={S.iconBtnGhost}>
+                <X size={13} color={T.textMuted} />
+              </button>
+            </div>
+          ))}
+          <button onClick={addCreditor} style={S.ghostBtn}>
+            <Plus size={13} /> Add creditor
+          </button>
+        </div>
+      </Field>
+
+      <Field label="Document checklist">
+        <div style={S.adminChipRow}>
+          {DFS_DOCUMENT_CHECKLIST.map((doc) => (
+            <button
+              key={doc}
+              onClick={() => toggleDoc(doc)}
+              style={{
+                ...S.adminChip,
+                cursor: "pointer",
+                border: "none",
+                background: (form.documents || {})[doc] ? "#EAF3EC" : "#F0EFE9",
+                color: (form.documents || {})[doc] ? T.pineDark : T.textMuted,
+              }}
+            >
+              {(form.documents || {})[doc] ? "✓ " : ""}
+              {doc}
+            </button>
+          ))}
+        </div>
+      </Field>
+
+      <Field label="Notes">
+        <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} style={{ ...S.input, minHeight: 70 }} />
+      </Field>
+
+      {form.activityLog && form.activityLog.length > 0 && (
+        <Field label="Activity log">
+          <div style={S.pnlTransactionList}>
+            {[...form.activityLog].reverse().map((a) => (
+              <div key={a.id} style={S.pnlTransactionRow}>
+                <span style={{ color: T.textMuted, minWidth: 90 }}>
+                  {new Date(a.at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                </span>
+                <span style={{ flex: 1 }}>{a.message}</span>
+                <span style={{ color: T.textMuted }}>{a.by}</span>
+              </div>
+            ))}
+          </div>
+        </Field>
+      )}
+
+      <div style={S.modalFooter}>
+        {onDelete && (
+          <button onClick={onDelete} style={S.dangerBtnGhost}>
+            <Trash2 size={14} /> Delete
+          </button>
+        )}
+        {onSendToCloser && (
+          <button onClick={onSendToCloser} style={S.ghostBtn}>
+            Send to Closer
+          </button>
+        )}
+        {onConvert && (
+          <button onClick={onConvert} disabled={!form.name || !form.phone} style={S.ghostBtn}>
+            Convert to Client
+          </button>
+        )}
+        <div style={{ flex: 1 }} />
+        <button onClick={onCancel} style={S.ghostBtn}>
+          Cancel
+        </button>
+        <button onClick={() => onSave(form)} disabled={!form.name.trim()} style={S.primaryBtn}>
+          Save
+        </button>
+      </div>
     </div>
   );
 }
 
-// ---- theme + styles ----
+function DfsSendToCloserForm({ lead, closers, onCancel, onSend }) {
+  const [closerName, setCloserName] = useState("");
+  return (
+    <Modal onClose={onCancel} narrow>
+      <div style={S.modalTitle}>Send to closer</div>
+      <Field label="Closer" required>
+        <div style={{ position: "relative" }}>
+          <select value={closerName} onChange={(e) => setCloserName(e.target.value)} style={S.select}>
+            <option value="">Choose</option>
+            {closers.map((c) => (
+              <option key={c.id} value={c.name}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+        </div>
+      </Field>
+      <div style={S.modalFooter}>
+        <div style={{ flex: 1 }} />
+        <button onClick={onCancel} style={S.ghostBtn}>
+          Cancel
+        </button>
+        <button onClick={() => onSend(lead, closerName)} disabled={!closerName} style={S.primaryBtn}>
+          Send
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function DfsClientForm({ initial, onCancel, onSave, onDelete }) {
+  const [form, setForm] = useState({ name: "", businessName: "", phone: "", email: "", debtAmount: "", notes: "", documents: {}, ...initial });
+  function set(key, value) {
+    setForm((f) => ({ ...f, [key]: value }));
+  }
+  function toggleDoc(doc) {
+    setForm((f) => ({ ...f, documents: { ...(f.documents || {}), [doc]: !(f.documents || {})[doc] } }));
+  }
+  return (
+    <div>
+      <div style={S.modalTitle}>{form.id ? "Edit client" : "New client"}</div>
+      <div style={S.formGrid2}>
+        <Field label="Name" required>
+          <input value={form.name} onChange={(e) => set("name", e.target.value)} style={S.input} autoFocus />
+        </Field>
+        <Field label="Business name">
+          <input value={form.businessName} onChange={(e) => set("businessName", e.target.value)} style={S.input} />
+        </Field>
+        <Field label="Phone">
+          <input value={form.phone} onChange={(e) => set("phone", e.target.value)} style={S.input} />
+        </Field>
+        <Field label="Email">
+          <input value={form.email} onChange={(e) => set("email", e.target.value)} style={S.input} />
+        </Field>
+        <Field label="Debt amount">
+          <input type="number" value={form.debtAmount} onChange={(e) => set("debtAmount", e.target.value)} style={{ ...S.input, fontFamily: T.mono }} />
+        </Field>
+      </div>
+      <Field label="Document checklist">
+        <div style={S.adminChipRow}>
+          {DFS_DOCUMENT_CHECKLIST.map((doc) => (
+            <button
+              key={doc}
+              onClick={() => toggleDoc(doc)}
+              style={{
+                ...S.adminChip,
+                cursor: "pointer",
+                border: "none",
+                background: (form.documents || {})[doc] ? "#EAF3EC" : "#F0EFE9",
+                color: (form.documents || {})[doc] ? T.pineDark : T.textMuted,
+              }}
+            >
+              {(form.documents || {})[doc] ? "✓ " : ""}
+              {doc}
+            </button>
+          ))}
+        </div>
+      </Field>
+      <Field label="Notes">
+        <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} style={{ ...S.input, minHeight: 70 }} />
+      </Field>
+      <div style={S.modalFooter}>
+        {onDelete && (
+          <button onClick={onDelete} style={S.dangerBtnGhost}>
+            <Trash2 size={14} /> Delete
+          </button>
+        )}
+        <div style={{ flex: 1 }} />
+        <button onClick={onCancel} style={S.ghostBtn}>
+          Cancel
+        </button>
+        <button onClick={() => onSave(form)} disabled={!form.name.trim()} style={S.primaryBtn}>
+          Save
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function DfsEventForm({ initial, onCancel, onSave }) {
+  const [form, setForm] = useState({ title: "", date: todayDateStr(), time: "", notes: "", ...initial });
+  function set(key, value) {
+    setForm((f) => ({ ...f, [key]: value }));
+  }
+  return (
+    <div>
+      <div style={S.modalTitle}>{form.id ? "Edit event" : "New event"}</div>
+      <Field label="Title" required>
+        <input value={form.title} onChange={(e) => set("title", e.target.value)} style={S.input} autoFocus />
+      </Field>
+      <Field label="Date">
+        <input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} style={S.input} />
+      </Field>
+      <Field label="Time">
+        <input type="time" value={form.time} onChange={(e) => set("time", e.target.value)} style={S.input} />
+      </Field>
+      <Field label="Notes">
+        <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} style={{ ...S.input, minHeight: 60 }} />
+      </Field>
+      <div style={S.modalFooter}>
+        <div style={{ flex: 1 }} />
+        <button onClick={onCancel} style={S.ghostBtn}>
+          Cancel
+        </button>
+        <button onClick={() => onSave({ ...form, id: form.id || uid() })} disabled={!form.title.trim()} style={S.primaryBtn}>
+          Save
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function DfsEventDetail({ event, onEdit, onDelete }) {
+  return (
+    <div>
+      <div style={S.modalTitle}>{event.title}</div>
+      <div style={{ fontSize: 12.5, color: T.textMuted, marginBottom: 10 }}>
+        {event.date ? new Date(event.date + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : ""}
+        {event.time ? ` at ${event.time}` : ""}
+      </div>
+      {event.notes && <div style={{ fontSize: 13, color: T.ink, marginBottom: 14 }}>{event.notes}</div>}
+      <div style={S.modalFooter}>
+        <button onClick={onDelete} style={S.dangerBtnGhost}>
+          <Trash2 size={14} /> Delete
+        </button>
+        <div style={{ flex: 1 }} />
+        <button onClick={onEdit} style={S.primaryBtn}>
+          Edit
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const T = {
-  paper: "#FAFAF7",
-  paperRaised: "#FFFFFF",
+  bg: "#F7F5EF",
+  paper: "#EDEAE0",
   ink: "#1B1E1A",
   textMuted: "#767468",
   border: "#E6E2D6",
   borderStrong: "#D3CEBD",
   pine: "#2D5F4C",
   pineDark: "#1F4536",
-  gold: "#B8944A",
-  red: "#A45050",
-  display: "'Fraunces', Georgia, serif",
-  sans: "'Inter', -apple-system, sans-serif",
+  display: "'Fraunces', serif",
+  sans: "'Inter', sans-serif",
   mono: "'IBM Plex Mono', monospace",
 };
 
 const S = {
-  app: {
-    fontFamily: T.sans,
-    background: T.paper,
-    color: T.ink,
-    borderRadius: 14,
-    border: `1px solid ${T.border}`,
-    overflow: "hidden",
-    display: "flex",
-    flexDirection: "row",
-    width: "100%",
-  },
+  app: { display: "flex", minHeight: "100vh", background: T.bg, fontFamily: T.sans, color: T.ink },
   sidebar: {
-    width: 176,
-    flexShrink: 0,
-    background: T.paperRaised,
-    borderRight: `1px solid ${T.border}`,
-    padding: "18px 14px",
+    width: 220,
+    background: "#232620",
+    color: "#F7F5EF",
     display: "flex",
     flexDirection: "column",
     justifyContent: "space-between",
+    padding: "22px 14px",
+    flexShrink: 0,
   },
-  navList: { display: "flex", flexDirection: "column", gap: 2, marginTop: 20 },
+  brand: { fontFamily: T.display, fontSize: 19, fontWeight: 600, color: "#fff", padding: "0 8px" },
+  brandSub: { fontSize: 11, color: "#9C9686", padding: "2px 8px 18px 8px" },
+  navList: { display: "flex", flexDirection: "column", gap: 2 },
   navItem: {
     display: "flex",
     alignItems: "center",
-    gap: 9,
+    gap: 10,
+    padding: "9px 10px",
+    borderRadius: 7,
     border: "none",
     background: "transparent",
-    color: T.textMuted,
+    color: "#C9C4B4",
     fontSize: 13,
     fontWeight: 500,
-    padding: "8px 9px",
-    borderRadius: 7,
     textAlign: "left",
   },
-  navItemActive: { background: T.pineDark, color: "#fff" },
-  viewerBtnSidebar: {
+  navItemActive: { background: "#33362E", color: "#fff" },
+  viewerBtnSidebar: { display: "flex", alignItems: "center", gap: 8, padding: "8px 8px", marginTop: 12 },
+  avatarSm: {
+    width: 24,
+    height: 24,
+    borderRadius: "50%",
+    background: T.pine,
+    color: "#fff",
     display: "flex",
     alignItems: "center",
-    gap: 7,
-    border: `1px solid ${T.border}`,
-    background: T.paper,
-    borderRadius: 10,
-    padding: "7px 8px",
-    width: "100%",
+    justifyContent: "center",
+    fontSize: 10,
+    fontWeight: 600,
+    flexShrink: 0,
   },
   logOutLink: {
     display: "block",
     width: "100%",
-    marginTop: 6,
-    border: "none",
+    textAlign: "left",
+    padding: "8px 8px",
     background: "transparent",
-    color: T.textMuted,
-    fontSize: 11.5,
-    fontWeight: 500,
-    padding: "4px 8px",
-    textAlign: "center",
-    cursor: "pointer",
-  },
-  viewerPopoverSidebar: {
-    position: "absolute",
-    bottom: "calc(100% + 8px)",
-    left: 0,
-    background: T.paperRaised,
-    border: `1px solid ${T.border}`,
-    borderRadius: 10,
-    padding: 14,
-    width: 220,
-    boxShadow: "0 8px 28px rgba(0,0,0,0.14)",
-    zIndex: 50,
+    border: "none",
+    color: "#9C9686",
+    fontSize: 12,
   },
   main: { flex: 1, minWidth: 0, display: "flex", flexDirection: "column" },
   topbar: {
     display: "flex",
     alignItems: "center",
-    gap: 16,
-    padding: "16px 20px",
-    borderBottom: `1px solid ${T.border}`,
-    background: T.paperRaised,
-    flexWrap: "wrap",
-  },
-  topbarTitle: { fontFamily: T.display, fontSize: 18, fontWeight: 600, color: T.ink },
-  dashboardWrap: { padding: 20 },
-  reportsSubTabs: { display: "flex", gap: 6, marginBottom: 16 },
-  reportsSubTabBtn: {
-    border: `1px solid ${T.border}`,
-    background: T.paper,
-    color: T.textMuted,
-    fontSize: 12.5,
-    fontWeight: 500,
-    padding: "7px 14px",
-    borderRadius: 8,
-    cursor: "pointer",
-  },
-  reportsSubTabBtnActive: {
-    background: T.pineDark,
-    color: "#fff",
-    borderColor: T.pineDark,
-  },
-  pnlAutoBadge: {
-    marginLeft: 8,
-    fontSize: 9.5,
-    fontWeight: 600,
-    color: T.pineDark,
-    background: "#EAF3EC",
-    padding: "1px 6px",
-    borderRadius: 10,
-    textTransform: "uppercase",
-    letterSpacing: "0.03em",
-  },
-  epgBadgeSuccess: {
-    fontSize: 9,
-    fontWeight: 700,
-    color: T.pineDark,
-    background: "#EAF3EC",
-    padding: "1px 6px",
-    borderRadius: 10,
-    letterSpacing: "0.02em",
-    whiteSpace: "nowrap",
-    flexShrink: 0,
-  },
-  epgBadgeFailed: {
-    fontSize: 9,
-    fontWeight: 700,
-    color: "#A32D2D",
-    background: "#FCEBEB",
-    padding: "1px 6px",
-    borderRadius: 10,
-    letterSpacing: "0.02em",
-    whiteSpace: "nowrap",
-    flexShrink: 0,
-    cursor: "help",
-  },
-  pnlTransactionList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 3,
-    background: T.paper,
-    borderRadius: 7,
-    padding: 8,
-  },
-  pnlTransactionRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    fontSize: 12,
-    padding: "3px 4px",
-  },
-  infoNotesGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
-    gap: 12,
-    marginTop: 16,
-  },
-  infoNoteCard: {
-    background: T.paperRaised,
-    border: `1px solid ${T.border}`,
-    borderRadius: 10,
-    padding: 14,
-    cursor: "pointer",
-  },
-  infoNoteHeader: {
-    display: "flex",
-    alignItems: "flex-start",
     justifyContent: "space-between",
-    gap: 8,
-    marginBottom: 8,
+    padding: "20px 28px",
+    borderBottom: `1px solid ${T.border}`,
+    flexWrap: "wrap",
+    gap: 12,
   },
-  infoNoteTitle: {
-    fontSize: 14,
-    fontWeight: 600,
-    color: T.ink,
-  },
-  infoNoteDate: {
-    fontSize: 10.5,
-    color: T.textMuted,
-    whiteSpace: "nowrap",
-    flexShrink: 0,
-  },
-  infoNoteBody: {
-    fontSize: 12.5,
-    color: T.textMuted,
-    lineHeight: 1.5,
-    whiteSpace: "pre-wrap",
-    overflow: "hidden",
-    display: "-webkit-box",
-    WebkitLineClamp: 5,
-    WebkitBoxOrient: "vertical",
-  },
-  scriptFileRow: {
+  topbarTitle: { fontFamily: T.display, fontSize: 22, fontWeight: 600, color: T.ink },
+  searchWrap: {
     display: "flex",
     alignItems: "center",
-    gap: 10,
-    background: T.paperRaised,
+    gap: 6,
+    background: "#fff",
     border: `1px solid ${T.border}`,
     borderRadius: 8,
-    padding: "10px 12px",
+    padding: "7px 10px",
+    minWidth: 220,
   },
-  scriptFileLink: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 13,
-    fontWeight: 500,
+  searchInput: { border: "none", outline: "none", fontSize: 13, flex: 1, background: "transparent", color: T.ink },
+  iconBtnGhost: { border: "none", background: "transparent", padding: 2, display: "flex" },
+  stats: { display: "flex", alignItems: "center", gap: 24, padding: "18px 28px", borderBottom: `1px solid ${T.border}` },
+  statItem: {},
+  statLabel: { fontSize: 11, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.03em", marginBottom: 3 },
+  statValue: { fontFamily: T.mono, fontSize: 22, fontWeight: 500, color: T.ink },
+  statDivider: { width: 1, height: 34, background: T.border },
+  dashboardWrap: { padding: "22px 28px 60px 28px", flex: 1, overflow: "auto" },
+  dashboardSectionLabel: { fontSize: 13, fontWeight: 600, color: T.ink },
+  weekNavRow: { display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 14 },
+  weekNav: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  weekNavBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 6,
+    border: `1px solid ${T.border}`,
+    background: "#fff",
     color: T.ink,
-    textDecoration: "underline",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
+    fontSize: 15,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  scriptFileMeta: { fontSize: 11, color: T.textMuted, flexShrink: 0, whiteSpace: "nowrap" },
+  weekNavLabel: {
+    fontSize: 12.5,
+    fontWeight: 600,
+    color: T.ink,
+    background: "transparent",
+    border: "none",
+    padding: "4px 8px",
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+  },
+  weekNavLabelActive: { color: T.pineDark },
+  weekNavThisWeek: { fontSize: 9.5, background: "#EAF3EC", color: T.pineDark, padding: "2px 6px", borderRadius: 20, fontWeight: 700 },
+  select: {
+    appearance: "none",
+    border: `1px solid ${T.border}`,
+    borderRadius: 7,
+    padding: "6px 10px",
+    fontSize: 12.5,
+    background: "#fff",
+    color: T.ink,
+    width: "100%",
+  },
+  selectChevron: { position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" },
+  customRangeInput: { border: `1px solid ${T.border}`, borderRadius: 7, padding: "5px 8px", fontSize: 12, background: "#fff", color: T.ink },
+  sourceGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 },
+  sourceCard: { background: "#fff", border: `1px solid ${T.border}`, borderRadius: 10, padding: "14px 16px" },
+  sourceCount: { fontSize: 11, color: T.textMuted },
+  sourceValue: { fontFamily: T.mono, fontSize: 21, fontWeight: 500, color: T.ink, marginTop: 6 },
+  reportsCardLabel: { fontSize: 11, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.03em" },
+  channelBadge: { fontSize: 11, fontWeight: 600, background: "#F0EFE9", color: T.textMuted, padding: "2px 8px", borderRadius: 20 },
+  chartCard: { background: "#fff", border: `1px solid ${T.border}`, borderRadius: 10, padding: 20 },
+  emptyState: { display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "50px 0", textAlign: "center" },
+  recentList: { display: "flex", flexDirection: "column", gap: 2, marginTop: 10 },
+  recentRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "10px 12px",
+    borderRadius: 8,
+    background: "#fff",
+    border: `1px solid ${T.border}`,
+    marginBottom: 6,
+    cursor: "pointer",
+  },
+  recentTitle: { fontSize: 13, fontWeight: 500, color: T.ink },
+  recentSub: { fontSize: 11.5, color: T.textMuted, marginTop: 2 },
+  dealValue: { fontFamily: T.mono, fontSize: 14, fontWeight: 500, color: T.ink },
   entryScreenWrap: {
-    maxWidth: 360,
-    margin: "60px auto",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    textAlign: "center",
+    justifyContent: "center",
+    padding: "60px 20px",
+    maxWidth: 420,
+    margin: "0 auto",
   },
   entrySuccessIcon: {
     width: 48,
     height: 48,
     borderRadius: "50%",
     background: "#EAF3EC",
-    color: "#1E8E4A",
+    color: T.pineDark,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
     fontSize: 22,
     fontWeight: 700,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
     marginBottom: 14,
   },
-  entrySuccessTitle: { fontFamily: T.display, fontSize: 19, fontWeight: 600, marginBottom: 6 },
-  dashboardSectionLabel: { fontSize: 12, fontWeight: 600, color: T.textMuted, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.04em" },
-  weekNavRow: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 },
-  weekNav: { display: "flex", alignItems: "center", gap: 4 },
-  weekNavBtn: {
-    border: `1px solid ${T.border}`,
-    background: T.paperRaised,
-    color: T.textMuted,
-    fontSize: 14,
-    lineHeight: 1,
-    width: 26,
-    height: 26,
-    borderRadius: 7,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  weekNavLabel: {
-    border: `1px solid ${T.border}`,
-    background: T.paperRaised,
-    color: T.ink,
-    fontSize: 12,
-    fontWeight: 500,
-    padding: "5px 10px",
-    borderRadius: 7,
-    display: "flex",
+  entrySuccessTitle: { fontFamily: T.display, fontSize: 19, fontWeight: 600, color: T.ink, marginBottom: 6 },
+  salesWrap: { padding: "22px 28px 60px 28px", flex: 1, overflow: "auto" },
+  contactsWrap: { padding: "22px 28px 60px 28px", flex: 1, overflow: "auto" },
+  contactsToolbar: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 10 },
+  contactsCount: { fontSize: 12.5, color: T.textMuted },
+  primaryBtn: {
+    display: "inline-flex",
     alignItems: "center",
     gap: 6,
-  },
-  weekNavLabelActive: { borderColor: T.pineDark },
-  customRangeInput: {
-    border: `1px solid ${T.border}`,
-    background: T.paperRaised,
-    color: T.ink,
-    fontSize: 12,
-    fontWeight: 500,
-    padding: "5px 8px",
-    borderRadius: 7,
-    outline: "none",
-  },
-  weekNavThisWeek: {
-    fontSize: 9.5,
+    background: T.pineDark,
+    color: "#fff",
+    border: "none",
+    borderRadius: 8,
+    padding: "9px 15px",
+    fontSize: 13,
     fontWeight: 600,
-    color: T.pineDark,
-    background: "#E7EFEA",
-    padding: "1px 6px",
-    borderRadius: 20,
   },
-  rrgLegend: { display: "flex", gap: 16, marginBottom: 14 },
-  rrgLegendItem: { display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: T.textMuted },
-  rrgLegendDot: { width: 8, height: 8, borderRadius: "50%", display: "inline-block" },
-  rrgChipRow: { display: "flex", flexWrap: "wrap", gap: "3px 6px" },
-  rrgChip: { fontFamily: T.mono, fontSize: 14, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" },
-  attendanceSummaryBox: {
-    background: T.paper,
+  ghostBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    background: "#fff",
+    color: T.ink,
     border: `1px solid ${T.border}`,
     borderRadius: 8,
-    padding: 10,
-    marginBottom: 12,
+    padding: "8px 13px",
+    fontSize: 12.5,
+    fontWeight: 500,
   },
-  attendanceSummaryItem: {
-    display: "flex",
+  dangerBtn: {
+    display: "inline-flex",
     alignItems: "center",
     gap: 6,
-    fontSize: 12.5,
-    color: T.ink,
-  },
-  attendanceSummaryDot: {
-    width: 8,
-    height: 8,
-    borderRadius: "50%",
-    display: "inline-block",
-    flexShrink: 0,
-  },
-  attendanceSelect: {
-    fontSize: 10.5,
-    fontWeight: 700,
-    border: "1px solid transparent",
-    borderRadius: 5,
-    padding: "2px 4px",
-    outline: "none",
-    cursor: "pointer",
-    maxWidth: 90,
-  },
-  spiffInput: {
-    fontSize: 10.5,
+    background: "#A32D2D",
+    color: "#fff",
+    border: "none",
+    borderRadius: 8,
+    padding: "9px 15px",
+    fontSize: 13,
     fontWeight: 600,
-    fontFamily: T.mono,
-    border: "1px solid transparent",
-    borderRadius: 5,
-    padding: "2px 4px",
-    outline: "none",
-    maxWidth: 74,
-    color: T.textMuted,
-    background: "transparent",
   },
-  spiffPaidLabel: {
-    display: "flex",
+  dangerBtnGhost: {
+    display: "inline-flex",
     alignItems: "center",
-    gap: 3,
-    fontSize: 9,
-    fontWeight: 600,
-    color: "#8A5A1E",
-    marginTop: 2,
-    cursor: "pointer",
-    userSelect: "none",
+    gap: 6,
+    background: "transparent",
+    color: "#A32D2D",
+    border: `1px solid #F0C9C9`,
+    borderRadius: 8,
+    padding: "8px 13px",
+    fontSize: 12.5,
+    fontWeight: 500,
   },
-  sourceGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 4 },
-  sourceCard: {
-    background: T.paperRaised,
-    border: `1px solid ${T.border}`,
-    borderRadius: 10,
-    padding: 14,
-  },
-  sourceCount: { fontSize: 11, color: T.textMuted },
-  channelBadge: {
-    fontSize: 10.5,
-    fontWeight: 600,
-    padding: "2px 8px",
-    borderRadius: 20,
-    letterSpacing: "0.02em",
-    whiteSpace: "nowrap",
-    background: "#EDEAE0",
-    color: "#5A5748",
-  },
-  sourceValue: { fontFamily: T.mono, fontSize: 21, fontWeight: 600, color: T.ink, marginTop: 10 },
-  chartCard: {
-    background: T.paperRaised,
-    border: `1px solid ${T.border}`,
-    borderRadius: 12,
-    padding: 20,
-  },
-  reportsCardLabel: { fontSize: 10.5, fontWeight: 600, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.03em" },
-  adminSettingsGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginTop: 12 },
-  savedNote: { fontSize: 11.5, color: T.pineDark, fontWeight: 500, marginTop: 8 },
-  adminListsGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12, marginTop: 12 },
-  adminListCard: {
-    background: T.paperRaised,
-    border: `1px solid ${T.border}`,
-    borderRadius: 10,
-    padding: 14,
-  },
-  adminListTitle: { fontSize: 12, fontWeight: 600, color: T.ink, marginBottom: 10 },
-  adminChipRow: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10, minHeight: 24 },
-  adminChip: {
-    display: "flex",
+  refundBtn: {
+    display: "inline-flex",
     alignItems: "center",
     gap: 5,
+    background: "#FBF3E6",
+    color: "#8A5A1E",
+    border: "1px solid #E3C89A",
+    borderRadius: 8,
+    padding: "6px 11px",
     fontSize: 11.5,
-    fontWeight: 500,
-    color: T.textMuted,
-    background: T.paper,
-    border: `1px solid ${T.border}`,
-    padding: "3px 4px 3px 9px",
-    borderRadius: 20,
-  },
-  adminChipRemove: {
-    border: "none",
-    background: "transparent",
-    color: "inherit",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 2,
-    borderRadius: "50%",
-    opacity: 0.6,
-  },
-  adminAddRow: { display: "flex", gap: 6 },
-  reportsExportRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 14,
-    marginBottom: 16,
-    padding: "10px 12px",
-    background: T.paper,
-    border: `1px solid ${T.border}`,
-    borderRadius: 10,
+    fontWeight: 600,
   },
   exportBtn: {
-    display: "flex",
+    display: "inline-flex",
     alignItems: "center",
     gap: 6,
-    border: "none",
-    background: T.pineDark,
-    color: "#fff",
-    fontSize: 12.5,
-    fontWeight: 500,
-    padding: "8px 14px",
-    borderRadius: 7,
-    flexShrink: 0,
-    whiteSpace: "nowrap",
-  },
-  recentList: { display: "flex", flexDirection: "column", gap: 6 },
-  recentRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    background: T.paperRaised,
-    border: `1px solid ${T.border}`,
-    borderRadius: 9,
-    padding: "10px 12px",
-    cursor: "pointer",
-  },
-  recentTitle: { fontSize: 13, fontWeight: 500, color: T.ink },
-  recentSub: { fontSize: 11.5, color: T.textMuted, marginTop: 1 },
-  brand: {
-    fontFamily: T.display,
-    fontSize: 19,
-    fontWeight: 600,
-    letterSpacing: "-0.01em",
+    background: "#fff",
     color: T.ink,
-    lineHeight: 1.1,
-  },
-  gateWrap: {
-    width: "100%",
-    maxWidth: 300,
-    margin: "auto",
-    padding: "40px 20px",
-  },
-  campaignCard: {
-    display: "block",
-    width: "100%",
-    textAlign: "left",
-    background: T.paperRaised,
-    border: `1px solid ${T.border}`,
-    borderRadius: 10,
-    padding: "16px 18px",
-  },
-  dfsSubHeader: {
-    fontFamily: T.display,
-    fontSize: 14,
-    fontWeight: 600,
-    color: T.ink,
-    marginBottom: 10,
-    paddingBottom: 6,
-    borderBottom: `1px solid ${T.border}`,
-  },
-  dfsFieldGrid3: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr 1fr",
-    gap: 12,
-  },
-  brandSub: {
-    fontSize: 11,
-    color: T.textMuted,
-    fontFamily: T.mono,
-    letterSpacing: "0.02em",
-    marginTop: 1,
-  },
-  tabs: { display: "flex", gap: 2, background: T.paper, padding: 3, borderRadius: 8, border: `1px solid ${T.border}` },
-  tab: {
-    border: "none",
-    background: "transparent",
-    padding: "6px 14px",
-    borderRadius: 6,
-    fontSize: 13,
-    fontWeight: 500,
-    color: T.textMuted,
-  },
-  tabActive: { background: T.ink, color: T.paper },
-  searchWrap: {
-    marginLeft: "auto",
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
     border: `1px solid ${T.border}`,
     borderRadius: 8,
-    padding: "7px 10px",
-    minWidth: 180,
-    background: T.paper,
-  },
-  searchInput: {
-    border: "none",
-    outline: "none",
-    background: "transparent",
-    fontSize: 13,
-    color: T.ink,
-    width: "100%",
-  },
-  iconBtnGhost: { border: "none", background: "transparent", padding: 2, display: "flex" },
-  viewerBtn: {
-    display: "flex",
-    alignItems: "center",
-    gap: 7,
-    border: `1px solid ${T.border}`,
-    background: T.paper,
-    borderRadius: 20,
-    padding: "5px 10px 5px 5px",
-  },
-  avatarSm: {
-    width: 20,
-    height: 20,
-    borderRadius: "50%",
-    background: "#E7EFEA",
-    color: T.pineDark,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 9.5,
+    padding: "7px 12px",
+    fontSize: 12,
     fontWeight: 600,
     flexShrink: 0,
   },
-  viewerPopover: {
-    position: "absolute",
-    top: "calc(100% + 8px)",
-    right: 0,
-    background: T.paperRaised,
-    border: `1px solid ${T.border}`,
-    borderRadius: 10,
-    padding: 14,
-    width: 220,
-    boxShadow: "0 8px 28px rgba(0,0,0,0.14)",
-    zIndex: 50,
-  },
-  roleChip: {
-    flex: 1,
-    border: `1px solid ${T.border}`,
-    background: "transparent",
-    color: T.textMuted,
-    fontSize: 11.5,
-    fontWeight: 500,
-    padding: "6px 4px",
-    borderRadius: 20,
-  },
-  refundTypeActive: { background: "#FCEBEB", color: "#A32D2D", borderColor: "#E8B4B4" },
-  refundAmountsGrid: { display: "flex", flexDirection: "column", gap: 2 },
-  refundRoleBlock: {
-    background: T.paper,
-    border: `1px solid ${T.border}`,
-    borderRadius: 8,
-    padding: 10,
-  },
-  refundRoleBlockLabel: { fontSize: 11.5, color: T.textMuted, marginBottom: 6, fontWeight: 500 },
-  viewerNote: { fontSize: 10.5, color: T.textMuted, lineHeight: 1.4, marginTop: 8 },
-  myItemsToggle: {
-    border: `1px solid ${T.border}`,
-    background: T.paperRaised,
-    color: T.textMuted,
-    fontSize: 11.5,
-    fontWeight: 500,
-    padding: "6px 12px",
-    borderRadius: 20,
-  },
-  myItemsToggleActive: { background: T.pineDark, color: "#fff", borderColor: T.pineDark },
-  dealOwner: { fontSize: 10.5, color: T.textMuted, marginTop: 2 },
-  contactOwner: { fontSize: 10.5, color: T.textMuted, marginTop: 8 },
-  stats: {
-    display: "flex",
-    alignItems: "center",
-    padding: "12px 20px",
-    borderBottom: `1px solid ${T.border}`,
-    background: T.paper,
-    gap: 20,
-    flexWrap: "wrap",
-  },
-  statItem: { display: "flex", flexDirection: "column", gap: 2 },
-  statLabel: { fontSize: 10.5, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" },
-  statValue: { fontFamily: T.mono, fontSize: 19, fontWeight: 600, color: T.ink },
-  statDivider: { width: 1, height: 26, background: T.border },
-  dealValue: { fontFamily: T.mono, fontSize: 14.5, color: T.pineDark, marginTop: 6, fontWeight: 600 },
-  contactsWrap: { padding: 20 },
-  salesWrap: { padding: 20 },
-  tableScroll: {
-    overflowX: "auto",
-    overflowY: "auto",
-    maxHeight: "calc(100vh - 260px)",
-    border: `1px solid ${T.border}`,
-    borderRadius: 10,
-    background: T.paperRaised,
-  },
-  leadBadge: {
-    fontSize: 10.5,
-    fontWeight: 600,
-    padding: "2px 8px",
-    borderRadius: 20,
-    letterSpacing: "0.02em",
-    whiteSpace: "nowrap",
-  },
-  leadBadgeMonster: { background: "#F3E9DA", color: "#8A5A1E" },
-  leadBadgePGR: { background: "#E1EAF5", color: "#2A5488" },
-  duplicateCustomersPanel: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 10,
-    marginBottom: 16,
-  },
-  duplicateCustomerCard: {
-    background: T.paperRaised,
-    border: `1px solid ${T.border}`,
-    borderRadius: 10,
-    padding: 12,
-  },
-  duplicateCustomerName: {
-    fontSize: 14,
-    fontWeight: 600,
-    color: T.ink,
-    marginBottom: 8,
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-  },
-  duplicateCustomerCount: {
-    fontSize: 11,
-    fontWeight: 500,
-    color: T.textMuted,
-  },
-  duplicateCustomerRows: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
-  },
-  duplicateCustomerRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    fontSize: 12.5,
-    padding: "6px 8px",
-    borderRadius: 6,
-    cursor: "pointer",
-    background: T.paper,
-  },
-  expenseFileBadge: {
-    position: "absolute",
-    top: -4,
-    right: -4,
-    background: T.pineDark,
-    color: "#fff",
-    fontSize: 9,
-    fontWeight: 700,
-    borderRadius: 20,
-    minWidth: 14,
-    height: 14,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "0 3px",
-    pointerEvents: "none",
-  },
-  sourceBadge: {
-    fontSize: 10.5,
-    fontWeight: 600,
-    padding: "2px 8px",
-    borderRadius: 20,
-    letterSpacing: "0.02em",
-    whiteSpace: "nowrap",
-    background: T.border,
-    color: T.textMuted,
-  },
-  table: { borderCollapse: "collapse", width: "100%", minWidth: 1820 },
-  th: {
-    textAlign: "left",
-    fontSize: 10.5,
-    fontWeight: 600,
-    color: T.textMuted,
-    textTransform: "uppercase",
-    letterSpacing: "0.03em",
-    padding: "10px 12px",
-    borderBottom: `1px solid ${T.border}`,
-    whiteSpace: "nowrap",
-    position: "sticky",
-    top: 0,
-    background: T.paperRaised,
-    zIndex: 1,
-  },
-  tr: { cursor: "pointer" },
-  td: {
-    fontSize: 12.5,
-    color: T.ink,
-    padding: "9px 12px",
-    borderBottom: `1px solid ${T.border}`,
-    whiteSpace: "nowrap",
-  },
-  rowDeleteBtn: {
-    border: "none",
-    background: "transparent",
-    color: T.borderStrong,
-    padding: 4,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 6,
-  },
-  reorderCell: { display: "flex", alignItems: "center", gap: 6 },
-  reorderBtns: { display: "flex", flexDirection: "column", gap: 1 },
-  reorderBtn: {
-    border: `1px solid ${T.border}`,
-    background: T.paperRaised,
-    color: T.textMuted,
-    padding: 0,
-    width: 16,
-    height: 13,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 3,
-  },
-  reorderBtnDisabled: { opacity: 0.3, cursor: "not-allowed" },
-  contactsToolbar: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
-  contactsCount: { fontSize: 12.5, color: T.textMuted },
-  contactGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 },
-  leadList: { display: "flex", flexDirection: "column", gap: 10 },
-  leadCard: {
-    background: T.paperRaised,
-    border: `1px solid ${T.border}`,
-    borderRadius: 10,
-    padding: 14,
-  },
-  leadCardRefunded: {
-    borderColor: "#E8B4B4",
-    background: "#FCF3F3",
-  },
-  leadCardApproved: {
-    borderColor: "#B8D9C4",
-    background: "#F2F8F4",
-  },
-  leadCardHeader: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 10,
-  },
-  leadName: { fontSize: 14, fontWeight: 600, color: T.ink, fontFamily: T.display },
-  refundedBadge: {
-    fontSize: 10.5,
-    fontWeight: 700,
-    color: "#fff",
-    background: "#A32D2D",
-    padding: "2px 8px",
-    borderRadius: 20,
-    textTransform: "uppercase",
-    letterSpacing: "0.03em",
-  },
-  leadCardActions: { display: "flex", alignItems: "center", gap: 6, flexShrink: 0 },
-  refundBtn: {
-    display: "flex",
-    alignItems: "center",
-    gap: 5,
-    border: `1px solid #E8B4B4`,
-    background: "#FCEBEB",
-    color: "#A32D2D",
-    fontSize: 12,
-    fontWeight: 500,
-    padding: "6px 10px",
-    borderRadius: 7,
-  },
-  leadInfoGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
-    gap: "8px 16px",
-    paddingTop: 10,
-    borderTop: `1px solid ${T.border}`,
-  },
-  leadInfoItem: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 2,
-    fontSize: 12,
-    color: T.ink,
-    minWidth: 0,
-    overflowWrap: "anywhere",
-  },
-  leadInfoLabel: { fontSize: 10, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.03em" },
-  leadEmployeeRow: {
-    display: "flex",
-    gap: 16,
-    flexWrap: "wrap",
-    marginTop: 10,
-    paddingTop: 10,
-    borderTop: `1px solid ${T.border}`,
-  },
-  leadEmployeeItem: { display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: T.ink },
-  refundImpactNote: { fontFamily: T.mono, fontSize: 12.5, fontWeight: 700, color: "#A32D2D" },
-  leadNotes: {
-    marginTop: 10,
-    paddingTop: 10,
-    borderTop: `1px solid ${T.border}`,
-    fontSize: 12,
-    color: T.textMuted,
-    lineHeight: 1.5,
-  },
-  contactCard: {
-    background: T.paperRaised,
-    border: `1px solid ${T.border}`,
-    borderRadius: 10,
-    padding: 14,
-    cursor: "pointer",
-  },
+  contactGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 12 },
+  contactCard: { background: "#fff", border: `1px solid ${T.border}`, borderRadius: 10, padding: 14, cursor: "pointer" },
+  contactName: { fontSize: 13.5, fontWeight: 600, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  contactOwner: { fontSize: 11, color: T.textMuted, marginTop: 4 },
+  contactMeta: { display: "flex", flexDirection: "column", gap: 4, marginTop: 8 },
+  contactMetaRow: { display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: T.textMuted },
   avatar: {
     width: 34,
     height: 34,
     borderRadius: "50%",
-    background: "#E7EFEA",
-    color: T.pineDark,
+    background: T.pine,
+    color: "#fff",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -11580,462 +8136,204 @@ const S = {
     fontWeight: 600,
     flexShrink: 0,
   },
-  contactName: { fontSize: 16, fontWeight: 700, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  contactCompany: { fontSize: 11.5, color: T.textMuted, display: "flex", alignItems: "center", marginTop: 2 },
-  contactMeta: { marginTop: 10, display: "flex", flexDirection: "column", gap: 4 },
-  contactMetaRow: { display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: T.textMuted },
-  employeeStats: {
-    marginTop: 10,
-    paddingTop: 8,
-    borderTop: `1px solid ${T.border}`,
-    fontFamily: T.mono,
-    fontSize: 13,
-    fontWeight: 600,
-    color: T.pineDark,
-  },
-  pendingRefundList: {
-    marginTop: 6,
-    display: "flex",
-    flexDirection: "column",
-    gap: 3,
-  },
-  pendingRefundNote: {
-    display: "flex",
+  employeeStats: { fontSize: 11.5, color: T.textMuted, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${T.border}` },
+  pendingRefundList: { display: "flex", flexDirection: "column", gap: 3, marginTop: 6 },
+  pendingRefundNote: { display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#A32D2D", fontWeight: 500 },
+  weeklySaleList: { display: "flex", flexDirection: "column", gap: 3, marginTop: 6 },
+  weeklySaleRow: { fontSize: 11.5, fontWeight: 500 },
+  weeklyTemplateBtn: {
+    display: "inline-flex",
     alignItems: "center",
     gap: 5,
-    fontSize: 11.5,
-    fontWeight: 600,
-    color: "#A32D2D",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  },
-  weeklySaleList: {
     marginTop: 8,
-    paddingTop: 8,
-    borderTop: `1px solid ${T.border}`,
-    display: "flex",
-    flexDirection: "column",
-    gap: 3,
-  },
-  weeklySaleRow: {
-    fontFamily: T.mono,
-    fontSize: 13,
-    fontWeight: 600,
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    cursor: "pointer",
-  },
-  weeklyTemplateBtn: {
-    marginTop: 10,
-    width: "100%",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    border: `1px solid ${T.border}`,
-    background: T.paper,
-    color: T.textMuted,
-    fontSize: 11.5,
-    fontWeight: 500,
-    padding: "7px 8px",
-    borderRadius: 7,
-  },
-  deactivateBtn: {
-    marginTop: 14,
-    marginBottom: -4,
-    width: "100%",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    border: `1px solid #E8B4B4`,
     background: "transparent",
-    color: "#A32D2D",
-    fontSize: 12,
-    fontWeight: 500,
-    padding: "8px 8px",
-    borderRadius: 7,
-  },
-  reactivateBtn: {
-    marginTop: 14,
-    marginBottom: -4,
-    width: "100%",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    border: `1px solid #B8D9C4`,
-    background: "#EAF3EC",
-    color: T.pineDark,
-    fontSize: 12,
-    fontWeight: 500,
-    padding: "8px 8px",
-    borderRadius: 7,
-  },
-  exEmployeeNote: {
-    marginTop: 10,
-    paddingTop: 10,
-    borderTop: `1px solid ${T.border}`,
-    fontSize: 11,
-    color: T.textMuted,
-    fontStyle: "italic",
-  },
-  detailSummary: {
-    marginTop: 16,
-    background: T.paper,
-    border: `1px solid ${T.border}`,
-    borderRadius: 10,
-    padding: 12,
-    display: "flex",
-    flexDirection: "column",
-    gap: 6,
-  },
-  detailSummaryRow: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    fontSize: 12.5,
-    color: T.textMuted,
-  },
-  detailSummaryTotal: {
-    paddingTop: 8,
-    marginTop: 2,
-    borderTop: `1px solid ${T.border}`,
-    fontWeight: 600,
-    color: T.ink,
-    fontSize: 13,
-  },
-  commissionRateBadge: {
-    fontSize: 11,
-    fontWeight: 600,
-    color: T.gold,
-    background: "#F3E9DA",
-    padding: "2px 8px",
-    borderRadius: 20,
-  },
-  minGuaranteeBadge: {
-    display: "block",
-    marginTop: 3,
-    fontSize: 9.5,
-    fontWeight: 600,
-    color: T.gold,
-    letterSpacing: "0.02em",
-    textTransform: "uppercase",
-  },
-  totalPayCell: { display: "flex", alignItems: "center", gap: 4 },
-  totalPayCurrency: { fontFamily: T.mono, fontSize: 17, fontWeight: 700, color: T.pineDark },
-  totalPayInput: {
-    fontFamily: T.mono,
-    fontSize: 17,
-    fontWeight: 700,
-    border: `1px solid transparent`,
-    background: "transparent",
-    borderRadius: 5,
-    padding: "3px 4px",
-    width: 80,
-    outline: "none",
-  },
-  totalPayResetBtn: {
     border: "none",
-    background: "#F3E9DA",
-    color: "#8A5A1E",
-    padding: 3,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 5,
-    flexShrink: 0,
-  },
-  customPayNote: { fontSize: 11, color: "#8A5A1E", marginTop: 2 },
-  workedSaturdayLabel: {
-    display: "flex",
-    alignItems: "center",
-    gap: 4,
-    fontSize: 10.5,
-    color: T.textMuted,
-    marginTop: 4,
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  },
-  emptyState: { textAlign: "center", padding: "50px 0" },
-  overlay: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(27,30,26,0.35)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 1000,
-    padding: 20,
-  },
-  overlayFullScreen: {
-    background: T.paper,
+    color: T.pineDark,
+    fontSize: 11,
+    fontWeight: 600,
     padding: 0,
   },
-  modal: {
-    background: T.paperRaised,
-    borderRadius: 12,
-    padding: 20,
-    width: "100%",
-    maxWidth: 420,
-    maxHeight: "85vh",
-    overflowY: "auto",
-    boxShadow: "0 12px 40px rgba(0,0,0,0.18)",
-  },
-  modalFullScreen: {
-    maxWidth: "100%",
-    width: "100%",
-    height: "100vh",
-    maxHeight: "100vh",
-    borderRadius: 0,
-    boxShadow: "none",
-    padding: "24px 28px",
-  },
-  modalTitle: { fontFamily: T.display, fontSize: 17, fontWeight: 600, color: T.ink, marginBottom: 14 },
-  payslipSentNote: {
-    fontSize: 11.5,
+  exEmployeeNote: { fontSize: 10.5, color: T.textMuted, marginTop: 6, fontStyle: "italic" },
+  tableScroll: { overflowX: "auto", borderRadius: 10, border: `1px solid ${T.border}`, background: "#fff" },
+  table: { width: "100%", borderCollapse: "collapse", fontSize: 12.5 },
+  th: {
+    textAlign: "left",
+    padding: "9px 12px",
+    fontSize: 10.5,
     fontWeight: 600,
-    color: T.pineDark,
+    color: T.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: "0.03em",
+    borderBottom: `1px solid ${T.border}`,
+    whiteSpace: "nowrap",
   },
-  payslipErrorNote: {
-    fontSize: 11,
-    fontWeight: 500,
-    color: "#A32D2D",
-    maxWidth: 220,
+  tr: { cursor: "pointer" },
+  td: { padding: "9px 12px", borderBottom: `1px solid ${T.border}`, color: T.ink, whiteSpace: "nowrap" },
+  rowDeleteBtn: { border: "none", background: "transparent", padding: 4, borderRadius: 6, color: T.textMuted, display: "flex" },
+  sourceBadge: { fontSize: 10.5, fontWeight: 600, background: "#F0EFE9", color: T.textMuted, padding: "2px 7px", borderRadius: 20 },
+  leadBadge: { fontSize: 10.5, fontWeight: 600, padding: "2px 8px", borderRadius: 20, whiteSpace: "nowrap" },
+  leadBadgeMonster: { background: "#F3E9DA", color: "#8A5A1E" },
+  leadBadgePGR: { background: "#E1EAF5", color: "#2A5488" },
+  epgBadgeSuccess: { fontSize: 9.5, fontWeight: 700, background: "#EAF3EC", color: T.pineDark, padding: "1px 6px", borderRadius: 20 },
+  epgBadgeFailed: { fontSize: 9.5, fontWeight: 700, background: "#FCEBEB", color: "#A32D2D", padding: "1px 6px", borderRadius: 20 },
+  leadList: { display: "flex", flexDirection: "column", gap: 10 },
+  leadCard: { background: "#fff", border: `1px solid ${T.border}`, borderRadius: 10, padding: 16 },
+  leadCardApproved: { borderColor: "#B9D6BF" },
+  leadCardRefunded: { borderColor: "#F0C9C9" },
+  leadCardHeader: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 10 },
+  leadName: { fontSize: 15, fontWeight: 600, color: T.ink },
+  leadCardActions: { display: "flex", alignItems: "center", gap: 6, flexShrink: 0 },
+  refundedBadge: { fontSize: 10.5, fontWeight: 700, color: "#A32D2D" },
+  leadInfoGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 8, marginBottom: 10 },
+  leadInfoItem: { display: "flex", flexDirection: "column", gap: 1 },
+  leadInfoLabel: { fontSize: 9.5, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.02em" },
+  leadEmployeeRow: { display: "flex", gap: 16, flexWrap: "wrap", paddingTop: 10, borderTop: `1px solid ${T.border}` },
+  leadEmployeeItem: { display: "flex", alignItems: "center", gap: 6, fontSize: 12 },
+  commissionRateBadge: { fontSize: 10.5, fontWeight: 600, padding: "2px 7px", borderRadius: 20 },
+  refundImpactNote: { fontSize: 10.5, color: "#A32D2D", fontWeight: 600 },
+  leadNotes: { fontSize: 12, color: T.textMuted, marginTop: 8, fontStyle: "italic" },
+  duplicateCustomersPanel: { display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 },
+  duplicateCustomerCard: { background: "#fff", border: `1px solid ${T.border}`, borderRadius: 10, padding: 12 },
+  duplicateCustomerName: { fontSize: 13, fontWeight: 600, color: T.ink, marginBottom: 6 },
+  duplicateCustomerCount: { fontSize: 11, color: T.textMuted, fontWeight: 400 },
+  duplicateCustomerRows: { display: "flex", flexDirection: "column", gap: 4 },
+  duplicateCustomerRow: { display: "flex", alignItems: "center", gap: 8, fontSize: 12, cursor: "pointer", padding: "3px 0" },
+  rrgLegend: { display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 6 },
+  rrgLegendItem: { display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: T.textMuted },
+  rrgLegendDot: { width: 8, height: 8, borderRadius: "50%" },
+  hint: { fontSize: 11.5, color: T.textMuted, lineHeight: 1.5, marginBottom: 14 },
+  rrgChipRow: { display: "flex", flexDirection: "column", gap: 2 },
+  rrgChip: { fontSize: 12, fontWeight: 600, cursor: "pointer" },
+  reorderCell: { display: "flex", alignItems: "center", gap: 6 },
+  reorderBtns: { display: "flex", flexDirection: "column", gap: 1 },
+  reorderBtn: { border: "none", background: "transparent", padding: 0, color: T.textMuted, display: "flex" },
+  reorderBtnDisabled: { opacity: 0.25, cursor: "not-allowed" },
+  attendanceSelect: {
+    fontSize: 10.5,
+    fontWeight: 600,
+    border: "1px solid transparent",
+    borderRadius: 5,
+    padding: "2px 4px",
+    width: "100%",
   },
-  minimizeBtn: {
+  spiffInput: { width: "100%", fontSize: 11, border: `1px solid ${T.border}`, borderRadius: 5, padding: "2px 4px" },
+  spiffPaidLabel: { display: "flex", alignItems: "center", gap: 3, fontSize: 9.5, color: T.textMuted, marginTop: 2 },
+  totalPayCell: { display: "flex", alignItems: "center", gap: 4 },
+  totalPayCurrency: { fontSize: 13, fontFamily: T.mono, color: T.textMuted },
+  totalPayInput: { width: 66, border: "none", background: "transparent", fontFamily: T.mono, fontSize: 14, fontWeight: 600 },
+  totalPayResetBtn: { border: "none", background: "#F0EFE9", borderRadius: 5, padding: 2, color: T.textMuted, display: "flex" },
+  minGuaranteeBadge: { fontSize: 9, fontWeight: 600, background: "#FBF3E6", color: "#8A5A1E", padding: "1px 6px", borderRadius: 20 },
+  customPayNote: { fontSize: 9.5, color: "#8A5A1E", marginTop: 2 },
+  workedSaturdayLabel: { display: "flex", alignItems: "center", gap: 4, fontSize: 9.5, color: T.textMuted, marginTop: 3 },
+  reportsSubTabs: { display: "flex", gap: 4, marginBottom: 18, borderBottom: `1px solid ${T.border}` },
+  reportsSubTabBtn: {
+    border: "none",
+    background: "transparent",
+    padding: "8px 4px",
+    marginRight: 18,
+    fontSize: 13,
+    fontWeight: 600,
+    color: T.textMuted,
+    borderBottom: "2px solid transparent",
+  },
+  reportsSubTabBtnActive: { color: T.pineDark, borderBottom: `2px solid ${T.pineDark}` },
+  reportsExportRow: { display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 16 },
+  pnlAutoBadge: { fontSize: 9, fontWeight: 700, background: "#F0EFE9", color: T.textMuted, padding: "1px 6px", borderRadius: 20, marginLeft: 6 },
+  pnlTransactionList: { display: "flex", flexDirection: "column", gap: 4 },
+  pnlTransactionRow: { display: "flex", alignItems: "center", gap: 8, fontSize: 11.5 },
+  tabs: { display: "flex", gap: 6 },
+  tab: { border: `1px solid ${T.border}`, background: "#fff", color: T.textMuted, borderRadius: 8, padding: "7px 13px", fontSize: 12, fontWeight: 600 },
+  tabActive: { background: T.pineDark, color: "#fff", borderColor: T.pineDark },
+  infoNotesGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 12, marginTop: 14 },
+  infoNoteCard: { background: "#fff", border: `1px solid ${T.border}`, borderRadius: 10, padding: 14, cursor: "pointer" },
+  infoNoteHeader: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 6 },
+  infoNoteTitle: { fontSize: 13.5, fontWeight: 600, color: T.ink },
+  infoNoteDate: { fontSize: 10.5, color: T.textMuted, flexShrink: 0 },
+  infoNoteBody: {
+    fontSize: 12,
+    color: T.textMuted,
+    lineHeight: 1.5,
+    overflow: "hidden",
+    display: "-webkit-box",
+    WebkitLineClamp: 4,
+    WebkitBoxOrient: "vertical",
+  },
+  scriptFileRow: { display: "flex", alignItems: "center", gap: 10, background: "#fff", border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px" },
+  scriptFileLink: { flex: 1, fontSize: 13, color: T.ink, textDecoration: "none", fontWeight: 500 },
+  scriptFileMeta: { fontSize: 11, color: T.textMuted },
+  adminSettingsGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, marginTop: 12 },
+  savedNote: { fontSize: 11.5, color: T.pineDark, fontWeight: 600, marginTop: 10 },
+  adminListsGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 14, marginTop: 12 },
+  adminListCard: { background: "#fff", border: `1px solid ${T.border}`, borderRadius: 10, padding: 14 },
+  adminListTitle: { fontSize: 12, fontWeight: 600, color: T.ink, marginBottom: 10 },
+  adminChipRow: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 },
+  adminChip: { display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, background: "#F0EFE9", color: T.ink, padding: "4px 8px", borderRadius: 20 },
+  adminChipRemove: { border: "none", background: "transparent", padding: 0, display: "flex", color: "inherit" },
+  adminAddRow: { display: "flex", gap: 6 },
+  gateWrap: { width: "100%", maxWidth: 340, background: "#fff", border: `1px solid ${T.border}`, borderRadius: 14, padding: 30 },
+  fieldLabel: { fontSize: 11, fontWeight: 600, color: T.textMuted, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.02em" },
+  input: { width: "100%", border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 11px", fontSize: 13, color: T.ink, background: "#fff" },
+  passwordEyeBtn: { position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", border: "none", background: "transparent", color: T.textMuted, display: "flex" },
+  errorText: { fontSize: 12, color: "#A32D2D", marginBottom: 10, marginTop: -4 },
+  campaignCard: { background: "#fff", border: `1px solid ${T.border}`, borderRadius: 10, padding: 16, textAlign: "left" },
+  modalBackdrop: { position: "fixed", inset: 0, background: "rgba(27,30,26,0.4)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 100 },
+  modalCard: { background: "#fff", borderRadius: 14, padding: 26, width: "100%", maxWidth: 540, maxHeight: "88vh", overflow: "auto", position: "relative" },
+  modalCloseRow: { display: "flex", justifyContent: "flex-end", gap: 4, marginBottom: 6 },
+  modalIconBtn: { border: "none", background: "transparent", padding: 4, borderRadius: 6, color: T.textMuted, display: "flex" },
+  modalTitle: { fontFamily: T.display, fontSize: 19, fontWeight: 600, color: T.ink, marginBottom: 16 },
+  modalFooter: { display: "flex", alignItems: "center", gap: 8, marginTop: 18, flexWrap: "wrap" },
+  formGrid2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px" },
+  dncWarning: {
     display: "flex",
     alignItems: "center",
-    gap: 4,
-    border: `1px solid ${T.border}`,
-    background: T.paper,
-    color: T.textMuted,
-    fontSize: 11.5,
-    fontWeight: 500,
-    padding: "5px 10px",
-    borderRadius: 7,
-    cursor: "pointer",
-    flexShrink: 0,
+    gap: 8,
+    background: "#FCEBEB",
+    color: "#A32D2D",
+    borderRadius: 8,
+    padding: "9px 12px",
+    fontSize: 12.5,
+    fontWeight: 600,
+    marginBottom: 14,
   },
+  addressSuggestions: {
+    position: "absolute",
+    top: "100%",
+    left: 0,
+    right: 0,
+    background: "#fff",
+    border: `1px solid ${T.border}`,
+    borderRadius: 8,
+    marginTop: 2,
+    zIndex: 10,
+    maxHeight: 200,
+    overflow: "auto",
+    boxShadow: "0 4px 14px rgba(0,0,0,0.08)",
+  },
+  addressSuggestionItem: { padding: "8px 12px", fontSize: 12, color: T.ink, cursor: "pointer", borderBottom: `1px solid ${T.border}` },
   minimizedPill: {
     position: "fixed",
     bottom: 20,
     right: 20,
-    zIndex: 1100,
     display: "flex",
     alignItems: "center",
     gap: 8,
     background: T.pineDark,
     color: "#fff",
     border: "none",
-    fontSize: 13,
-    fontWeight: 600,
-    padding: "12px 18px",
     borderRadius: 30,
-    boxShadow: "0 6px 20px rgba(27,30,26,0.25)",
-    cursor: "pointer",
-  },
-  fieldLabel: { fontSize: 11.5, color: T.textMuted, marginBottom: 5, fontWeight: 500 },
-  addressSuggestionsBox: {
-    position: "absolute",
-    top: "calc(100% + 4px)",
-    left: 0,
-    right: 0,
-    background: "#FFFFFF",
-    border: `1px solid ${T.border}`,
-    borderRadius: 8,
-    boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
-    zIndex: 20,
-    maxHeight: 220,
-    overflowY: "auto",
-  },
-  addressSuggestionRow: {
-    padding: "9px 12px",
+    padding: "10px 16px",
     fontSize: 12.5,
-    color: T.ink,
-    cursor: "pointer",
-    borderBottom: `1px solid ${T.border}`,
-  },
-  addressLookupSpinner: {
-    position: "absolute",
-    right: 10,
-    top: "50%",
-    transform: "translateY(-50%)",
-    fontSize: 11,
-    color: T.textMuted,
-    background: T.paper,
-    pointerEvents: "none",
-  },
-  zipLookupSpinner: {
-    position: "absolute",
-    right: 10,
-    top: "50%",
-    transform: "translateY(-50%)",
-    fontSize: 11,
-    color: T.textMuted,
-    pointerEvents: "none",
-  },
-  input: {
-    width: "100%",
-    border: `1px solid ${T.border}`,
-    borderRadius: 7,
-    padding: "8px 10px",
-    fontSize: 13,
-    color: T.ink,
-    outline: "none",
-    background: T.paper,
-  },
-  select: {
-    width: "100%",
-    border: `1px solid ${T.border}`,
-    borderRadius: 7,
-    padding: "8px 10px",
-    fontSize: 13,
-    color: T.ink,
-    outline: "none",
-    background: T.paper,
-    appearance: "none",
-    WebkitAppearance: "none",
-  },
-  selectChevron: { position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" },
-  errorText: { fontSize: 11.5, color: T.red, marginTop: -8, marginBottom: 10 },
-  dncWarningBanner: {
-    display: "flex",
-    alignItems: "flex-start",
-    gap: 8,
-    background: "#FCEBEB",
-    border: "1px solid #E8B4B4",
-    borderRadius: 8,
-    padding: "10px 12px",
-    marginBottom: 12,
-    fontSize: 13,
-    color: "#A32D2D",
-  },
-  repeatCustomerBanner: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    background: "#EAF3EC",
-    border: `1px solid ${T.border}`,
-    borderRadius: 8,
-    padding: "10px 12px",
-    marginBottom: 12,
-    fontSize: 13,
     fontWeight: 600,
-    color: T.pineDark,
+    boxShadow: "0 4px 14px rgba(0,0,0,0.2)",
+    zIndex: 90,
   },
-  passwordEyeBtn: {
-    position: "absolute",
-    right: 8,
-    top: "50%",
-    transform: "translateY(-50%)",
-    border: "none",
-    background: "transparent",
-    color: T.textMuted,
-    padding: 4,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    cursor: "pointer",
-  },
-  hint: { fontSize: 11, color: T.textMuted, lineHeight: 1.5, marginBottom: 4 },
-  attachmentsBox: {
-    background: T.paper,
-    border: `1px solid ${T.border}`,
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 10,
-  },
-  attachmentList: { display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 },
-  attachmentRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    background: T.paperRaised,
-    border: `1px solid ${T.border}`,
-    borderRadius: 6,
-    padding: "6px 8px",
-  },
-  attachmentLink: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 12,
-    color: T.pineDark,
-    fontWeight: 500,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-    textDecoration: "none",
-  },
-  attachmentMeta: { fontSize: 10.5, color: T.textMuted, flexShrink: 0 },
-  attachmentDeleteBtn: {
-    border: "none",
-    background: "transparent",
-    color: T.borderStrong,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 3,
-    borderRadius: 4,
-    flexShrink: 0,
-    cursor: "pointer",
-  },
-  attachmentUploadBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    border: `1px solid ${T.border}`,
-    background: T.paperRaised,
-    color: T.ink,
-    fontSize: 12,
-    fontWeight: 500,
-    padding: "7px 12px",
-    borderRadius: 7,
-    cursor: "pointer",
-  },
-  roleFieldGrid: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 },
-  modalFooter: { display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 16 },
-  primaryBtn: {
-    display: "flex",
-    alignItems: "center",
-    gap: 5,
-    border: "none",
-    background: T.pineDark,
-    color: "#fff",
-    fontSize: 12.5,
-    fontWeight: 500,
-    padding: "8px 14px",
-    borderRadius: 7,
-  },
-  ghostBtn: {
-    border: `1px solid ${T.border}`,
-    background: "transparent",
-    color: T.ink,
-    fontSize: 12.5,
-    fontWeight: 500,
-    padding: "8px 14px",
-    borderRadius: 7,
-  },
-  dangerBtn: {
-    border: "none",
-    background: T.red,
-    color: "#fff",
-    fontSize: 12.5,
-    fontWeight: 500,
-    padding: "8px 14px",
-    borderRadius: 7,
-  },
-  dangerGhostBtn: {
-    display: "flex",
-    alignItems: "center",
-    gap: 5,
-    border: "none",
-    background: "transparent",
-    color: T.red,
-    fontSize: 12.5,
-    fontWeight: 500,
-    padding: "8px 4px",
-  },
+  employeeDetailDayRow: { display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderBottom: `1px solid ${T.border}` },
+  employeeDetailDayLabel: { width: 70, fontSize: 12, fontWeight: 600, color: T.ink, flexShrink: 0 },
+  employeeDetailSummary: { marginTop: 16, paddingTop: 12, borderTop: `1px solid ${T.border}` },
+  employeeDetailSummaryRow: { display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12.5, color: T.ink, padding: "4px 0" },
+  payslipSentNote: { fontSize: 11.5, color: T.pineDark, fontWeight: 600, marginTop: 6 },
+  payslipErrorNote: { fontSize: 11.5, color: "#A32D2D", fontWeight: 600, marginTop: 6 },
+  refundTypeBtn: { flex: 1, border: `1px solid ${T.border}`, background: "#fff", color: T.textMuted, borderRadius: 8, padding: "8px 0", fontSize: 12.5, fontWeight: 600 },
+  refundTypeActive: { background: T.pineDark, color: "#fff", borderColor: T.pineDark },
+  refundRoleRow: { display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${T.border}` },
 };
