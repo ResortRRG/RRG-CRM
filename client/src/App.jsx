@@ -1451,6 +1451,10 @@ export default function TeamCRM() {
   const payrollWeek = getWeekRange(payrollWeekOffset);
   const payrollWeekLabel = formatWeekLabel(payrollWeek.start, payrollWeek.end);
   const payrollEmployeesForWeek = employeesForWeek(payrollWeek.start);
+  // Pay date: everything worked this week is paid on the Friday of the FOLLOWING week.
+  const payrollPayDate = new Date(payrollWeek.start);
+  payrollPayDate.setDate(payrollPayDate.getDate() + 11);
+  const payrollPayDateLabel = payrollPayDate.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" });
 
   const currentWeek = getWeekRange(0);
 
@@ -4103,7 +4107,17 @@ export default function TeamCRM() {
                       <div style={S.employeeStats}>
                         {empSales.length} sale{empSales.length === 1 ? "" : "s"} {employeeStatsLabel} · {money(empAllTimeTotal)}
                       </div>
-                      <div style={S.exEmployeeNote}>Deactivated — open to reactivate</div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEmployeeDetailWeekOffset(0);
+                          setEmployeeDetailId(emp.id);
+                        }}
+                        style={S.weeklyTemplateBtn}
+                      >
+                        <CalendarDays size={12} /> Weekly template
+                      </button>
+                      <div style={S.exEmployeeNote}>Deactivated — open to reactivate, or use Weekly template for past pay/deals</div>
                     </div>
                   );
                 })}
@@ -4302,7 +4316,10 @@ export default function TeamCRM() {
         {section === "payroll" && (
           <div style={S.dashboardWrap}>
             <div style={S.weekNavRow}>
-              <div style={S.dashboardSectionLabel}>Payroll</div>
+              <div>
+                <div style={S.dashboardSectionLabel}>Payroll</div>
+                <div style={S.payDateLabel}>Pay date: {payrollPayDateLabel}</div>
+              </div>
               <div style={S.weekNav}>
                 <button onClick={() => setPayrollWeekOffset((w) => w - 1)} style={S.weekNavBtn} aria-label="Previous week">
                   ‹
@@ -7955,6 +7972,7 @@ const S = {
   statDivider: { width: 1, height: 34, background: T.border },
   dashboardWrap: { padding: "22px 28px 60px 28px", flex: 1, overflow: "auto" },
   dashboardSectionLabel: { fontSize: 13, fontWeight: 600, color: T.ink },
+  payDateLabel: { fontSize: 11, color: T.pineDark, fontWeight: 600, marginTop: 3 },
   weekNavRow: { display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 14 },
   weekNav: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" },
   weekNavBtn: {
