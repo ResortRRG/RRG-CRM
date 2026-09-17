@@ -6403,14 +6403,26 @@ function SaleForm({ initial, employees, settings, dncList, sales, syncingToEpg, 
     matchingDncEntryHelper(dncList, form.phone2) ||
     matchingDncEntryHelper(dncList, form.email, true);
 
-  // Surfaces prior sales for this same customer name, across ALL users —
-  // `sales` is shared data, not scoped to the person filling out this form.
-  const nameKey = (form.name || "").trim().toLowerCase();
-  const lastSold = nameKey
-    ? sales
-        .filter((s) => s.id !== form.id && s.status === "Approved" && (s.name || "").trim().toLowerCase() === nameKey)
-        .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0))[0] || null
-    : null;
+  // Surfaces prior sales for this same customer — matched by name OR phone
+  // number, across ALL users. `sales` is shared data, not scoped to the
+  // person filling out this form.
+  const lastSoldNameKey = (form.name || "").trim().toLowerCase();
+  const lastSoldPhoneKey = (form.phone || "").replace(/\D/g, "");
+  const lastSoldPhone2Key = (form.phone2 || "").replace(/\D/g, "");
+  function matchesSameCustomer(s) {
+    if (s.id === form.id || s.status !== "Approved") return false;
+    const sName = (s.name || "").trim().toLowerCase();
+    const sPhone = (s.phone || "").replace(/\D/g, "");
+    const sPhone2 = (s.phone2 || "").replace(/\D/g, "");
+    if (lastSoldNameKey && sName === lastSoldNameKey) return true;
+    if (lastSoldPhoneKey && lastSoldPhoneKey.length >= 7 && (sPhone === lastSoldPhoneKey || sPhone2 === lastSoldPhoneKey)) return true;
+    if (lastSoldPhone2Key && lastSoldPhone2Key.length >= 7 && (sPhone === lastSoldPhone2Key || sPhone2 === lastSoldPhone2Key)) return true;
+    return false;
+  }
+  const lastSold =
+    lastSoldNameKey || lastSoldPhoneKey || lastSoldPhone2Key
+      ? sales.filter(matchesSameCustomer).sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0))[0] || null
+      : null;
 
   const [blacklistResult, setBlacklistResult] = useState(null); // { data } | { error } | null
   const [blacklistChecking, setBlacklistChecking] = useState(false);
