@@ -702,6 +702,7 @@ export default function TeamCRM() {
   const [refundType, setRefundType] = useState("full");
   const [refundWeekChoices, setRefundWeekChoices] = useState({ front: "next", close: "next", verification: "next" });
   const [refundAmounts, setRefundAmounts] = useState({ front: "", close: "", verification: "" });
+  const [blacklistFailure, setBlacklistFailure] = useState(null);
   const saveTimer = useRef(null);
 
   useEffect(() => {
@@ -893,6 +894,29 @@ export default function TeamCRM() {
   useEffect(() => {
     if (currentUser) refreshUsers();
   }, [currentUser && currentUser.id]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    (async () => {
+      try {
+        const res = await fetch("/api/blacklist/failure-status", { credentials: "include" });
+        if (!res.ok) return;
+        const data = await res.json();
+        setBlacklistFailure(data.failure || null);
+      } catch (e) {
+        // ignore — banner just won't show, not worth surfacing a second error about the error banner
+      }
+    })();
+  }, [currentUser && currentUser.id]);
+
+  async function acknowledgeBlacklistFailure() {
+    setBlacklistFailure(null);
+    try {
+      await fetch("/api/blacklist/acknowledge-failure", { method: "POST", credentials: "include" });
+    } catch (e) {
+      // local dismiss already happened; not critical if the server call fails
+    }
+  }
 
   function updateViewer(next) {
     setViewer(next);
@@ -2903,6 +2927,17 @@ export default function TeamCRM() {
       </div>
 
       <div style={S.main}>
+        {blacklistFailure && (
+          <div style={S.blacklistFailureBanner}>
+            <AlertTriangle size={15} style={{ flexShrink: 0 }} />
+            <span style={{ flex: 1 }}>
+              Blacklist Alliance check failed ({new Date(blacklistFailure.at).toLocaleString("en-US")}): {blacklistFailure.message}
+            </span>
+            <button onClick={acknowledgeBlacklistFailure} style={S.blacklistFailureDismiss}>
+              <X size={14} />
+            </button>
+          </div>
+        )}
         <div style={S.topbar}>
           <div>
             <div style={S.topbarTitle}>{NAV_ITEMS.find((n) => n.id === section)?.label}</div>
@@ -6360,6 +6395,39 @@ function SaleForm({ initial, employees, settings, dncList, sales, syncingToEpg, 
     matchingDncEntryHelper(dncList, form.phone2) ||
     matchingDncEntryHelper(dncList, form.email, true);
 
+  const [blacklistResult, setBlacklistResult] = useState(null); // { data } | { error } | null
+  const [blacklistChecking, setBlacklistChecking] = useState(false);
+  const [blacklistCheckedPhone, setBlacklistCheckedPhone] = useState("");
+
+  async function checkBlacklist() {
+    const cleanPhone = (form.phone || "").replace(/\D/g, "");
+    if (cleanPhone.length !== 10) {
+      setBlacklistResult({ error: "Enter a valid 10-digit phone number first." });
+      return;
+    }
+    setBlacklistChecking(true);
+    setBlacklistResult(null);
+    try {
+      const res = await fetch("/api/blacklist/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ phone: cleanPhone }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setBlacklistResult({ error: data.error || "Litigation risk check failed." });
+      } else {
+        setBlacklistResult({ data });
+        setBlacklistCheckedPhone(cleanPhone);
+      }
+    } catch (err) {
+      setBlacklistResult({ error: "Couldn't reach the server — check your connection and try again." });
+    } finally {
+      setBlacklistChecking(false);
+    }
+  }
+
   function matchingDncEntryHelper(list, value, isEmail) {
     if (!value) return null;
     if (isEmail) {
@@ -6394,6 +6462,43 @@ function SaleForm({ initial, employees, settings, dncList, sales, syncingToEpg, 
         <div style={S.dncWarning}>
           <ShieldAlert size={15} />
           This contact is on the DNC list{dncMatch.notes ? `: ${dncMatch.notes}` : ""}.
+        </div>
+      )}
+      <div style={S.blacklistCheckRow}>
+        <button
+          type="button"
+          onClick={checkBlacklist}
+          disabled={blacklistChecking}
+          style={{ ...S.ghostBtn, ...(blacklistChecking ? { opacity: 0.6, cursor: "not-allowed" } : {}) }}
+        >
+          <ShieldAlert size={14} /> {blacklistChecking ? "Checking…" : "Check Blacklist"}
+        </button>
+        {blacklistResult && blacklistResult.data && blacklistCheckedPhone && (
+          <span style={{ fontSize: 11.5, color: T.textMuted }}>Checked {blacklistCheckedPhone}</span>
+        )}
+      </div>
+      {blacklistResult && blacklistResult.error && (
+        <div style={S.errorText}>Litigation risk check failed: {blacklistResult.error}</div>
+      )}
+      {blacklistResult && blacklistResult.data && (
+        <div style={S.blacklistResultBox}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: T.textMuted, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.02em" }}>
+            Blacklist Alliance result
+          </div>
+          <div style={S.blacklistResultGrid}>
+            {Object.entries(blacklistResult.data).map(([key, value]) => (
+              <div key={key} style={S.blacklistResultRow}>
+                <span style={{ color: T.textMuted }}>{key}</span>
+                <span style={{ color: T.ink, fontWeight: 500, textAlign: "right" }}>
+                  {typeof value === "object" ? JSON.stringify(value) : String(value)}
+                </span>
+              </div>
+            ))}
+          </div>
+          <div style={{ ...S.hint, marginTop: 8, marginBottom: 0 }}>
+            This is Blacklist Alliance's raw screening result — review it yourself before proceeding; a clean-looking
+            result here isn't a legal guarantee against TCPA or DNC exposure.
+          </div>
         </div>
       )}
       <div style={S.formGrid2}>
@@ -8313,6 +8418,22 @@ const S = {
     fontWeight: 600,
     marginBottom: 14,
   },
+  blacklistCheckRow: { display: "flex", alignItems: "center", gap: 10, marginBottom: 10 },
+  blacklistResultBox: { background: T.paper, border: `1px solid ${T.border}`, borderRadius: 8, padding: 12, marginBottom: 14 },
+  blacklistResultGrid: { display: "flex", flexDirection: "column", gap: 4 },
+  blacklistResultRow: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, fontSize: 12 },
+  blacklistFailureBanner: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    background: "#FBF3E6",
+    color: "#8A5A1E",
+    borderBottom: "1px solid #E3C89A",
+    padding: "10px 24px",
+    fontSize: 12.5,
+    fontWeight: 500,
+  },
+  blacklistFailureDismiss: { border: "none", background: "transparent", padding: 4, borderRadius: 6, color: "#8A5A1E", display: "flex", flexShrink: 0 },
   addressSuggestions: {
     position: "absolute",
     top: "100%",
