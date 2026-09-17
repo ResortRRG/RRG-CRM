@@ -684,7 +684,6 @@ export default function TeamCRM() {
   const [employeeDetailWeekOffset, setEmployeeDetailWeekOffset] = useState(0);
   const [leadsSearch, setLeadsSearch] = useState("");
   const [leadsSubTab, setLeadsSubTab] = useState("leads");
-  const [showDuplicateCustomers, setShowDuplicateCustomers] = useState(false);
   const [leadsFilterMode, setLeadsFilterMode] = useState("all");
   const [leadsSelectedDate, setLeadsSelectedDate] = useState(todayDateStr());
   const [leadsCategoryFilter, setLeadsCategoryFilter] = useState("");
@@ -3410,7 +3409,18 @@ export default function TeamCRM() {
           })()
         )}
 
-        {section === "leads" && (
+        {section === "leads" && (() => {
+          const nameGroupsForTabs = {};
+          sales.forEach((s) => {
+            const key = (s.name || "").trim().toLowerCase();
+            if (!key) return;
+            if (!nameGroupsForTabs[key]) nameGroupsForTabs[key] = [];
+            nameGroupsForTabs[key].push(s);
+          });
+          const duplicateCustomerGroupsForTab = Object.values(nameGroupsForTabs)
+            .filter((group) => group.length > 1)
+            .map((group) => [...group].sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0)));
+          return (
           <div style={S.contactsWrap}>
             <div style={S.reportsSubTabs}>
               <button
@@ -3420,12 +3430,60 @@ export default function TeamCRM() {
                 Leads
               </button>
               <button
+                onClick={() => setLeadsSubTab("duplicates")}
+                style={{ ...S.reportsSubTabBtn, ...(leadsSubTab === "duplicates" ? S.reportsSubTabBtnActive : {}) }}
+              >
+                Duplicates{duplicateCustomerGroupsForTab.length > 0 ? ` (${duplicateCustomerGroupsForTab.length})` : ""}
+              </button>
+              <button
                 onClick={() => setLeadsSubTab("dnc")}
                 style={{ ...S.reportsSubTabBtn, ...(leadsSubTab === "dnc" ? S.reportsSubTabBtnActive : {}) }}
               >
                 DNC List{dncList.length > 0 ? ` (${dncList.length})` : ""}
               </button>
             </div>
+            {leadsSubTab === "duplicates" && (
+              <div>
+                <div style={{ ...S.hint, marginTop: 4 }}>
+                  Customers with more than one sale on file — click any row to open that sale.
+                </div>
+                {duplicateCustomerGroupsForTab.length === 0 ? (
+                  <div style={S.emptyState}>
+                    <Users size={22} color={T.borderStrong} />
+                    <div style={{ marginTop: 8, fontSize: 13, color: T.textMuted }}>No repeat customers yet</div>
+                  </div>
+                ) : (
+                  <div style={S.duplicateCustomersPanel}>
+                    {duplicateCustomerGroupsForTab.map((group, gi) => (
+                      <div key={gi} style={S.duplicateCustomerCard}>
+                        <div style={S.duplicateCustomerName}>
+                          {group[0].name} <span style={S.duplicateCustomerCount}>{group.length} sales</span>
+                        </div>
+                        <div style={S.duplicateCustomerRows}>
+                          {group.map((s) => (
+                            <div key={s.id} style={S.duplicateCustomerRow} onClick={() => setSaleModal({ ...s })}>
+                              <span style={{ color: T.textMuted, minWidth: 130 }}>{formatTimestamp(s.timestamp)}</span>
+                              <span style={{ flex: 1 }}>{money(s.totalPrice)}</span>
+                              <span
+                                style={{
+                                  ...S.leadBadge,
+                                  background:
+                                    s.status === "Approved" ? "#EAF3EC" : s.status === "Declined" ? "#FCEBEB" : "#F3E9DA",
+                                  color:
+                                    s.status === "Approved" ? T.pineDark : s.status === "Declined" ? "#A32D2D" : "#8A5A1E",
+                                }}
+                              >
+                                {s.status}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             {leadsSubTab === "leads" && (
             <>
             {(() => {
@@ -3455,17 +3513,6 @@ export default function TeamCRM() {
                 })
                 .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
 
-              const nameGroups = {};
-              sales.forEach((s) => {
-                const key = (s.name || "").trim().toLowerCase();
-                if (!key) return;
-                if (!nameGroups[key]) nameGroups[key] = [];
-                nameGroups[key].push(s);
-              });
-              const duplicateCustomerGroups = Object.values(nameGroups)
-                .filter((group) => group.length > 1)
-                .map((group) => [...group].sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0)));
-
               return (
                 <>
                   <div style={S.contactsToolbar}>
@@ -3483,15 +3530,6 @@ export default function TeamCRM() {
                       >
                         <Download size={14} /> Export CSV
                       </button>
-                      {duplicateCustomerGroups.length > 0 && (
-                        <button
-                          onClick={() => setShowDuplicateCustomers((v) => !v)}
-                          style={{ ...S.ghostBtn, ...(showDuplicateCustomers ? S.refundTypeActive : {}) }}
-                          title="Customers with more than one sale on file"
-                        >
-                          <Users size={14} /> Repeat customers ({duplicateCustomerGroups.length})
-                        </button>
-                      )}
                       <div style={S.searchWrap}>
                         <Search size={14} color={T.textMuted} style={{ flexShrink: 0 }} />
                         <input
@@ -3508,37 +3546,6 @@ export default function TeamCRM() {
                       </div>
                     </div>
                   </div>
-
-                  {showDuplicateCustomers && duplicateCustomerGroups.length > 0 && (
-                    <div style={S.duplicateCustomersPanel}>
-                      {duplicateCustomerGroups.map((group, gi) => (
-                        <div key={gi} style={S.duplicateCustomerCard}>
-                          <div style={S.duplicateCustomerName}>
-                            {group[0].name} <span style={S.duplicateCustomerCount}>{group.length} sales</span>
-                          </div>
-                          <div style={S.duplicateCustomerRows}>
-                            {group.map((s) => (
-                              <div key={s.id} style={S.duplicateCustomerRow} onClick={() => setSaleModal({ ...s })}>
-                                <span style={{ color: T.textMuted, minWidth: 130 }}>{formatTimestamp(s.timestamp)}</span>
-                                <span style={{ flex: 1 }}>{money(s.totalPrice)}</span>
-                                <span
-                                  style={{
-                                    ...S.leadBadge,
-                                    background:
-                                      s.status === "Approved" ? "#EAF3EC" : s.status === "Declined" ? "#FCEBEB" : "#F3E9DA",
-                                    color:
-                                      s.status === "Approved" ? T.pineDark : s.status === "Declined" ? "#A32D2D" : "#8A5A1E",
-                                  }}
-                                >
-                                  {s.status}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
 
                   <div style={S.weekNavRow}>
                     <div style={{ position: "relative" }}>
@@ -3828,7 +3835,8 @@ export default function TeamCRM() {
               </div>
             )}
           </div>
-        )}
+          );
+        })()}
 
         {section === "employees" && (
           <div style={S.contactsWrap}>
@@ -6395,6 +6403,15 @@ function SaleForm({ initial, employees, settings, dncList, sales, syncingToEpg, 
     matchingDncEntryHelper(dncList, form.phone2) ||
     matchingDncEntryHelper(dncList, form.email, true);
 
+  // Surfaces prior sales for this same customer name, across ALL users —
+  // `sales` is shared data, not scoped to the person filling out this form.
+  const nameKey = (form.name || "").trim().toLowerCase();
+  const lastSold = nameKey
+    ? sales
+        .filter((s) => s.id !== form.id && s.status === "Approved" && (s.name || "").trim().toLowerCase() === nameKey)
+        .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0))[0] || null
+    : null;
+
   const [blacklistResult, setBlacklistResult] = useState(null); // { data } | { error } | null
   const [blacklistChecking, setBlacklistChecking] = useState(false);
   const [blacklistCheckedPhone, setBlacklistCheckedPhone] = useState("");
@@ -6462,6 +6479,12 @@ function SaleForm({ initial, employees, settings, dncList, sales, syncingToEpg, 
         <div style={S.dncWarning}>
           <ShieldAlert size={15} />
           This contact is on the DNC list{dncMatch.notes ? `: ${dncMatch.notes}` : ""}.
+        </div>
+      )}
+      {lastSold && (
+        <div style={S.lastSoldNotice}>
+          <CheckCircle size={15} />
+          Last sold on {formatTimestamp(lastSold.timestamp)}{lastSold.totalPrice ? ` — ${money(lastSold.totalPrice)}` : ""}
         </div>
       )}
       <div style={S.blacklistCheckRow}>
@@ -8419,6 +8442,18 @@ const S = {
     marginBottom: 14,
   },
   blacklistCheckRow: { display: "flex", alignItems: "center", gap: 10, marginBottom: 10 },
+  lastSoldNotice: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    background: "#FBF3E6",
+    color: "#8A5A1E",
+    borderRadius: 8,
+    padding: "9px 12px",
+    fontSize: 12.5,
+    fontWeight: 600,
+    marginBottom: 14,
+  },
   blacklistResultBox: { background: T.paper, border: `1px solid ${T.border}`, borderRadius: 8, padding: 12, marginBottom: 14 },
   blacklistResultGrid: { display: "flex", flexDirection: "column", gap: 4 },
   blacklistResultRow: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, fontSize: 12 },
