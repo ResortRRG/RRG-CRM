@@ -11,6 +11,7 @@ import { registerPayslipRoutes } from "./payslipRoutes.js";
 import { registerEpgRoutes } from "./epgIntegration.js";
 import { registerBlacklistRoutes } from "./blacklistCheck.js";
 import { registerScriptFileRoutes } from "./scriptFiles.js";
+import { registerDfsExportRoutes } from "./dfsExport.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -26,6 +27,7 @@ registerPayslipRoutes(app);
 registerEpgRoutes(app);
 registerBlacklistRoutes(app);
 registerScriptFileRoutes(app);
+registerDfsExportRoutes(app);
 
 // Serve the built React app (client/dist) in production.
 const clientDist = path.join(__dirname, "..", "client", "dist");
