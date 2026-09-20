@@ -1222,6 +1222,12 @@ export default function TeamCRM() {
     if (basePayLabel(emp.name) === "Base pay") {
       const absences = absentDaysInWeek(employeeId, weekStart);
       proratedAmount = Math.max(0, proratedAmount - absences * BASE_PAY_ABSENCE_DEDUCTION);
+    } else {
+      // Draw: same $80/day absence deduction as the weekly minimum guarantee,
+      // with the same Worked Saturday credit (one absence forgiven per week).
+      const absences = absentDaysInWeek(employeeId, weekStart);
+      const effectiveAbsences = getWorkedSaturday(employeeId, weekStart) ? Math.max(0, absences - 1) : absences;
+      proratedAmount = Math.max(0, proratedAmount - effectiveAbsences * ABSENCE_GUARANTEE_DEDUCTION);
     }
     return proratedAmount;
   }
