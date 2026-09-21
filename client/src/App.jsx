@@ -1413,6 +1413,12 @@ export default function TeamCRM() {
       count: declinedSales.length,
       color: chartColor("Declined"),
     },
+    {
+      label: "Chargeback",
+      value: chargebackTotal,
+      count: chargebackSales.length,
+      color: chartColor("Chargeback"),
+    },
   ];
 
   function salesForEmployee(employeeId) {
