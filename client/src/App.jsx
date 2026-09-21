@@ -1358,7 +1358,14 @@ export default function TeamCRM() {
   }
   const dashboardSales = dashboardRange ? sales.filter((s) => isSaleInRange(s, dashboardRange.start, dashboardRange.end)) : sales;
   const dashboardApprovedSales = dashboardSales.filter((s) => s.status === "Approved");
-  const totalSalesValue = dashboardApprovedSales.reduce((s, r) => s + (Number(r.totalPrice) || 0), 0);
+  const chargebackSales = dashboardRange
+    ? sales.filter((s) => s.refunded && dateInRange(s.refundedAt, dashboardRange.start, dashboardRange.end))
+    : sales.filter((s) => s.refunded);
+  const chargebackTotal = chargebackSales.reduce((sum, r) => sum + (Number(r.refundAmount) || 0), 0);
+  // Chargebacks reduce the day/week total rather than being counted as
+  // additional revenue — the sale's full amount was already counted when it
+  // was approved, and a chargeback takes that money back.
+  const totalSalesValue = dashboardApprovedSales.reduce((s, r) => s + (Number(r.totalPrice) || 0), 0) - chargebackTotal;
   function dashboardNavPrev() {
     if (dashboardFilterMode === "day") setDashboardSelectedDate((d) => shiftDateStr(d, -1));
     else if (dashboardFilterMode === "week") setWeekOffset((w) => w - 1);
@@ -1393,9 +1400,6 @@ export default function TeamCRM() {
   });
   const declinedSales = dashboardSales.filter((s) => s.status === "Declined");
   const pendingSales = dashboardSales.filter((s) => s.status === "Pending");
-  const chargebackSales = dashboardRange
-    ? sales.filter((s) => s.refunded && dateInRange(s.refundedAt, dashboardRange.start, dashboardRange.end))
-    : sales.filter((s) => s.refunded);
   const dashboardChartSegments = [
     ...salesBySource.map((row) => ({
       label: row.source,
@@ -1408,12 +1412,6 @@ export default function TeamCRM() {
       value: declinedSales.reduce((sum, r) => sum + (Number(r.totalPrice) || 0), 0),
       count: declinedSales.length,
       color: chartColor("Declined"),
-    },
-    {
-      label: "Chargeback",
-      value: chargebackSales.reduce((sum, r) => sum + (Number(r.refundAmount) || 0), 0),
-      count: chargebackSales.length,
-      color: chartColor("Chargeback"),
     },
   ];
 
@@ -3053,7 +3051,7 @@ export default function TeamCRM() {
                   </span>
                 </div>
                 <div style={S.sourceValue}>
-                  {money(chargebackSales.reduce((sum, r) => sum + (Number(r.refundAmount) || 0), 0))}
+                  {money(chargebackTotal)}
                 </div>
               </div>
             </div>
@@ -3065,7 +3063,7 @@ export default function TeamCRM() {
               <DonutChart
                 segments={dashboardChartSegments}
                 centerLabel="Total"
-                centerValue={money(dashboardChartSegments.reduce((s, seg) => s + seg.value, 0))}
+                centerValue={money(dashboardChartSegments.reduce((s, seg) => s + seg.value, 0) - chargebackTotal)}
               />
             </div>
 
