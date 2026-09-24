@@ -242,6 +242,7 @@ function blankSale() {
     status: "Pending",
     leadCategory: "",
     notes: "",
+    skipEpgPush: false,
   };
 }
 
@@ -2522,18 +2523,24 @@ export default function TeamCRM() {
     setContactModal(null);
   }
   async function saveSale(form) {
+    const skipEpgPush = !!form.skipEpgPush;
+    const { skipEpgPush: _skipFlag, ...formWithoutSkipFlag } = form;
     let savedSale;
     let wasAlreadyApproved = false;
     let nextSales;
-    const isNew = !form.id;
-    if (form.id) {
-      const existing = sales.find((s) => s.id === form.id);
+    const isNew = !formWithoutSkipFlag.id;
+    if (formWithoutSkipFlag.id) {
+      const existing = sales.find((s) => s.id === formWithoutSkipFlag.id);
       wasAlreadyApproved = !!(existing && existing.status === "Approved");
-      savedSale = { ...existing, ...form };
-      nextSales = sales.map((s) => (s.id === form.id ? savedSale : s));
+      savedSale = { ...existing, ...formWithoutSkipFlag };
+      nextSales = sales.map((s) => (s.id === formWithoutSkipFlag.id ? savedSale : s));
     } else {
-      savedSale = { ...form, id: uid(), createdAt: Date.now(), submittedBy: currentUser ? currentUser.name : "" };
+      savedSale = { ...formWithoutSkipFlag, id: uid(), createdAt: Date.now(), submittedBy: currentUser ? currentUser.name : "" };
       nextSales = [...sales, savedSale];
+    }
+    if (skipEpgPush) {
+      savedSale = { ...savedSale, epgPushStatus: "success", epgPushedAt: new Date().toISOString(), epgPushError: null };
+      nextSales = nextSales.map((s) => (s.id === savedSale.id ? savedSale : s));
     }
 
     // Write directly and WAIT for confirmation before showing success,
@@ -2561,9 +2568,11 @@ export default function TeamCRM() {
 
     // Push newly-Approved Monster deals to EPG — awaited before the modal
     // closes so the request can't get silently interrupted by closing the
-    // tab or navigating away right after saving.
+    // tab or navigating away right after saving. Skipped entirely if the
+    // rep marked this sale as already sent to EPG some other way, so we
+    // don't create a duplicate over there.
     const justBecameApproved = savedSale.status === "Approved" && !wasAlreadyApproved;
-    if (justBecameApproved && savedSale.leadSubmittedTo === "Monster") {
+    if (!skipEpgPush && justBecameApproved && savedSale.leadSubmittedTo === "Monster") {
       setSaleSyncingToEpg(true);
       try {
         await pushSaleToEpg(savedSale);
@@ -6661,6 +6670,12 @@ function SaleForm({ initial, employees, settings, dncList, sales, syncingToEpg, 
       <Field label="Notes">
         <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} style={{ ...S.input, minHeight: 70, resize: "vertical" }} />
       </Field>
+      {form.leadSubmittedTo === "Monster" && (
+        <label style={S.skipEpgLabel}>
+          <input type="checkbox" checked={!!form.skipEpgPush} onChange={(e) => set("skipEpgPush", e.target.checked)} style={{ margin: 0 }} />
+          Already sent to EPG — don't push again (marks it as synced here without re-sending)
+        </label>
+      )}
       {showValidation && missingFields.length > 0 && (
         <div style={S.errorText}>
           Missing: {missingFields.map((f) => f.label).join(", ")}
@@ -7514,6 +7529,15 @@ const S = {
   modalTitle: { fontFamily: T.display, fontSize: 19, fontWeight: 600, color: T.ink, marginBottom: 16 },
   modalFooter: { display: "flex", alignItems: "center", gap: 8, marginTop: 18, flexWrap: "wrap" },
   formGrid2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px" },
+  skipEpgLabel: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    fontSize: 12,
+    color: T.textMuted,
+    marginBottom: 14,
+    cursor: "pointer",
+  },
   dncWarning: {
     display: "flex",
     alignItems: "center",
