@@ -586,6 +586,7 @@ export default function TeamCRM() {
   const [saleModal, setSaleModal] = useState(null);
   const [saleModalMinimized, setSaleModalMinimized] = useState(false);
   const [saleSyncingToEpg, setSaleSyncingToEpg] = useState(false);
+  const [saleSaveError, setSaleSaveError] = useState("");
   useEffect(() => {
     function handleWheel(e) {
       const scrollEl = e.target.closest && e.target.closest(".crm-scroll");
@@ -599,7 +600,10 @@ export default function TeamCRM() {
     return () => document.removeEventListener("wheel", handleWheel);
   }, []);
   useEffect(() => {
-    if (saleModal) setSaleModalMinimized(false);
+    if (saleModal) {
+      setSaleModalMinimized(false);
+      setSaleSaveError("");
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [saleModal]);
   const [entryJustSaved, setEntryJustSaved] = useState(false);
@@ -2520,14 +2524,38 @@ export default function TeamCRM() {
   async function saveSale(form) {
     let savedSale;
     let wasAlreadyApproved = false;
+    let nextSales;
+    const isNew = !form.id;
     if (form.id) {
       const existing = sales.find((s) => s.id === form.id);
       wasAlreadyApproved = !!(existing && existing.status === "Approved");
       savedSale = { ...existing, ...form };
-      updateSales(sales.map((s) => (s.id === form.id ? savedSale : s)));
+      nextSales = sales.map((s) => (s.id === form.id ? savedSale : s));
     } else {
       savedSale = { ...form, id: uid(), createdAt: Date.now(), submittedBy: currentUser ? currentUser.name : "" };
-      updateSales([...sales, savedSale]);
+      nextSales = [...sales, savedSale];
+    }
+
+    // Write directly and WAIT for confirmation before showing success,
+    // closing the modal, or pushing to EPG. The debounced persist() used
+    // for most other state in this app can be silently interrupted if the
+    // tab closes or the device loses connectivity right after submitting —
+    // for a brand-new sale, that would lose it completely with no error
+    // shown and no trace left behind, which is unacceptable for real data.
+    setSales(nextSales);
+    clearTimeout(saveTimer.current);
+    setSaleSaveError("");
+    try {
+      await window.storage.set("crm:sales", JSON.stringify(nextSales), true);
+    } catch (err) {
+      console.error("Sale save failed:", err);
+      setSaleSaveError(
+        "Couldn't save this sale — " + (err.message || "unknown error") + ". Don't close this screen — try Save again."
+      );
+      return;
+    }
+
+    if (isNew) {
       setEntryJustSaved(true);
     }
 
@@ -5898,6 +5926,7 @@ export default function TeamCRM() {
             dncList={dncList}
             sales={sales}
             syncingToEpg={saleSyncingToEpg}
+            saveError={saleSaveError}
             onCancel={() => {
               setSaleModal(null);
               setSaleModalMinimized(false);
@@ -6287,7 +6316,7 @@ function ExpenseFileButton({ expenseKey }) {
   return null;
 }
 
-function SaleForm({ initial, employees, settings, dncList, sales, syncingToEpg, onCancel, onMinimize, onSave, onDelete }) {
+function SaleForm({ initial, employees, settings, dncList, sales, syncingToEpg, saveError, onCancel, onMinimize, onSave, onDelete }) {
   const [form, setForm] = useState({ ...blankSale(), ...initial });
   const [saving, setSaving] = useState(false);
   const [addressSuggestions, setAddressSuggestions] = useState([]);
@@ -6635,6 +6664,12 @@ function SaleForm({ initial, employees, settings, dncList, sales, syncingToEpg, 
       {showValidation && missingFields.length > 0 && (
         <div style={S.errorText}>
           Missing: {missingFields.map((f) => f.label).join(", ")}
+        </div>
+      )}
+      {saveError && (
+        <div style={S.dncWarning}>
+          <AlertTriangle size={15} />
+          {saveError}
         </div>
       )}
       {syncingToEpg && (
