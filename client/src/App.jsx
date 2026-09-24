@@ -6322,7 +6322,129 @@ function Field({ label, children, required }) {
 }
 
 function ExpenseFileButton({ expenseKey }) {
-  return null;
+  const [open, setOpen] = useState(false);
+  const [files, setFiles] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function loadFiles() {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/expenses/${encodeURIComponent(expenseKey)}/files`, { credentials: "include" });
+      if (!res.ok) throw new Error("status " + res.status);
+      const data = await res.json();
+      setFiles(data.files || []);
+    } catch (err) {
+      console.error("Loading expense files failed:", err);
+      setError("Couldn't load attachments: " + (err.message || "unknown error"));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (open) loadFiles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  async function uploadFile(file) {
+    if (!file) return;
+    setUploading(true);
+    setError("");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`/api/expenses/${encodeURIComponent(expenseKey)}/files`, {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "status " + res.status);
+      }
+      await loadFiles();
+    } catch (err) {
+      console.error("Expense file upload failed:", err);
+      setError("Upload failed: " + (err.message || "unknown error"));
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function deleteFile(fileId) {
+    try {
+      await fetch(`/api/expenses/${encodeURIComponent(expenseKey)}/files/${fileId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      setFiles((prev) => prev.filter((f) => f.id !== fileId));
+    } catch (err) {
+      console.error("Expense file delete failed:", err);
+      setError("Couldn't delete that file");
+    }
+  }
+
+  function formatFileSize(bytes) {
+    const n = Number(bytes) || 0;
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+    return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        style={{ ...S.iconBtnGhost, position: "relative" }}
+        title="Receipts / attachments"
+      >
+        <Paperclip size={11} color={T.textMuted} />
+      </button>
+      {open && (
+        <Modal onClose={() => setOpen(false)} narrow>
+          <div style={S.modalTitle}>Attachments</div>
+          {loading ? (
+            <div style={{ fontSize: 12.5, color: T.textMuted }}>Loading…</div>
+          ) : files.length === 0 ? (
+            <div style={{ fontSize: 12.5, color: T.textMuted, marginBottom: 14 }}>No files attached yet.</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
+              {files.map((f) => (
+                <div key={f.id} style={S.expenseFileRow}>
+                  <FileText size={14} color={T.pineDark} style={{ flexShrink: 0 }} />
+                  <a
+                    href={`/api/expenses/${encodeURIComponent(expenseKey)}/files/${f.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={S.expenseFileLink}
+                  >
+                    {f.filename}
+                  </a>
+                  <span style={{ fontSize: 10.5, color: T.textMuted, flexShrink: 0 }}>{formatFileSize(f.size)}</span>
+                  <button onClick={() => deleteFile(f.id)} style={S.iconBtnGhost} title="Delete">
+                    <Trash2 size={12} color={T.textMuted} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {error && <div style={S.errorText}>{error}</div>}
+          <label style={{ ...S.ghostBtn, display: "inline-flex", cursor: uploading ? "not-allowed" : "pointer", opacity: uploading ? 0.6 : 1 }}>
+            <Upload size={13} /> {uploading ? "Uploading…" : "Upload receipt"}
+            <input
+              type="file"
+              onChange={(e) => uploadFile(e.target.files && e.target.files[0])}
+              disabled={uploading}
+              style={{ display: "none" }}
+            />
+          </label>
+        </Modal>
+      )}
+    </>
+  );
 }
 
 function SaleForm({ initial, employees, settings, dncList, sales, syncingToEpg, saveError, onCancel, onMinimize, onSave, onDelete }) {
@@ -7506,6 +7628,8 @@ const S = {
     WebkitBoxOrient: "vertical",
   },
   scriptFileRow: { display: "flex", alignItems: "center", gap: 10, background: "#fff", border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px" },
+  expenseFileRow: { display: "flex", alignItems: "center", gap: 8, background: T.paper, border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 10px" },
+  expenseFileLink: { flex: 1, fontSize: 12, color: T.ink, textDecoration: "none", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
   scriptFileLink: { flex: 1, fontSize: 13, color: T.ink, textDecoration: "none", fontWeight: 500 },
   scriptFileMeta: { fontSize: 11, color: T.textMuted },
   adminSettingsGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, marginTop: 12 },
