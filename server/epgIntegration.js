@@ -23,7 +23,20 @@ export function registerEpgRoutes(app) {
       });
     }
 
-    const saleDate = sale.timestamp ? new Date(sale.timestamp).toISOString().slice(0, 10) : null;
+    // sale.timestamp is a plain local string like "2026-09-21T14:30" with no
+    // timezone marker — exactly what the rep saw when they submitted it.
+    // Take the date directly from those characters rather than parsing it
+    // into a Date object and back out via toISOString(), which re-interprets
+    // the numbers through a timezone conversion and can shift the date by a
+    // day depending on time of day and which timezone that conversion runs in.
+    const saleDateOnly = sale.timestamp ? sale.timestamp.slice(0, 10) : null;
+    // EPG runs in EST/EDT, which is behind UTC. A bare "YYYY-MM-DD" date
+    // string gets parsed by most systems (including plain JS `new Date(...)`)
+    // as UTC MIDNIGHT — converting that back to EST rolls it back to the
+    // evening of the PREVIOUS day, which is exactly the "shows as yesterday"
+    // bug. Anchoring at noon UTC instead keeps the same calendar day no
+    // matter how EPG's system interprets and displays it.
+    const saleDate = saleDateOnly ? `${saleDateOnly}T12:00:00Z` : null;
 
     const payload = {
       saleDate,
