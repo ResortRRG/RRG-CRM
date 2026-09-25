@@ -2525,18 +2525,38 @@ export default function TeamCRM() {
   async function saveSale(form) {
     const skipEpgPush = !!form.skipEpgPush;
     const { skipEpgPush: _skipFlag, ...formWithoutSkipFlag } = form;
+    const isNew = !formWithoutSkipFlag.id;
+
+    // Fetch the absolute latest copy from the server right before merging in
+    // this change, rather than trusting whatever was already loaded in this
+    // browser tab. Two people saving around the same moment, each starting
+    // from their own slightly-stale local copy, would otherwise silently
+    // overwrite one another — whoever's write lands last wins, and the
+    // other person's change vanishes with no error and no trace. Re-fetching
+    // right here shrinks that collision window from "however long since this
+    // tab last refreshed" down to a fraction of a second.
+    let latestSales = sales;
+    try {
+      const latest = await window.storage.get("crm:sales", true);
+      latestSales = latest && latest.value ? JSON.parse(latest.value) : [];
+    } catch (err) {
+      console.error("Couldn't fetch latest sales before saving, falling back to local copy:", err);
+    }
+
     let savedSale;
     let wasAlreadyApproved = false;
     let nextSales;
-    const isNew = !formWithoutSkipFlag.id;
     if (formWithoutSkipFlag.id) {
-      const existing = sales.find((s) => s.id === formWithoutSkipFlag.id);
+      const existing =
+        latestSales.find((s) => s.id === formWithoutSkipFlag.id) || sales.find((s) => s.id === formWithoutSkipFlag.id);
       wasAlreadyApproved = !!(existing && existing.status === "Approved");
       savedSale = { ...existing, ...formWithoutSkipFlag };
-      nextSales = sales.map((s) => (s.id === formWithoutSkipFlag.id ? savedSale : s));
+      nextSales = latestSales.some((s) => s.id === formWithoutSkipFlag.id)
+        ? latestSales.map((s) => (s.id === formWithoutSkipFlag.id ? savedSale : s))
+        : [...latestSales, savedSale];
     } else {
       savedSale = { ...formWithoutSkipFlag, id: uid(), createdAt: Date.now(), submittedBy: currentUser ? currentUser.name : "" };
-      nextSales = [...sales, savedSale];
+      nextSales = [...latestSales, savedSale];
     }
     if (skipEpgPush) {
       savedSale = { ...savedSale, epgPushStatus: "success", epgPushedAt: new Date().toISOString(), epgPushError: null };
