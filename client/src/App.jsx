@@ -1006,6 +1006,36 @@ export default function TeamCRM() {
     setSales(next);
     persist(null, next, null, null, null, null, null, null, null);
   }
+  // Fetches the absolute latest sales list from the server rather than
+  // trusting whatever is already loaded in this browser tab. Two people
+  // acting on the sales list around the same moment — one adding a sale,
+  // another refunding or deleting a different one — would otherwise each
+  // start from their own slightly-stale copy and silently overwrite each
+  // other when they write back, with no error and no trace of what was
+  // lost. Every function that mutates the sales list should route its
+  // write through this + writeSalesDirect rather than the debounced
+  // updateSales() above, which is fine for less critical/lower-frequency
+  // state but not safe for concurrent edits to a shared list like this one.
+  async function fetchLatestSales() {
+    try {
+      const latest = await window.storage.get("crm:sales", true);
+      return latest && latest.value ? JSON.parse(latest.value) : [];
+    } catch (err) {
+      console.error("Couldn't fetch latest sales, falling back to local copy:", err);
+      return sales;
+    }
+  }
+  async function writeSalesDirect(nextSales) {
+    setSales(nextSales);
+    clearTimeout(saveTimer.current);
+    try {
+      await window.storage.set("crm:sales", JSON.stringify(nextSales), true);
+      return true;
+    } catch (err) {
+      console.error("Sales write failed:", err);
+      return false;
+    }
+  }
   function updateEmployees(next) {
     setEmployees(next);
     persist(null, null, next, null, null, null, null, null, null);
@@ -2535,13 +2565,7 @@ export default function TeamCRM() {
     // other person's change vanishes with no error and no trace. Re-fetching
     // right here shrinks that collision window from "however long since this
     // tab last refreshed" down to a fraction of a second.
-    let latestSales = sales;
-    try {
-      const latest = await window.storage.get("crm:sales", true);
-      latestSales = latest && latest.value ? JSON.parse(latest.value) : [];
-    } catch (err) {
-      console.error("Couldn't fetch latest sales before saving, falling back to local copy:", err);
-    }
+    const latestSales = await fetchLatestSales();
 
     let savedSale;
     let wasAlreadyApproved = false;
@@ -2639,48 +2663,50 @@ export default function TeamCRM() {
       });
     }
   }
-  function deleteSale(id) {
-    updateSales(sales.filter((s) => s.id !== id));
+  async function deleteSale(id) {
+    const latestSales = await fetchLatestSales();
+    const nextSales = latestSales.filter((s) => s.id !== id);
+    await writeSalesDirect(nextSales);
     setConfirmDelete(null);
     setSaleModal(null);
   }
-  function markRefunded(id, opts) {
-    updateSales(
-      sales.map((s) => {
-        if (s.id !== id) return s;
-        const amounts =
-          opts.type === "partial"
-            ? {
-                front: Number(opts.amounts.front) || 0,
-                close: Number(opts.amounts.close) || 0,
-                verification: Number(opts.amounts.verification) || 0,
-              }
-            : null;
-        return {
-          ...s,
-          refunded: true,
-          refundedAt: new Date().toISOString(),
-          refundType: opts.type,
-          refundAmounts: amounts,
-          refundAmount: opts.type === "partial" ? amounts.front + amounts.close + amounts.verification : Number(s.totalPrice) || 0,
-          refundWeekChoices: {
-            front: (opts.weekChoices && opts.weekChoices.front) || "next",
-            close: (opts.weekChoices && opts.weekChoices.close) || "next",
-            verification: (opts.weekChoices && opts.weekChoices.verification) || "next",
-          },
-        };
-      })
-    );
+  async function markRefunded(id, opts) {
+    const latestSales = await fetchLatestSales();
+    const nextSales = latestSales.map((s) => {
+      if (s.id !== id) return s;
+      const amounts =
+        opts.type === "partial"
+          ? {
+              front: Number(opts.amounts.front) || 0,
+              close: Number(opts.amounts.close) || 0,
+              verification: Number(opts.amounts.verification) || 0,
+            }
+          : null;
+      return {
+        ...s,
+        refunded: true,
+        refundedAt: new Date().toISOString(),
+        refundType: opts.type,
+        refundAmounts: amounts,
+        refundAmount: opts.type === "partial" ? amounts.front + amounts.close + amounts.verification : Number(s.totalPrice) || 0,
+        refundWeekChoices: {
+          front: (opts.weekChoices && opts.weekChoices.front) || "next",
+          close: (opts.weekChoices && opts.weekChoices.close) || "next",
+          verification: (opts.weekChoices && opts.weekChoices.verification) || "next",
+        },
+      };
+    });
+    await writeSalesDirect(nextSales);
     setConfirmRefund(null);
   }
-  function undoRefund(id) {
-    updateSales(
-      sales.map((s) =>
-        s.id === id
-          ? { ...s, refunded: false, refundedAt: "", refundType: "", refundAmount: "", refundAmounts: null }
-          : s
-      )
+  async function undoRefund(id) {
+    const latestSales = await fetchLatestSales();
+    const nextSales = latestSales.map((s) =>
+      s.id === id
+        ? { ...s, refunded: false, refundedAt: "", refundType: "", refundAmount: "", refundAmounts: null }
+        : s
     );
+    await writeSalesDirect(nextSales);
   }
   function saveEmployee(form) {
     if (form.id) {
