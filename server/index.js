@@ -27,6 +27,14 @@ registerEpgRoutes(app);
 registerBlacklistRoutes(app);
 registerScriptFileRoutes(app);
 
+// Lets the client detect when a new version has been deployed, so it can
+// prompt anyone with an old tab open to refresh rather than silently
+// keep running outdated code after a fix goes live.
+const SERVER_VERSION = String(Date.now());
+app.get("/api/version", (req, res) => {
+  res.json({ version: SERVER_VERSION });
+});
+
 // Serve the built React app (client/dist) in production.
 const clientDist = path.join(__dirname, "..", "client", "dist");
 app.use(express.static(clientDist));

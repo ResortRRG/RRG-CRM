@@ -849,6 +849,38 @@ export default function TeamCRM() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser && currentUser.id]);
 
+  // Detects when a new version has been deployed while this tab has been
+  // open, so whoever's using it gets told to refresh instead of silently
+  // continuing to run outdated code — including old bug fixes for things
+  // like sales getting lost when two people edit around the same time.
+  const [appVersion, setAppVersion] = useState(null);
+  const [newVersionAvailable, setNewVersionAvailable] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    async function checkVersion() {
+      try {
+        const res = await fetch("/api/version");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        setAppVersion((current) => {
+          if (current && data.version && data.version !== current) {
+            setNewVersionAvailable(true);
+          }
+          return current || data.version;
+        });
+      } catch (e) {
+        // ignore — this is a nice-to-have check, not critical path
+      }
+    }
+    checkVersion();
+    const versionInterval = setInterval(checkVersion, 60000);
+    return () => {
+      cancelled = true;
+      clearInterval(versionInterval);
+    };
+  }, []);
+
   useEffect(() => {
     (async () => {
       try {
@@ -2956,6 +2988,18 @@ export default function TeamCRM() {
       </div>
 
       <div style={S.main}>
+        {newVersionAvailable && (
+          <div style={S.newVersionBanner}>
+            <AlertTriangle size={15} style={{ flexShrink: 0 }} />
+            <span style={{ flex: 1 }}>
+              A newer version of the CRM is available. Refresh to make sure you have the latest fixes — data entered
+              before refreshing is safe, this won't lose anything.
+            </span>
+            <button onClick={() => window.location.reload()} style={S.newVersionRefreshBtn}>
+              Refresh now
+            </button>
+          </div>
+        )}
         {blacklistFailure && (
           <div style={S.blacklistFailureBanner}>
             <AlertTriangle size={15} style={{ flexShrink: 0 }} />
@@ -7748,6 +7792,29 @@ const S = {
     fontWeight: 500,
   },
   blacklistFailureDismiss: { border: "none", background: "transparent", padding: 4, borderRadius: 6, color: "#8A5A1E", display: "flex", flexShrink: 0 },
+  newVersionBanner: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    background: "#E1EAF5",
+    color: "#2A5488",
+    borderBottom: "1px solid #B9CCE3",
+    padding: "10px 24px",
+    fontSize: 12.5,
+    fontWeight: 500,
+  },
+  newVersionRefreshBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    flexShrink: 0,
+    background: "#2A5488",
+    color: "#fff",
+    border: "none",
+    borderRadius: 7,
+    padding: "6px 12px",
+    fontSize: 12,
+    fontWeight: 600,
+  },
   addressSuggestions: {
     position: "absolute",
     top: "100%",
