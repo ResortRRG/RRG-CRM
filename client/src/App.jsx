@@ -106,6 +106,8 @@ const DEFAULT_SETTINGS = {
   leadCategories: DEFAULT_LEAD_CATEGORIES,
   expenseCategories: DEFAULT_EXPENSE_CATEGORIES,
   monsterCommissionRate: 68,
+  monsterCommissionRatePaper: 70,
+  monsterCommissionRateDialer: 63,
   pgrCommissionRate: 75,
 };
 
@@ -1641,6 +1643,15 @@ export default function TeamCRM() {
   const reportsTotalPackagePrice = reportsApprovedSales.reduce((s, r) => s + (Number(r.packagePrice) || 0), 0);
   const reportsTotalDateFlex = reportsApprovedSales.reduce((s, r) => s + (Number(r.dateFlex) || 0), 0);
   const reportsTotalRefunded = reportsRefundedSales.reduce((s, r) => s + (Number(r.refundAmount) || 0), 0);
+  // Monster pays a different commission rate depending on the channel the
+  // sale came through — Paper and Dialer each have their own rate. Any
+  // other/unset source falls back to the old flat rate so nothing breaks
+  // if a new source gets added to the dropdown list later.
+  function monsterRateForSale(sale) {
+    if (sale.source === "Paper") return Number(settings.monsterCommissionRatePaper ?? settings.monsterCommissionRate) || 0;
+    if (sale.source === "Dialer") return Number(settings.monsterCommissionRateDialer ?? settings.monsterCommissionRate) || 0;
+    return Number(settings.monsterCommissionRate) || 0;
+  }
   const reportsSourceBreakdown = settings.leadSources.map((src) => {
     const rows = reportsApprovedSales.filter((s) => s.leadSubmittedTo === src);
     return { source: src, count: rows.length, total: rows.reduce((sum, r) => sum + (Number(r.totalPrice) || 0), 0) };
@@ -1652,7 +1663,15 @@ export default function TeamCRM() {
   const reportsDeclined = reportsSales.filter((s) => s.status === "Declined");
   const reportsMonsterTotal = (reportsSourceBreakdown.find((r) => r.source === "Monster") || {}).total || 0;
   const reportsPgrTotal = (reportsSourceBreakdown.find((r) => r.source === "PGR") || {}).total || 0;
-  const reportsMonsterCommission = reportsMonsterTotal * ((Number(settings.monsterCommissionRate) || 0) / 100);
+  const reportsMonsterSales = reportsApprovedSales.filter((s) => s.leadSubmittedTo === "Monster");
+  const reportsMonsterPaperSales = reportsMonsterSales.filter((s) => s.source === "Paper");
+  const reportsMonsterDialerSales = reportsMonsterSales.filter((s) => s.source === "Dialer");
+  const reportsMonsterPaperTotal = reportsMonsterPaperSales.reduce((sum, s) => sum + (Number(s.totalPrice) || 0), 0);
+  const reportsMonsterDialerTotal = reportsMonsterDialerSales.reduce((sum, s) => sum + (Number(s.totalPrice) || 0), 0);
+  const reportsMonsterCommission = reportsMonsterSales.reduce(
+    (sum, s) => sum + (Number(s.totalPrice) || 0) * (monsterRateForSale(s) / 100),
+    0
+  );
   const reportsPgrCommission = reportsPgrTotal * ((Number(settings.pgrCommissionRate) || 0) / 100);
 
   const pnlMonth = getMonthRange(pnlMonthOffset);
@@ -1694,10 +1713,9 @@ export default function TeamCRM() {
   const pnlMonthKey = pnlExpenseSourceMonthKey;
   const pnlMonthLabel = pnlIsMultiMonth ? pnlPeriodLabel : pnlExpenseSourceMonthLabel;
   const pnlPeriodSales = sales.filter((s) => s.status === "Approved" && isSaleInRange(s, pnlPeriodStart, pnlPeriodEnd));
-  const pnlMonsterRevenue =
-    pnlPeriodSales
-      .filter((s) => s.leadSubmittedTo === "Monster")
-      .reduce((sum, s) => sum + (Number(s.totalPrice) || 0), 0) * ((Number(settings.monsterCommissionRate) || 0) / 100);
+  const pnlMonsterRevenue = pnlPeriodSales
+    .filter((s) => s.leadSubmittedTo === "Monster")
+    .reduce((sum, s) => sum + (Number(s.totalPrice) || 0) * (monsterRateForSale(s) / 100), 0);
   const pnlPgrRevenue =
     pnlPeriodSales
       .filter((s) => s.leadSubmittedTo === "PGR")
@@ -1708,10 +1726,9 @@ export default function TeamCRM() {
   const pnlRefundedSales = sales.filter(
     (s) => s.refunded && isSaleInRange({ timestamp: s.refundedAt }, pnlPeriodStart, pnlPeriodEnd)
   );
-  const pnlMonsterRefunds =
-    pnlRefundedSales
-      .filter((s) => s.leadSubmittedTo === "Monster")
-      .reduce((sum, s) => sum + (Number(s.refundAmount) || 0), 0) * ((Number(settings.monsterCommissionRate) || 0) / 100);
+  const pnlMonsterRefunds = pnlRefundedSales
+    .filter((s) => s.leadSubmittedTo === "Monster")
+    .reduce((sum, s) => sum + (Number(s.refundAmount) || 0) * (monsterRateForSale(s) / 100), 0);
   const pnlPgrRefunds =
     pnlRefundedSales
       .filter((s) => s.leadSubmittedTo === "PGR")
@@ -2012,7 +2029,7 @@ export default function TeamCRM() {
       const companyRevenue = empSales.reduce((sum, s) => {
         const contractRate =
           s.leadSubmittedTo === "Monster"
-            ? (Number(settings.monsterCommissionRate) || 0) / 100
+            ? monsterRateForSale(s) / 100
             : s.leadSubmittedTo === "PGR"
             ? (Number(settings.pgrCommissionRate) || 0) / 100
             : 0;
@@ -4906,10 +4923,21 @@ export default function TeamCRM() {
             <div style={S.sourceGrid}>
               <div style={S.sourceCard}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ ...S.leadBadge, background: chartColor("Monster") + "22", color: chartColor("Monster") }}>Monster</span>
-                  <span style={S.sourceCount}>{settings.monsterCommissionRate}% of {money(reportsMonsterTotal)}</span>
+                  <span style={{ ...S.leadBadge, background: chartColor("Monster") + "22", color: chartColor("Monster") }}>Monster — Paper</span>
+                  <span style={S.sourceCount}>{settings.monsterCommissionRatePaper}% of {money(reportsMonsterPaperTotal)}</span>
                 </div>
-                <div style={S.sourceValue}>{money(reportsMonsterCommission)}</div>
+                <div style={S.sourceValue}>
+                  {money(reportsMonsterPaperSales.reduce((sum, s) => sum + (Number(s.totalPrice) || 0) * (monsterRateForSale(s) / 100), 0))}
+                </div>
+              </div>
+              <div style={S.sourceCard}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ ...S.leadBadge, background: chartColor("Monster") + "22", color: chartColor("Monster") }}>Monster — Dialer</span>
+                  <span style={S.sourceCount}>{settings.monsterCommissionRateDialer}% of {money(reportsMonsterDialerTotal)}</span>
+                </div>
+                <div style={S.sourceValue}>
+                  {money(reportsMonsterDialerSales.reduce((sum, s) => sum + (Number(s.totalPrice) || 0) * (monsterRateForSale(s) / 100), 0))}
+                </div>
               </div>
               <div style={S.sourceCard}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -5064,8 +5092,9 @@ export default function TeamCRM() {
                   </div>
                 </div>
                 <div style={S.hint}>
-                  Revenue is your actual commission for {pnlPeriodLabel} — {settings.monsterCommissionRate}% of Monster
-                  sales and {settings.pgrCommissionRate}% of PGR sales, not the customer's full package price, minus
+                  Revenue is your actual commission for {pnlPeriodLabel} — {settings.monsterCommissionRatePaper}% of
+                  Monster Paper sales, {settings.monsterCommissionRateDialer}% of Monster Dialer sales, and{" "}
+                  {settings.pgrCommissionRate}% of PGR sales, not the customer's full package price, minus
                   the commission-equivalent of any refunds recorded in this period. Payroll is calculated automatically
                   from actual payroll data for this period. {pnlMode === "week"
                     ? `Other expenses are entered monthly (${pnlExpenseSourceMonthLabel}) and shown here as a 1/${pnlWeeksInSourceMonth.toFixed(1)} weekly share — edit them from Monthly view.`
@@ -5673,10 +5702,19 @@ export default function TeamCRM() {
               </div>
 
               <div>
-                <div style={S.fieldLabel}>Monster commission %</div>
+                <div style={S.fieldLabel}>Monster commission % (Paper)</div>
                 <input
-                  value={settings.monsterCommissionRate}
-                  onChange={(e) => updateSettings({ ...settings, monsterCommissionRate: Number(e.target.value) || 0 })}
+                  value={settings.monsterCommissionRatePaper}
+                  onChange={(e) => updateSettings({ ...settings, monsterCommissionRatePaper: Number(e.target.value) || 0 })}
+                  type="number"
+                  style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }}
+                />
+              </div>
+              <div>
+                <div style={S.fieldLabel}>Monster commission % (Dialer)</div>
+                <input
+                  value={settings.monsterCommissionRateDialer}
+                  onChange={(e) => updateSettings({ ...settings, monsterCommissionRateDialer: Number(e.target.value) || 0 })}
                   type="number"
                   style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }}
                 />
