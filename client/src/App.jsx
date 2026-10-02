@@ -717,8 +717,9 @@ export default function TeamCRM() {
       setContacts([]);
     }
     try {
-      const s = await window.storage.get("crm:sales", true);
-      setSales(s && s.value ? JSON.parse(s.value) : []);
+      const res = await fetch("/api/sales", { credentials: "include" });
+      const data = await res.json();
+      setSales(data.sales || []);
     } catch (e) {
       setSales([]);
     }
@@ -1034,39 +1035,53 @@ export default function TeamCRM() {
     setContacts(next);
     persist(next, null, null, null, null, null, null, null, null);
   }
-  function updateSales(next) {
-    setSales(next);
-    persist(null, next, null, null, null, null, null, null, null);
-  }
-  // Fetches the absolute latest sales list from the server rather than
-  // trusting whatever is already loaded in this browser tab. Two people
-  // acting on the sales list around the same moment — one adding a sale,
-  // another refunding or deleting a different one — would otherwise each
-  // start from their own slightly-stale copy and silently overwrite each
-  // other when they write back, with no error and no trace of what was
-  // lost. Every function that mutates the sales list should route its
-  // write through this + writeSalesDirect rather than the debounced
-  // updateSales() above, which is fine for less critical/lower-frequency
-  // state but not safe for concurrent edits to a shared list like this one.
-  async function fetchLatestSales() {
-    try {
-      const latest = await window.storage.get("crm:sales", true);
-      return latest && latest.value ? JSON.parse(latest.value) : [];
-    } catch (err) {
-      console.error("Couldn't fetch latest sales, falling back to local copy:", err);
-      return sales;
+  // Sale mutations go through these dedicated per-row endpoints instead of
+  // the shared blob pattern used for contacts/employees/etc. above. Each
+  // sale is its own database row now, so two people changing two different
+  // sales at the same time can never collide the way a shared-list
+  // read-modify-write could — this is the fix for sales silently vanishing
+  // when two people acted around the same moment.
+  async function createSaleOnServer(sale) {
+    const res = await fetch("/api/sales", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(sale),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || "status " + res.status);
     }
+    const data = await res.json();
+    return data.sale;
   }
-  async function writeSalesDirect(nextSales) {
-    setSales(nextSales);
-    clearTimeout(saveTimer.current);
-    try {
-      await window.storage.set("crm:sales", JSON.stringify(nextSales), true);
-      return true;
-    } catch (err) {
-      console.error("Sales write failed:", err);
-      return false;
+  async function updateSaleOnServer(id, patch) {
+    const res = await fetch(`/api/sales/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || "status " + res.status);
     }
+    const data = await res.json();
+    return data.sale;
+  }
+  async function deleteSaleOnServer(id) {
+    await fetch(`/api/sales/${id}`, { method: "DELETE", credentials: "include" });
+  }
+  // Only for genuine full-dataset admin operations (restore backup, import
+  // historical leads, merge employees) — see the comment on the server
+  // route for why those legitimately need to replace everything at once.
+  async function bulkReplaceSalesOnServer(nextSales) {
+    await fetch("/api/sales/bulk-replace", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ sales: nextSales }),
+    });
   }
   function updateEmployees(next) {
     setEmployees(next);
@@ -2438,7 +2453,7 @@ export default function TeamCRM() {
       if (backup.workedSaturdays) setWorkedSaturdays(backup.workedSaturdays);
       if (backup.candidates) setCandidates(backup.candidates);
       if (backup.contacts) await window.storage.set("crm:contacts", JSON.stringify(backup.contacts), true);
-      if (backup.sales) await window.storage.set("crm:sales", JSON.stringify(backup.sales), true);
+      if (backup.sales) await bulkReplaceSalesOnServer(backup.sales);
       if (backup.employees) await window.storage.set("crm:employees", JSON.stringify(backup.employees), true);
       if (backup.payrollOverrides) await window.storage.set("crm:payrollOverrides", JSON.stringify(backup.payrollOverrides), true);
       if (backup.attendance) await window.storage.set("crm:attendance", JSON.stringify(backup.attendance), true);
@@ -2520,7 +2535,7 @@ export default function TeamCRM() {
       ];
       setEmployees(nextEmployees);
       setSales(nextSales);
-      await window.storage.set("crm:sales", JSON.stringify(nextSales), true);
+      await bulkReplaceSalesOnServer(nextSales);
       await window.storage.set("crm:employees", JSON.stringify(nextEmployees), true);
       setConfirmImportLeads(null);
       setBackupStatus("restored");
@@ -2562,7 +2577,7 @@ export default function TeamCRM() {
       closerId: idRedirect[s.closerId] || s.closerId,
       verificationId: idRedirect[s.verificationId] || s.verificationId,
     }));
-    await window.storage.set("crm:sales", JSON.stringify(nextSales), true);
+    await bulkReplaceSalesOnServer(nextSales);
     await window.storage.set("crm:employees", JSON.stringify(nextEmployees), true);
     setEmployees(nextEmployees);
     setSales(nextSales);
@@ -2589,47 +2604,32 @@ export default function TeamCRM() {
     const { skipEpgPush: _skipFlag, ...formWithoutSkipFlag } = form;
     const isNew = !formWithoutSkipFlag.id;
 
-    // Fetch the absolute latest copy from the server right before merging in
-    // this change, rather than trusting whatever was already loaded in this
-    // browser tab. Two people saving around the same moment, each starting
-    // from their own slightly-stale local copy, would otherwise silently
-    // overwrite one another — whoever's write lands last wins, and the
-    // other person's change vanishes with no error and no trace. Re-fetching
-    // right here shrinks that collision window from "however long since this
-    // tab last refreshed" down to a fraction of a second.
-    const latestSales = await fetchLatestSales();
-
-    let savedSale;
     let wasAlreadyApproved = false;
-    let nextSales;
-    if (formWithoutSkipFlag.id) {
-      const existing =
-        latestSales.find((s) => s.id === formWithoutSkipFlag.id) || sales.find((s) => s.id === formWithoutSkipFlag.id);
+    if (!isNew) {
+      const existing = sales.find((s) => s.id === formWithoutSkipFlag.id);
       wasAlreadyApproved = !!(existing && existing.status === "Approved");
-      savedSale = { ...existing, ...formWithoutSkipFlag };
-      nextSales = latestSales.some((s) => s.id === formWithoutSkipFlag.id)
-        ? latestSales.map((s) => (s.id === formWithoutSkipFlag.id ? savedSale : s))
-        : [...latestSales, savedSale];
-    } else {
-      savedSale = { ...formWithoutSkipFlag, id: uid(), createdAt: Date.now(), submittedBy: currentUser ? currentUser.name : "" };
-      nextSales = [...latestSales, savedSale];
-    }
-    if (skipEpgPush) {
-      savedSale = { ...savedSale, epgPushStatus: "success", epgPushedAt: new Date().toISOString(), epgPushError: null };
-      nextSales = nextSales.map((s) => (s.id === savedSale.id ? savedSale : s));
     }
 
-    // Write directly and WAIT for confirmation before showing success,
-    // closing the modal, or pushing to EPG. The debounced persist() used
-    // for most other state in this app can be silently interrupted if the
-    // tab closes or the device loses connectivity right after submitting —
-    // for a brand-new sale, that would lose it completely with no error
-    // shown and no trace left behind, which is unacceptable for real data.
-    setSales(nextSales);
-    clearTimeout(saveTimer.current);
+    const candidateSale = isNew
+      ? { ...formWithoutSkipFlag, id: uid(), createdAt: Date.now(), submittedBy: currentUser ? currentUser.name : "" }
+      : { ...formWithoutSkipFlag };
+    if (skipEpgPush) {
+      candidateSale.epgPushStatus = "success";
+      candidateSale.epgPushedAt = new Date().toISOString();
+      candidateSale.epgPushError = null;
+    }
+
+    // Create/update this ONE sale as its own database row — this can't
+    // collide with anything happening to a different sale at the same
+    // moment, since each sale is now an independent atomic row rather than
+    // everyone sharing one big list that gets rewritten in full on every
+    // change. Waiting for confirmation here (rather than updating the
+    // screen optimistically first) is what prevents a sale from being lost
+    // if the tab closes or the connection drops right after saving.
     setSaleSaveError("");
+    let savedSale;
     try {
-      await window.storage.set("crm:sales", JSON.stringify(nextSales), true);
+      savedSale = isNew ? await createSaleOnServer(candidateSale) : await updateSaleOnServer(candidateSale.id, candidateSale);
     } catch (err) {
       console.error("Sale save failed:", err);
       setSaleSaveError(
@@ -2637,6 +2637,11 @@ export default function TeamCRM() {
       );
       return;
     }
+
+    setSales((prev) => {
+      const exists = prev.some((s) => s.id === savedSale.id);
+      return exists ? prev.map((s) => (s.id === savedSale.id ? savedSale : s)) : [...prev, savedSale];
+    });
 
     if (isNew) {
       setEntryJustSaved(true);
@@ -2660,6 +2665,7 @@ export default function TeamCRM() {
     setSaleModalMinimized(false);
   }
   async function pushSaleToEpg(sale) {
+    let patch;
     try {
       const res = await fetch("/api/epg/push-sale", {
         method: "POST",
@@ -2668,77 +2674,67 @@ export default function TeamCRM() {
         body: JSON.stringify(sale),
       });
       const data = await res.json().catch(() => ({}));
-      const patch = res.ok
+      patch = res.ok
         ? { epgPushStatus: "success", epgPushedAt: new Date().toISOString(), epgPushError: null }
         : { epgPushStatus: "failed", epgPushError: data.error || `EPG rejected the request (status ${res.status}).` };
-      // The updateSales() call just above scheduled a DEBOUNCED write of the
-      // sale as it looked before this EPG patch (see persist(), 250ms
-      // timer). If that stale timer fires after this direct write, it
-      // silently overwrites the epgPushStatus we're setting right now — so
-      // cancel it first. This is the fix for the badge disappearing even
-      // though EPG genuinely received the sale.
-      clearTimeout(saveTimer.current);
-      setSales((prev) => {
-        const next = prev.map((s) => (s.id === sale.id ? { ...s, ...patch } : s));
-        window.storage.set("crm:sales", JSON.stringify(next), true).catch((e) => console.error("EPG status save failed", e));
-        return next;
-      });
     } catch (err) {
       console.error("EPG push failed:", err);
-      clearTimeout(saveTimer.current);
-      setSales((prev) => {
-        const next = prev.map((s) =>
-          s.id === sale.id ? { ...s, epgPushStatus: "failed", epgPushError: "Network error reaching EPG" } : s
-        );
-        window.storage.set("crm:sales", JSON.stringify(next), true).catch((e) => console.error("EPG status save failed", e));
-        return next;
-      });
+      patch = { epgPushStatus: "failed", epgPushError: "Network error reaching EPG" };
+    }
+    try {
+      const updated = await updateSaleOnServer(sale.id, patch);
+      setSales((prev) => prev.map((s) => (s.id === sale.id ? updated : s)));
+    } catch (err) {
+      console.error("Saving EPG push status failed:", err);
     }
   }
   async function deleteSale(id) {
-    const latestSales = await fetchLatestSales();
-    const nextSales = latestSales.filter((s) => s.id !== id);
-    await writeSalesDirect(nextSales);
+    await deleteSaleOnServer(id);
+    setSales((prev) => prev.filter((s) => s.id !== id));
     setConfirmDelete(null);
     setSaleModal(null);
   }
   async function markRefunded(id, opts) {
-    const latestSales = await fetchLatestSales();
-    const nextSales = latestSales.map((s) => {
-      if (s.id !== id) return s;
-      const amounts =
-        opts.type === "partial"
-          ? {
-              front: Number(opts.amounts.front) || 0,
-              close: Number(opts.amounts.close) || 0,
-              verification: Number(opts.amounts.verification) || 0,
-            }
-          : null;
-      return {
-        ...s,
-        refunded: true,
-        refundedAt: new Date().toISOString(),
-        refundType: opts.type,
-        refundAmounts: amounts,
-        refundAmount: opts.type === "partial" ? amounts.front + amounts.close + amounts.verification : Number(s.totalPrice) || 0,
-        refundWeekChoices: {
-          front: (opts.weekChoices && opts.weekChoices.front) || "next",
-          close: (opts.weekChoices && opts.weekChoices.close) || "next",
-          verification: (opts.weekChoices && opts.weekChoices.verification) || "next",
-        },
-      };
-    });
-    await writeSalesDirect(nextSales);
+    const amounts =
+      opts.type === "partial"
+        ? {
+            front: Number(opts.amounts.front) || 0,
+            close: Number(opts.amounts.close) || 0,
+            verification: Number(opts.amounts.verification) || 0,
+          }
+        : null;
+    const patch = {
+      refunded: true,
+      refundedAt: new Date().toISOString(),
+      refundType: opts.type,
+      refundAmounts: amounts,
+      refundAmount: opts.type === "partial" ? amounts.front + amounts.close + amounts.verification : undefined,
+      refundWeekChoices: {
+        front: (opts.weekChoices && opts.weekChoices.front) || "next",
+        close: (opts.weekChoices && opts.weekChoices.close) || "next",
+        verification: (opts.weekChoices && opts.weekChoices.verification) || "next",
+      },
+    };
+    if (patch.refundAmount === undefined) {
+      const existing = sales.find((s) => s.id === id);
+      patch.refundAmount = Number(existing && existing.totalPrice) || 0;
+    }
+    try {
+      const updated = await updateSaleOnServer(id, patch);
+      setSales((prev) => prev.map((s) => (s.id === id ? updated : s)));
+    } catch (err) {
+      console.error("Refund save failed:", err);
+    }
     setConfirmRefund(null);
   }
   async function undoRefund(id) {
-    const latestSales = await fetchLatestSales();
-    const nextSales = latestSales.map((s) =>
-      s.id === id
-        ? { ...s, refunded: false, refundedAt: "", refundType: "", refundAmount: "", refundAmounts: null }
-        : s
-    );
-    await writeSalesDirect(nextSales);
+    const patch = { refunded: false, refundedAt: "", refundType: "", refundAmount: "", refundAmounts: null };
+    try {
+      const updated = await updateSaleOnServer(id, patch);
+      setSales((prev) => prev.map((s) => (s.id === id ? updated : s)));
+    } catch (err) {
+      console.error("Undo refund failed:", err);
+    }
   }
   function saveEmployee(form) {
     if (form.id) {

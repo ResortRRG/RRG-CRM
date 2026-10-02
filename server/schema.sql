@@ -74,3 +74,21 @@ CREATE TABLE IF NOT EXISTS script_files (
   uploaded_by TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Sales, one row per sale. Previously the entire sales list lived as a
+-- single JSON blob under the "crm:sales" key in app_data, read in full,
+-- modified in memory, and written back in full on every change. Two people
+-- changing different sales around the same moment would each start from
+-- their own copy of that whole list and the later write would silently
+-- overwrite whatever the earlier one had just added or changed — which is
+-- what caused sales to vanish. With each sale as its own row, adding,
+-- editing, or deleting one sale is a single atomic operation on that one
+-- row; it cannot collide with anything happening to a different sale.
+-- `data` holds everything about the sale except its id, exactly the same
+-- shape the frontend has always used — this avoids a much larger, riskier
+-- rewrite into individual typed columns for 30+ fields.
+CREATE TABLE IF NOT EXISTS sales (
+  id TEXT PRIMARY KEY,
+  data JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
