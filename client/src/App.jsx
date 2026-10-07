@@ -571,6 +571,7 @@ export default function TeamCRM() {
   const [payrollOverrides, setPayrollOverrides] = useState({});
   const [refundDeductionOverrides, setRefundDeductionOverrides] = useState({});
   const [workedSaturdays, setWorkedSaturdays] = useState({});
+  const [payrollNotes, setPayrollNotes] = useState({});
   const [attendance, setAttendance] = useState({});
   const [spiffs, setSpiffs] = useState({});
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
@@ -764,6 +765,12 @@ export default function TeamCRM() {
       setWorkedSaturdays(ws && ws.value ? JSON.parse(ws.value) : {});
     } catch (e) {
       setWorkedSaturdays({});
+    }
+    try {
+      const pn = await window.storage.get("crm:payrollNotes", true);
+      setPayrollNotes(pn && pn.value ? JSON.parse(pn.value) : {});
+    } catch (e) {
+      setPayrollNotes({});
     }
     try {
       const cand = await window.storage.get("crm:candidates", true);
@@ -1234,6 +1241,25 @@ export default function TeamCRM() {
       await window.storage.set("crm:workedSaturdays", JSON.stringify(next), true);
     } catch (err) {
       console.error("Worked Saturday save failed:", err);
+    }
+  }
+  // Payroll notes — one free-text note per employee per pay week (e.g. "Owes $50 – uniform").
+  // Same employeeId__weekMonday key shape as the other per-week payroll maps.
+  function getPayrollNote(employeeId, weekStart) {
+    return payrollNotes[workedSaturdayKey(employeeId, weekStart)] || "";
+  }
+  async function setPayrollNoteValue(employeeId, weekStart, value) {
+    const key = workedSaturdayKey(employeeId, weekStart);
+    const text = (value || "").trim();
+    if ((payrollNotes[key] || "") === text) return;
+    const next = { ...payrollNotes };
+    if (text) next[key] = text;
+    else delete next[key];
+    setPayrollNotes(next);
+    try {
+      await window.storage.set("crm:payrollNotes", JSON.stringify(next), true);
+    } catch (err) {
+      console.error("Payroll note save failed:", err);
     }
   }
   function effectiveMinGuarantee(employeeId, weekStart) {
@@ -2419,6 +2445,7 @@ export default function TeamCRM() {
       expenseTransactions,
       infoNotes,
       workedSaturdays,
+      payrollNotes,
       candidates,
     };
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
@@ -2468,6 +2495,7 @@ export default function TeamCRM() {
       if (backup.expenseTransactions) setExpenseTransactions(backup.expenseTransactions);
       if (backup.infoNotes) setInfoNotes(backup.infoNotes);
       if (backup.workedSaturdays) setWorkedSaturdays(backup.workedSaturdays);
+      if (backup.payrollNotes) setPayrollNotes(backup.payrollNotes);
       if (backup.candidates) setCandidates(backup.candidates);
       if (backup.contacts) await window.storage.set("crm:contacts", JSON.stringify(backup.contacts), true);
       if (backup.sales) await bulkReplaceSalesOnServer(backup.sales);
@@ -2484,6 +2512,7 @@ export default function TeamCRM() {
       if (backup.infoNotes) await window.storage.set("crm:infoNotes", JSON.stringify(backup.infoNotes), true);
       if (backup.workedSaturdays)
         await window.storage.set("crm:workedSaturdays", JSON.stringify(backup.workedSaturdays), true);
+      if (backup.payrollNotes) await window.storage.set("crm:payrollNotes", JSON.stringify(backup.payrollNotes), true);
       if (backup.candidates) await window.storage.set("crm:candidates", JSON.stringify(backup.candidates), true);
       setConfirmRestoreBackup(null);
       setBackupStatus("restored");
@@ -4467,7 +4496,7 @@ export default function TeamCRM() {
               </div>
             </div>
             <div style={S.hint}>
-              Everyone is guaranteed at least {money(settings.minWeeklyPay)} for the week — if commission plus base pay comes in under that, they're paid the guaranteed amount instead. Sales Total reflects only the week shown here, not an all-time figure. Each day marked Absent on the RRG Board knocks {money(ABSENCE_GUARANTEE_DEDUCTION)} off that person's guarantee for the week. Refunds marked in All Leads deduct the involved employees' credited commission from the payroll week right after the refund was recorded — that Refund Deduction amount is editable too, so if someone's paying a refund back over a few pay periods instead of all at once, you can lower this week's amount and it'll show a reset button to bring back the full calculated figure. Total pay is editable the same way — click into the amount to override it for that person's that week; a reset button brings back the calculated number.
+              Everyone is guaranteed at least {money(settings.minWeeklyPay)} for the week — if commission plus base pay comes in under that, they're paid the guaranteed amount instead. Sales Total reflects only the week shown here, not an all-time figure. Each day marked Absent on the RRG Board knocks {money(ABSENCE_GUARANTEE_DEDUCTION)} off that person's guarantee for the week. Refunds marked in All Leads deduct the involved employees' credited commission from the payroll week right after the refund was recorded — that Refund Deduction amount is editable too, so if someone's paying a refund back over a few pay periods instead of all at once, you can lower this week's amount and it'll show a reset button to bring back the full calculated figure. Total pay is editable the same way — click into the amount to override it for that person's that week; a reset button brings back the calculated number. Use the Notes column to jot down anything about that person's pay for the week — like money they owe and what it's for. Notes save when you click away and stay with that week only.
             </div>
 
             {payrollEmployeesForWeek.length === 0 ? (
@@ -4479,7 +4508,7 @@ export default function TeamCRM() {
               </div>
             ) : (
               <div className="crm-scroll" style={S.tableScroll}>
-                <table style={{ ...S.table, minWidth: 940 }}>
+                <table style={{ ...S.table, minWidth: 1140 }}>
                   <thead>
                     <tr>
                       <th style={{ ...S.th, fontSize: 12 }}>Employee</th>
@@ -4491,6 +4520,7 @@ export default function TeamCRM() {
                       <th style={{ ...S.th, fontSize: 12 }}>Draw</th>
                       <th style={{ ...S.th, fontSize: 12 }}>Spiff</th>
                       <th style={{ ...S.th, fontSize: 12 }}>Total pay</th>
+                      <th style={{ ...S.th, fontSize: 12 }}>Notes</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -4646,6 +4676,13 @@ export default function TeamCRM() {
                               </label>
                             )}
                           </td>
+                          <td style={{ ...S.td, minWidth: 200, verticalAlign: "middle" }} onClick={(e) => e.stopPropagation()}>
+                            <PayrollNoteCell
+                              key={emp.id + "__" + payrollWeek.start.toISOString().slice(0, 10)}
+                              value={getPayrollNote(emp.id, payrollWeek.start)}
+                              onSave={(text) => setPayrollNoteValue(emp.id, payrollWeek.start, text)}
+                            />
+                          </td>
                         </tr>
                       );
                     })}
@@ -4683,6 +4720,7 @@ export default function TeamCRM() {
                           }, 0)
                         )}
                       </td>
+                      <td style={S.td} />
                     </tr>
                   </tfoot>
                 </table>
@@ -6433,6 +6471,58 @@ function Modal({ children, onClose, narrow, wide, disableBackdropClose, printabl
   );
 }
 
+// Inline, auto-growing note box for one employee's pay week. Keeps its own
+// draft while typing and only saves on blur (or Enter), so it isn't writing
+// to the server on every keystroke. Shift+Enter adds a new line; Esc cancels.
+function PayrollNoteCell({ value, onSave }) {
+  const [draft, setDraft] = useState(value);
+  const [focused, setFocused] = useState(false);
+  const ref = useRef(null);
+  const cancelRef = useRef(false);
+  useEffect(() => {
+    if (!focused) setDraft(value);
+  }, [value, focused]);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
+  }, [draft, focused]);
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      value={draft}
+      placeholder="Add note…"
+      onFocus={() => setFocused(true)}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        setFocused(false);
+        if (cancelRef.current) {
+          cancelRef.current = false;
+          setDraft(value);
+          return;
+        }
+        onSave(draft);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          e.currentTarget.blur();
+        } else if (e.key === "Escape") {
+          cancelRef.current = true;
+          e.currentTarget.blur();
+        }
+      }}
+      style={{
+        ...S.payrollNoteInput,
+        ...(focused ? S.payrollNoteInputFocused : {}),
+        ...(draft && !focused ? S.payrollNoteInputFilled : {}),
+      }}
+    />
+  );
+}
+
 function Field({ label, children, required }) {
   return (
     <div style={{ marginBottom: 12 }}>
@@ -7718,6 +7808,23 @@ const S = {
   minGuaranteeBadge: { fontSize: 9, fontWeight: 600, background: "#FBF3E6", color: "#8A5A1E", padding: "1px 6px", borderRadius: 20 },
   customPayNote: { fontSize: 9.5, color: "#8A5A1E", marginTop: 2 },
   workedSaturdayLabel: { display: "flex", alignItems: "center", gap: 4, fontSize: 9.5, color: T.textMuted, marginTop: 3 },
+  payrollNoteInput: {
+    width: "100%",
+    minWidth: 180,
+    border: "1px solid transparent",
+    borderRadius: 6,
+    padding: "5px 7px",
+    fontSize: 12.5,
+    lineHeight: 1.4,
+    color: T.ink,
+    background: "transparent",
+    resize: "none",
+    overflow: "hidden",
+    outline: "none",
+    display: "block",
+  },
+  payrollNoteInputFilled: { background: "#FBF6EA", border: "1px solid #EADFC4" },
+  payrollNoteInputFocused: { background: "#fff", border: `1px solid ${T.pine}` },
   reportsSubTabs: { display: "flex", gap: 4, marginBottom: 18, borderBottom: `1px solid ${T.border}` },
   reportsSubTabBtn: {
     border: "none",
