@@ -4015,6 +4015,37 @@ export default function TeamCRM() {
                   : employeeStatsMode === "year"
                   ? formatYearLabel(employeeStatsYear.start)
                   : "all-time";
+              const attendanceCountsFor = (empId) => {
+                let absent = 0;
+                let late = 0;
+                const prefix = empId + "__";
+                Object.keys(attendance).forEach((k) => {
+                  if (k.indexOf(prefix) !== 0) return;
+                  const ds = k.slice(prefix.length);
+                  if (employeeStatsRange) {
+                    const d = new Date(ds + "T12:00:00");
+                    if (isNaN(d.getTime()) || d < employeeStatsRange.start || d > employeeStatsRange.end) return;
+                  }
+                  const st = attendance[k];
+                  if (st === "absent" || st === "unexcused_absent") absent++;
+                  else if (st === "late" || st === "unexcused_late") late++;
+                });
+                return { absent, late };
+              };
+              const renderAttendanceCounts = (empId) => {
+                const c = attendanceCountsFor(empId);
+                if (!c.absent && !c.late) return null;
+                return (
+                  <div style={{ ...S.employeeStats, display: "flex", gap: 12, marginTop: 2 }}>
+                    <span style={{ color: "#A32D2D" }}>
+                      {c.absent} day{c.absent === 1 ? "" : "s"} absent
+                    </span>
+                    <span style={{ color: "#B8763E" }}>
+                      {c.late} day{c.late === 1 ? "" : "s"} late
+                    </span>
+                  </div>
+                );
+              };
               return (
                 <>
             <div style={S.contactsToolbar}>
@@ -4216,6 +4247,7 @@ export default function TeamCRM() {
                         <div style={S.employeeStats}>
                           {empSales.length} sale{empSales.length === 1 ? "" : "s"} {employeeStatsLabel} · {money(empAllTimeTotal)}
                         </div>
+                        {renderAttendanceCounts(emp.id)}
                         {empPendingRefunds.length > 0 && (
                           <div style={S.pendingRefundList}>
                             {empPendingRefunds.map(({ sale, credit }) => (
@@ -4310,6 +4342,7 @@ export default function TeamCRM() {
                       <div style={S.employeeStats}>
                         {empSales.length} sale{empSales.length === 1 ? "" : "s"} {employeeStatsLabel} · {money(empAllTimeTotal)}
                       </div>
+                      {renderAttendanceCounts(emp.id)}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
