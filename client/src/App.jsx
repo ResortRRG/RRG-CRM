@@ -2774,12 +2774,49 @@ export default function TeamCRM() {
     setConfirmRefund(null);
   }
   async function undoRefund(id) {
-    const patch = { refunded: false, refundedAt: "", refundType: "", refundAmount: "", refundAmounts: null };
+    const existing = sales.find((x) => x.id === id);
+    if (!existing) return;
+    if (!window.confirm("Undo the chargeback for " + (existing.name || "this lead") + "?")) return;
+    const patch = {
+      refunded: false,
+      refundedAt: "",
+      refundType: "",
+      refundAmount: "",
+      refundAmounts: null,
+      lastUndoneRefund: {
+        refundedAt: existing.refundedAt || "",
+        refundType: existing.refundType || "",
+        refundAmount: existing.refundAmount === undefined ? "" : existing.refundAmount,
+        refundAmounts: existing.refundAmounts || null,
+        refundWeekChoices: existing.refundWeekChoices || null,
+        undoneAt: new Date().toISOString(),
+      },
+    };
     try {
       const updated = await updateSaleOnServer(id, patch);
-      setSales((prev) => prev.map((s) => (s.id === id ? updated : s)));
+      setSales((prev) => prev.map((x) => (x.id === id ? updated : x)));
     } catch (err) {
       console.error("Undo refund failed:", err);
+    }
+  }
+  async function restoreRefund(id) {
+    const existing = sales.find((x) => x.id === id);
+    const snap = existing && existing.lastUndoneRefund;
+    if (!snap) return;
+    const patch = {
+      refunded: true,
+      refundedAt: snap.refundedAt,
+      refundType: snap.refundType,
+      refundAmount: snap.refundAmount,
+      refundAmounts: snap.refundAmounts,
+      refundWeekChoices: snap.refundWeekChoices,
+      lastUndoneRefund: null,
+    };
+    try {
+      const updated = await updateSaleOnServer(id, patch);
+      setSales((prev) => prev.map((x) => (x.id === id ? updated : x)));
+    } catch (err) {
+      console.error("Restore refund failed:", err);
     }
   }
   function saveEmployee(form) {
@@ -3791,12 +3828,19 @@ export default function TeamCRM() {
                                 <Undo2 size={12} /> Undo refund
                               </button>
                             ) : (
-                              <button
-                                style={S.refundBtn}
-                                onClick={() => setConfirmRefund({ ...s })}
-                              >
-                                <RotateCcw size={12} /> Refund
-                              </button>
+                              <>
+                                {s.lastUndoneRefund && (
+                                  <button style={S.ghostBtn} onClick={() => restoreRefund(s.id)}>
+                                    <Undo2 size={12} /> Restore chargeback
+                                  </button>
+                                )}
+                                <button
+                                  style={S.refundBtn}
+                                  onClick={() => setConfirmRefund({ ...s })}
+                                >
+                                  <RotateCcw size={12} /> Refund
+                                </button>
+                              </>
                             )}
                             <button
                               style={S.rowDeleteBtn}
