@@ -6661,6 +6661,29 @@ function ExpenseFileButton({ expenseKey }) {
   );
 }
 
+function employeeOptionsActiveFirst(employees) {
+  const active = employees.filter((e) => e.active !== false);
+  const inactive = employees.filter((e) => e.active === false);
+  return (
+    <>
+      {active.map((e) => (
+        <option key={e.id} value={e.id}>
+          {e.name}
+        </option>
+      ))}
+      {inactive.length > 0 && (
+        <optgroup label="Inactive">
+          {inactive.map((e) => (
+            <option key={e.id} value={e.id}>
+              {e.name}
+            </option>
+          ))}
+        </optgroup>
+      )}
+    </>
+  );
+}
+
 function SaleForm({ initial, employees, settings, dncList, sales, syncingToEpg, saveError, onCancel, onMinimize, onSave, onDelete }) {
   const [form, setForm] = useState({ ...blankSale(), ...initial });
   const [saving, setSaving] = useState(false);
@@ -6967,11 +6990,7 @@ function SaleForm({ initial, employees, settings, dncList, sales, syncingToEpg, 
           <div style={{ position: "relative" }}>
             <select value={form.openerId} onChange={(e) => set("openerId", e.target.value)} style={S.select}>
               <option value="">Choose</option>
-              {employees.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.name}
-                </option>
-              ))}
+              {employeeOptionsActiveFirst(employees)}
             </select>
             <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
           </div>
@@ -6980,11 +6999,7 @@ function SaleForm({ initial, employees, settings, dncList, sales, syncingToEpg, 
           <div style={{ position: "relative" }}>
             <select value={form.closerId} onChange={(e) => set("closerId", e.target.value)} style={S.select}>
               <option value="">Choose</option>
-              {employees.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.name}
-                </option>
-              ))}
+              {employeeOptionsActiveFirst(employees)}
             </select>
             <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
           </div>
@@ -6993,11 +7008,7 @@ function SaleForm({ initial, employees, settings, dncList, sales, syncingToEpg, 
           <div style={{ position: "relative" }}>
             <select value={form.verificationId} onChange={(e) => set("verificationId", e.target.value)} style={S.select}>
               <option value="">Choose</option>
-              {employees.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.name}
-                </option>
-              ))}
+              {employeeOptionsActiveFirst(employees)}
             </select>
             <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
           </div>
