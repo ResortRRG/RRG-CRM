@@ -7260,6 +7260,109 @@ function UserForm({ initial, currentUserId, userCount, onCancel, onSave, serverE
   );
 }
 
+function EmployeeFilesSection({ employeeId }) {
+  const [files, setFiles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const base = `/api/employees/${encodeURIComponent(employeeId)}/files`;
+
+  async function loadFiles() {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(base, { credentials: "include" });
+      if (!res.ok) throw new Error("status " + res.status);
+      const data = await res.json();
+      setFiles(data.files || []);
+    } catch (err) {
+      console.error("Loading employee files failed:", err);
+      setError("Couldn't load paperwork: " + (err.message || "unknown error"));
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => {
+    loadFiles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employeeId]);
+
+  async function uploadFile(file) {
+    if (!file) return;
+    setUploading(true);
+    setError("");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(base, { method: "POST", credentials: "include", body: formData });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "status " + res.status);
+      }
+      await loadFiles();
+    } catch (err) {
+      console.error("Employee file upload failed:", err);
+      setError("Upload failed: " + (err.message || "unknown error"));
+    } finally {
+      setUploading(false);
+    }
+  }
+  async function deleteFile(fileId) {
+    if (!window.confirm("Delete this file?")) return;
+    try {
+      await fetch(`${base}/${fileId}`, { method: "DELETE", credentials: "include" });
+      setFiles((prev) => prev.filter((f) => f.id !== fileId));
+    } catch (err) {
+      console.error("Employee file delete failed:", err);
+      setError("Couldn't delete that file");
+    }
+  }
+  function formatFileSize(bytes) {
+    const n = Number(bytes) || 0;
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+    return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  return (
+    <Field label="Paperwork / attachments">
+      {loading ? (
+        <div style={{ fontSize: 12.5, color: T.textMuted }}>Loading…</div>
+      ) : files.length === 0 ? (
+        <div style={{ fontSize: 12.5, color: T.textMuted, marginBottom: 8 }}>No files attached yet.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}>
+          {files.map((f) => (
+            <div key={f.id} style={S.expenseFileRow}>
+              <FileText size={14} color={T.pineDark} style={{ flexShrink: 0 }} />
+              <a href={`${base}/${f.id}`} target="_blank" rel="noreferrer" style={S.expenseFileLink}>
+                {f.filename}
+              </a>
+              <span style={{ fontSize: 10.5, color: T.textMuted, flexShrink: 0 }}>{formatFileSize(f.size)}</span>
+              <button onClick={() => deleteFile(f.id)} style={S.iconBtnGhost} title="Delete">
+                <Trash2 size={12} color={T.textMuted} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {error && <div style={S.errorText}>{error}</div>}
+      <label style={{ ...S.ghostBtn, display: "inline-flex", cursor: uploading ? "not-allowed" : "pointer", opacity: uploading ? 0.6 : 1 }}>
+        <Upload size={13} /> {uploading ? "Uploading…" : "Attach file"}
+        <input
+          type="file"
+          onChange={(e) => {
+            uploadFile(e.target.files && e.target.files[0]);
+            e.target.value = "";
+          }}
+          disabled={uploading}
+          style={{ display: "none" }}
+        />
+      </label>
+    </Field>
+  );
+}
+
 function EmployeeForm({ initial, attendance, onCancel, onSave, onDelete, onToggleActive }) {
   const [form, setForm] = useState({
     name: "",
@@ -7312,6 +7415,7 @@ function EmployeeForm({ initial, attendance, onCancel, onSave, onDelete, onToggl
       <Field label="Notes">
         <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} style={{ ...S.input, minHeight: 60 }} />
       </Field>
+      {form.id && <EmployeeFilesSection employeeId={form.id} />}
       <div style={S.modalFooter}>
         {onDelete && (
           <button onClick={onDelete} style={S.dangerBtnGhost}>
