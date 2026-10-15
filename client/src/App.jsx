@@ -349,6 +349,23 @@ function dateInRange(dateStr, start, end) {
   return d >= start && d <= end;
 }
 
+// The date a chargeback counts toward on the Dashboard: a custom date picked in
+// the refund window wins, "Previous week" shifts back 7 days, anything else
+// (This week / Next week, the default) uses the day the refund was entered.
+function chargebackEffectiveDate(sale) {
+  if (!sale || !sale.refundedAt) return sale ? sale.refundedAt : null;
+  const choices = sale.refundWeekChoices || {};
+  const picked = ["close", "front", "verification"].map((r) => choices[r]).filter(Boolean);
+  const custom = picked.find((c) => /^\d{4}-\d{2}-\d{2}$/.test(c));
+  if (custom) return new Date(custom + "T12:00:00").toISOString();
+  if (picked.indexOf("previous") !== -1) {
+    const d = new Date(sale.refundedAt);
+    d.setDate(d.getDate() - 7);
+    return d.toISOString();
+  }
+  return sale.refundedAt;
+}
+
 function getWeekdayIndex(dateObj) {
   const day = dateObj.getDay();
   const idx = (day + 6) % 7;
@@ -1469,7 +1486,7 @@ export default function TeamCRM() {
   const dashboardSales = dashboardRange ? sales.filter((s) => isSaleInRange(s, dashboardRange.start, dashboardRange.end)) : sales;
   const dashboardApprovedSales = dashboardSales.filter((s) => s.status === "Approved");
   const chargebackSales = dashboardRange
-    ? sales.filter((s) => s.refunded && dateInRange(s.refundedAt, dashboardRange.start, dashboardRange.end))
+    ? sales.filter((s) => s.refunded && dateInRange(chargebackEffectiveDate(s), dashboardRange.start, dashboardRange.end))
     : sales.filter((s) => s.refunded);
   const chargebackTotal = chargebackSales.reduce((sum, r) => sum + (Number(r.refundAmount) || 0), 0);
   // Chargebacks reduce the day/week total rather than being counted as
