@@ -62,9 +62,15 @@ export function registerAuthRoutes(app) {
   });
 
   app.post("/api/auth/login", async (req, res) => {
-    const { username, password } = req.body || {};
+    const { username: rawUsername, password } = req.body || {};
+    const username = typeof rawUsername === "string" ? rawUsername.trim() : rawUsername;
     if (!username || !password) return res.status(400).json({ error: "Username and password required" });
-    const { rows } = await pool.query("SELECT * FROM users WHERE username = $1", [username]);
+    // Case-insensitive match (phones/tablets often capitalize the first letter),
+    // preferring an exact-case match if two accounts differ only by case.
+    const { rows } = await pool.query(
+      "SELECT * FROM users WHERE lower(username) = lower($1) ORDER BY (username = $1) DESC LIMIT 1",
+      [username]
+    );
     const row = rows[0];
     if (!row) return res.status(401).json({ error: "Incorrect username or password" });
     const ok = await bcrypt.compare(password, row.password_hash);
@@ -98,7 +104,8 @@ export function registerAuthRoutes(app) {
   });
 
   app.post("/api/users", requireAuth, async (req, res) => {
-    const { name, username, password, role } = req.body || {};
+    const { name, password, role } = req.body || {};
+    const username = typeof (req.body || {}).username === "string" ? req.body.username.trim() : (req.body || {}).username;
     if (!name || !username || !password) return res.status(400).json({ error: "Name, username, and password are required" });
     const id = crypto.randomUUID();
     const hash = await bcrypt.hash(password, 10);
@@ -115,7 +122,8 @@ export function registerAuthRoutes(app) {
   });
 
   app.put("/api/users/:id", requireAuth, async (req, res) => {
-    const { name, username, password, role } = req.body || {};
+    const { name, password, role } = req.body || {};
+    const username = typeof (req.body || {}).username === "string" ? req.body.username.trim() : (req.body || {}).username;
     const fields = [];
     const values = [];
     let i = 1;

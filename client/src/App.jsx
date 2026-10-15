@@ -968,7 +968,7 @@ export default function TeamCRM() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ username: gateUsernameInput, password: gatePasswordInput }),
+        body: JSON.stringify({ username: gateUsernameInput.trim(), password: gatePasswordInput }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -7204,6 +7204,7 @@ function ContactForm({ initial, onCancel, onSave, onDelete }) {
 function UserForm({ initial, currentUserId, userCount, onCancel, onSave, serverError }) {
   const [form, setForm] = useState({ name: "", username: "", password: "", role: "rep", ...initial });
   const [localError, setLocalError] = useState("");
+  const [showPw, setShowPw] = useState(false);
   const isSelf = form.id && form.id === currentUserId;
   const isLastAdmin = form.id && form.role === "admin" && userCount <= 1;
   function set(key, value) {
@@ -7231,7 +7232,36 @@ function UserForm({ initial, currentUserId, userCount, onCancel, onSave, serverE
         <input value={form.username} onChange={(e) => set("username", e.target.value)} style={S.input} />
       </Field>
       <Field label={form.id ? "New password (leave blank to keep current)" : "Password"} required={!form.id}>
-        <input type="password" value={form.password} onChange={(e) => set("password", e.target.value)} style={S.input} />
+        <div style={{ display: "flex", gap: 8 }}>
+          <input
+            type={showPw ? "text" : "password"}
+            value={form.password}
+            onChange={(e) => set("password", e.target.value)}
+            style={{ ...S.input, flex: 1 }}
+            autoComplete="new-password"
+          />
+          <button type="button" onClick={() => setShowPw((v) => !v)} style={S.ghostBtn}>
+            {showPw ? "Hide" : "Show"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const chars = "abcdefghjkmnpqrstuvwxyz23456789";
+              let pw = "";
+              for (let i = 0; i < 8; i++) pw += chars[Math.floor(Math.random() * chars.length)];
+              set("password", pw);
+              setShowPw(true);
+            }}
+            style={S.ghostBtn}
+          >
+            Generate
+          </button>
+        </div>
+        <div style={S.hint}>
+          {form.id
+            ? "Passwords are stored scrambled, so an existing one can't be displayed. Set a new one here and give it to the user."
+            : "Write this down and give it to the user — it can't be shown again after saving."}
+        </div>
       </Field>
       <Field label="Role">
         <div style={{ position: "relative" }}>
