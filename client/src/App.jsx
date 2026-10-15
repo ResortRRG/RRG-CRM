@@ -6483,16 +6483,30 @@ export default function TeamCRM() {
                 )}
                 <div style={{ position: "relative" }}>
                   <select
-                    value={refundWeekChoices[opt.id]}
-                    onChange={(e) => setRefundWeekChoices((r) => ({ ...r, [opt.id]: e.target.value }))}
+                    value={/^\d{4}-\d{2}-\d{2}$/.test(refundWeekChoices[opt.id]) ? "custom" : refundWeekChoices[opt.id]}
+                    onChange={(e) => {
+                      const v = e.target.value === "custom" ? todayDateStr() : e.target.value;
+                      setRefundWeekChoices((r) => ({ ...r, [opt.id]: v }));
+                    }}
                     style={{ ...S.select, width: 130, paddingRight: 26, fontSize: 12 }}
                   >
                     <option value="previous">Previous week</option>
                     <option value="current">This week</option>
                     <option value="next">Next week</option>
+                    <option value="custom">Custom date…</option>
                   </select>
                   <ChevronDown size={12} color={T.textMuted} style={S.selectChevron} />
                 </div>
+                {/^\d{4}-\d{2}-\d{2}$/.test(refundWeekChoices[opt.id]) && (
+                  <input
+                    type="date"
+                    value={refundWeekChoices[opt.id]}
+                    onChange={(e) => {
+                      if (e.target.value) setRefundWeekChoices((r) => ({ ...r, [opt.id]: e.target.value }));
+                    }}
+                    style={{ ...S.input, width: 140, fontSize: 12 }}
+                  />
+                )}
               </div>
             );
           })}
@@ -8084,5 +8098,5 @@ const S = {
   payslipErrorNote: { fontSize: 11.5, color: "#A32D2D", fontWeight: 600, marginTop: 6 },
   refundTypeBtn: { flex: 1, border: `1px solid ${T.border}`, background: "#fff", color: T.textMuted, borderRadius: 8, padding: "8px 0", fontSize: 12.5, fontWeight: 600 },
   refundTypeActive: { background: T.pineDark, color: "#fff", borderColor: T.pineDark },
-  refundRoleRow: { display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${T.border}` },
+  refundRoleRow: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: 10, padding: "8px 0", borderBottom: `1px solid ${T.border}` },
 };
