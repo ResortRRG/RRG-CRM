@@ -102,6 +102,7 @@ const DEFAULT_SETTINGS = {
   companyName: DEFAULT_COMPANY_NAME,
   minWeeklyPay: DEFAULT_MIN_WEEKLY_PAY,
   sources: DEFAULT_SOURCES,
+  paperSources: [],
   leadSources: DEFAULT_LEAD_SOURCES,
   leadCategories: DEFAULT_LEAD_CATEGORIES,
   expenseCategories: DEFAULT_EXPENSE_CATEGORIES,
@@ -240,6 +241,7 @@ function blankSale() {
     closerId: "",
     verificationId: "",
     source: "",
+    paperSource: "",
     leadSubmittedTo: "",
     status: "Pending",
     leadCategory: "",
@@ -705,6 +707,7 @@ export default function TeamCRM() {
   const [leadsSelectedDate, setLeadsSelectedDate] = useState(todayDateStr());
   const [leadsCategoryFilter, setLeadsCategoryFilter] = useState("");
   const [adminNewSource, setAdminNewSource] = useState("");
+  const [adminNewPaperSource, setAdminNewPaperSource] = useState("");
   const [adminNewLeadSource, setAdminNewLeadSource] = useState("");
   const [adminNewCategory, setAdminNewCategory] = useState("");
   const [adminNewExpenseCategory, setAdminNewExpenseCategory] = useState("");
@@ -1147,15 +1150,16 @@ export default function TeamCRM() {
   function addListItem(listKey, value, clearInput) {
     const v = value.trim();
     if (!v) return;
-    if (settings[listKey].some((x) => x.toLowerCase() === v.toLowerCase())) {
+    const current = settings[listKey] || [];
+    if (current.some((x) => x.toLowerCase() === v.toLowerCase())) {
       clearInput("");
       return;
     }
-    updateSettings({ ...settings, [listKey]: [...settings[listKey], v] });
+    updateSettings({ ...settings, [listKey]: [...current, v] });
     clearInput("");
   }
   function removeListItem(listKey, value) {
-    updateSettings({ ...settings, [listKey]: settings[listKey].filter((x) => x !== value) });
+    updateSettings({ ...settings, [listKey]: (settings[listKey] || []).filter((x) => x !== value) });
   }
 
   function payrollOverrideKey(employeeId, weekStart) {
@@ -1703,6 +1707,28 @@ export default function TeamCRM() {
     const rows = reportsApprovedSales.filter((s) => s.source === src);
     return { source: src, count: rows.length, total: rows.reduce((sum, r) => sum + (Number(r.totalPrice) || 0), 0) };
   });
+  // Paper leads broken down by which paper source they came from. "What I made"
+  // is the commission we keep: Monster/PGR rate applied to the sale total.
+  function earningsForSale(sale) {
+    const total = Number(sale.totalPrice) || 0;
+    if (sale.leadSubmittedTo === "PGR") return total * ((Number(settings.pgrCommissionRate) || 0) / 100);
+    if (sale.leadSubmittedTo === "Monster") return total * (monsterRateForSale(sale) / 100);
+    return 0;
+  }
+  const reportsPaperApproved = reportsApprovedSales.filter((s) => s.source === "Paper");
+  const reportsPaperSourceNames = [
+    ...(settings.paperSources || []),
+    ...Array.from(new Set(reportsPaperApproved.map((s) => s.paperSource).filter((n) => n && !(settings.paperSources || []).includes(n)))),
+  ];
+  const reportsPaperSourceRows = [...reportsPaperSourceNames, ""].map((name) => {
+    const rows = reportsPaperApproved.filter((s) => (s.paperSource || "") === name);
+    return {
+      name: name || "No paper source chosen",
+      count: rows.length,
+      total: rows.reduce((sum, r) => sum + (Number(r.totalPrice) || 0), 0),
+      earned: rows.reduce((sum, r) => sum + earningsForSale(r), 0),
+    };
+  }).filter((r) => r.name !== "No paper source chosen" || r.count > 0);
   const reportsDeclined = reportsSales.filter((s) => s.status === "Declined");
   const reportsMonsterTotal = (reportsSourceBreakdown.find((r) => r.source === "Monster") || {}).total || 0;
   const reportsPgrTotal = (reportsSourceBreakdown.find((r) => r.source === "PGR") || {}).total || 0;
@@ -3524,7 +3550,7 @@ export default function TeamCRM() {
                                 {employeeById[s.verificationId] ? employeeById[s.verificationId].name : ""}
                               </td>
                               <td style={S.td}>
-                                {s.source && <span style={S.sourceBadge}>{s.source}</span>}
+                                {s.source && <span style={S.sourceBadge}>{s.source}{s.source === "Paper" && s.paperSource ? " · " + s.paperSource : ""}</span>}
                               </td>
                               <td style={S.td}>
                                 {s.leadSubmittedTo && (
@@ -3834,7 +3860,7 @@ export default function TeamCRM() {
                                 {s.leadSubmittedTo}
                               </span>
                             )}
-                            {s.source && <span style={{ ...S.sourceBadge, fontSize: 14 }}>{s.source}</span>}
+                            {s.source && <span style={{ ...S.sourceBadge, fontSize: 14 }}>{s.source}{s.source === "Paper" && s.paperSource ? " · " + s.paperSource : ""}</span>}
                           </div>
                           <div style={S.leadCardActions}>
                             <button style={S.ghostBtn} onClick={() => setSaleModal({ ...s })}>
@@ -5051,6 +5077,26 @@ export default function TeamCRM() {
               ))}
             </div>
 
+            {reportsPaperApproved.length > 0 || (settings.paperSources || []).length > 0 ? (
+              <>
+                <div style={{ ...S.dashboardSectionLabel, marginTop: 20 }}>Paper lead sources</div>
+                <div style={S.sourceGrid}>
+                  {reportsPaperSourceRows.map((row) => (
+                    <div key={row.name} style={S.sourceCard}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <span style={S.channelBadge}>{row.name}</span>
+                        <span style={S.sourceCount}>
+                          {row.count} sale{row.count === 1 ? "" : "s"}
+                        </span>
+                      </div>
+                      <div style={S.sourceValue}>{money(row.total)}</div>
+                      <div style={{ fontSize: 11.5, color: T.textMuted, marginTop: 2 }}>Earned {money(row.earned)}</div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : null}
+
             <div style={{ ...S.dashboardSectionLabel, marginTop: 20 }}>Source commission</div>
             <div style={S.sourceGrid}>
               <div style={S.sourceCard}>
@@ -5888,6 +5934,34 @@ export default function TeamCRM() {
                     />
                   </div>
                   <button onClick={() => addListItem("sources", adminNewSource, setAdminNewSource)} style={S.ghostBtn}>
+                    Add
+                  </button>
+                </div>
+              </div>
+
+              <div style={S.adminListCard}>
+                <div style={S.adminListTitle}>Paper lead sources (shown when Source is Paper)</div>
+                <div style={S.adminChipRow}>
+                  {(settings.paperSources || []).map((s) => (
+                    <span key={s} style={S.adminChip}>
+                      {s}
+                      <button onClick={() => removeListItem("paperSources", s)} style={S.adminChipRemove}>
+                        <X size={10} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <div style={S.adminAddRow}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <input
+                      value={adminNewPaperSource}
+                      onChange={(e) => setAdminNewPaperSource(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && addListItem("paperSources", adminNewPaperSource, setAdminNewPaperSource)}
+                      placeholder="Add paper source"
+                      style={S.input}
+                    />
+                  </div>
+                  <button onClick={() => addListItem("paperSources", adminNewPaperSource, setAdminNewPaperSource)} style={S.ghostBtn}>
                     Add
                   </button>
                 </div>
@@ -7058,7 +7132,11 @@ function SaleForm({ initial, employees, settings, dncList, sales, syncingToEpg, 
         </Field>
         <Field label="Source" required>
           <div style={{ position: "relative" }}>
-            <select value={form.source} onChange={(e) => set("source", e.target.value)} style={S.select}>
+            <select
+              value={form.source}
+              onChange={(e) => setForm((f) => ({ ...f, source: e.target.value, paperSource: e.target.value === "Paper" ? f.paperSource : "" }))}
+              style={S.select}
+            >
               <option value="">Choose</option>
               {settings.sources.map((s) => (
                 <option key={s} value={s}>
@@ -7069,6 +7147,24 @@ function SaleForm({ initial, employees, settings, dncList, sales, syncingToEpg, 
             <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
           </div>
         </Field>
+        {form.source === "Paper" && (
+          <Field label="Paper lead source">
+            <div style={{ position: "relative" }}>
+              <select value={form.paperSource || ""} onChange={(e) => set("paperSource", e.target.value)} style={S.select}>
+                <option value="">Choose</option>
+                {(settings.paperSources || []).map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
+            </div>
+            {(settings.paperSources || []).length === 0 && (
+              <div style={S.hint}>No paper sources yet — add them in Admin / Settings under Dropdown lists.</div>
+            )}
+          </Field>
+        )}
         <Field label="Submitted to" required>
           <div style={{ position: "relative" }}>
             <select value={form.leadSubmittedTo} onChange={(e) => set("leadSubmittedTo", e.target.value)} style={S.select}>
