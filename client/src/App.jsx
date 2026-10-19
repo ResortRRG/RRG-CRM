@@ -4795,6 +4795,27 @@ export default function TeamCRM() {
                                 {empAbsences > 0 ? "Worked Saturday (makes up 1 day)" : "Worked Saturday"}
                               </label>
                             )}
+                            {(() => {
+                              let lateDays = 0;
+                              const absentNames = [];
+                              for (let i = 0; i < 6; i++) {
+                                const d = new Date(payrollWeek.start);
+                                d.setDate(payrollWeek.start.getDate() + i);
+                                const st = getAttendance(emp.id, d);
+                                if (st === "late" || st === "unexcused_late") lateDays++;
+                                if (st === "absent" || st === "unexcused_absent") {
+                                  absentNames.push(d.toLocaleDateString("en-US", { weekday: "short" }));
+                                }
+                              }
+                              if (!absentNames.length && !lateDays) return null;
+                              return (
+                                <div style={{ fontSize: 11, marginTop: 3, color: "#A32D2D" }}>
+                                  {absentNames.length > 0 && `Absent ${absentNames.length}d (${absentNames.join(", ")})`}
+                                  {absentNames.length > 0 && lateDays > 0 && " · "}
+                                  {lateDays > 0 && <span style={{ color: "#B8763E" }}>Late {lateDays}d</span>}
+                                </div>
+                              );
+                            })()}
                           </td>
                           <td style={{ ...S.td, minWidth: 200, verticalAlign: "middle" }} onClick={(e) => e.stopPropagation()}>
                             <PayrollNoteCell
