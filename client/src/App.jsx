@@ -1693,7 +1693,7 @@ export default function TeamCRM() {
 
   const reportsSales = reportsRange ? sales.filter((s) => isSaleInRange(s, reportsRange.start, reportsRange.end)) : sales;
   const reportsRefundedSales = reportsRange
-    ? sales.filter((s) => s.refunded && dateInRange(s.refundedAt, reportsRange.start, reportsRange.end))
+    ? sales.filter((s) => s.refunded && dateInRange(chargebackEffectiveDate(s), reportsRange.start, reportsRange.end))
     : sales.filter((s) => s.refunded);
   const reportsApprovedSales = reportsSales.filter((s) => s.status === "Approved");
 
@@ -1792,7 +1792,16 @@ export default function TeamCRM() {
     (sum, s) => sum + (Number(s.totalPrice) || 0) * (monsterRateForSale(s) / 100),
     0
   );
-  const reportsAllSourceCommission = reportsMonsterPaperCommission + reportsMonsterDialerCommission + reportsPgrCommission;
+  // Commission we give back on chargebacks in this period (refunded amount at the
+  // rate that sale earned).
+  const reportsChargebackCommission = reportsRefundedSales.reduce((sum, s) => {
+    const amt = Number(s.refundAmount) || 0;
+    if (s.leadSubmittedTo === "PGR") return sum + amt * ((Number(settings.pgrCommissionRate) || 0) / 100);
+    if (s.leadSubmittedTo === "Monster") return sum + amt * (monsterRateForSale(s) / 100);
+    return sum;
+  }, 0);
+  const reportsAllSourceCommission =
+    reportsMonsterPaperCommission + reportsMonsterDialerCommission + reportsPgrCommission - reportsChargebackCommission;
 
   const pnlMonth = getMonthRange(pnlMonthOffset);
   const pnlWeek = getWeekRange(pnlWeekOffset);
@@ -5222,7 +5231,9 @@ export default function TeamCRM() {
                   </span>
                 </div>
                 <div style={{ ...S.sourceValue, color: T.pineDark }}>{money(reportsAllSourceCommission)}</div>
-                <div style={{ fontSize: 11.5, color: T.textMuted, marginTop: 2 }}>Paper + Dialer + PGR</div>
+                <div style={{ fontSize: 11.5, color: T.textMuted, marginTop: 2 }}>
+                  Paper + Dialer + PGR{reportsChargebackCommission > 0 ? ` − chargebacks (${money(reportsChargebackCommission)})` : ""}
+                </div>
               </div>
             </div>
 
