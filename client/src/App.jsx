@@ -2381,7 +2381,7 @@ export default function TeamCRM() {
     });
     return Object.keys(bySale)
       .map((saleId) => ({ sale: sales.find((s) => s.id === saleId), credit: bySale[saleId] }))
-      .filter((e) => e.sale);
+      .filter((e) => e.sale && e.credit > 0);
   }
 
   function lookbackWeek(weekStart, weekEnd) {
