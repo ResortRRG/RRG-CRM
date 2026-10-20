@@ -1784,6 +1784,15 @@ export default function TeamCRM() {
     0
   );
   const reportsPgrCommission = reportsPgrTotal * ((Number(settings.pgrCommissionRate) || 0) / 100);
+  const reportsMonsterPaperCommission = reportsMonsterPaperSales.reduce(
+    (sum, s) => sum + (Number(s.totalPrice) || 0) * (monsterRateForSale(s) / 100),
+    0
+  );
+  const reportsMonsterDialerCommission = reportsMonsterDialerSales.reduce(
+    (sum, s) => sum + (Number(s.totalPrice) || 0) * (monsterRateForSale(s) / 100),
+    0
+  );
+  const reportsAllSourceCommission = reportsMonsterPaperCommission + reportsMonsterDialerCommission + reportsPgrCommission;
 
   const pnlMonth = getMonthRange(pnlMonthOffset);
   const pnlWeek = getWeekRange(pnlWeekOffset);
@@ -5178,7 +5187,7 @@ export default function TeamCRM() {
                   <span style={S.sourceCount}>{settings.monsterCommissionRatePaper}% of {money(reportsMonsterPaperTotal)}</span>
                 </div>
                 <div style={S.sourceValue}>
-                  {money(reportsMonsterPaperSales.reduce((sum, s) => sum + (Number(s.totalPrice) || 0) * (monsterRateForSale(s) / 100), 0))}
+                  {money(reportsMonsterPaperCommission)}
                 </div>
               </div>
               <div style={S.sourceCard}>
@@ -5187,7 +5196,7 @@ export default function TeamCRM() {
                   <span style={S.sourceCount}>{settings.monsterCommissionRateDialer}% of {money(reportsMonsterDialerTotal)}</span>
                 </div>
                 <div style={S.sourceValue}>
-                  {money(reportsMonsterDialerSales.reduce((sum, s) => sum + (Number(s.totalPrice) || 0) * (monsterRateForSale(s) / 100), 0))}
+                  {money(reportsMonsterDialerCommission)}
                 </div>
               </div>
               <div style={S.sourceCard}>
@@ -5196,6 +5205,16 @@ export default function TeamCRM() {
                   <span style={S.sourceCount}>{settings.pgrCommissionRate}% of {money(reportsPgrTotal)}</span>
                 </div>
                 <div style={S.sourceValue}>{money(reportsPgrCommission)}</div>
+              </div>
+              <div style={{ ...S.sourceCard, borderColor: T.pineDark }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ ...S.leadBadge, background: T.pineDark, color: "#fff" }}>Total commission</span>
+                  <span style={S.sourceCount}>
+                    of {money(reportsMonsterPaperTotal + reportsMonsterDialerTotal + reportsPgrTotal)}
+                  </span>
+                </div>
+                <div style={{ ...S.sourceValue, color: T.pineDark }}>{money(reportsAllSourceCommission)}</div>
+                <div style={{ fontSize: 11.5, color: T.textMuted, marginTop: 2 }}>Paper + Dialer + PGR</div>
               </div>
             </div>
 
