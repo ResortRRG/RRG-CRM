@@ -5193,10 +5193,18 @@ export default function TeamCRM() {
               <div style={S.sourceCard}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <span style={{ ...S.leadBadge, background: chartColor("Monster") + "22", color: chartColor("Monster") }}>Monster — Dialer</span>
-                  <span style={S.sourceCount}>{settings.monsterCommissionRateDialer}% of {money(reportsMonsterDialerTotal)}</span>
+                  <span style={S.sourceCount}>
+                    {reportsMonsterDialerTotal > 0
+                      ? `${Math.round((reportsMonsterDialerCommission / reportsMonsterDialerTotal) * 1000) / 10}%`
+                      : `${settings.monsterCommissionRateDialer}%`}{" "}
+                    of {money(reportsMonsterDialerTotal)}
+                  </span>
                 </div>
                 <div style={S.sourceValue}>
                   {money(reportsMonsterDialerCommission)}
+                </div>
+                <div style={{ fontSize: 11.5, color: T.textMuted, marginTop: 2 }}>
+                  {settings.monsterCommissionRateDialer}% normally, {settings.monsterCommissionRateDialerBonus}% in pay weeks over {money(settings.monsterDialerBonusThreshold)} in Monster sales
                 </div>
               </div>
               <div style={S.sourceCard}>
