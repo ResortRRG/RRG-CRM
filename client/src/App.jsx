@@ -109,6 +109,8 @@ const DEFAULT_SETTINGS = {
   monsterCommissionRate: 68,
   monsterCommissionRatePaper: 70,
   monsterCommissionRateDialer: 63,
+  monsterDialerBonusThreshold: 20000,
+  monsterCommissionRateDialerBonus: 65,
   pgrCommissionRate: 75,
 };
 
@@ -267,6 +269,34 @@ function getWeekRange(offset) {
   saturday.setDate(monday.getDate() + 5);
   saturday.setHours(23, 59, 59, 999);
   return { start: monday, end: saturday };
+}
+
+// An employee can have a weekly sales threshold that bumps their commission
+// rate for that pay week (e.g. over $5,000 in sales -> 35% on the whole week).
+function effectiveCommissionRate(emp, weekSalesTotal) {
+  const base = Number(emp && emp.commissionRate) || 0;
+  const threshold = Number(emp && emp.bonusThreshold) || 0;
+  const bonus = Number(emp && emp.bonusRate) || 0;
+  if (threshold > 0 && bonus > 0 && (Number(weekSalesTotal) || 0) > threshold) return bonus;
+  return base;
+}
+
+// Total of all approved Monster sales per pay week (Mon-Sat), used to decide
+// whether the Dialer rate bumps up that week. Cached per sales array.
+const monsterWeekTotalsCache = new WeakMap();
+function monsterWeekTotalsFor(sales) {
+  let cached = monsterWeekTotalsCache.get(sales);
+  if (cached) return cached;
+  cached = {};
+  sales.forEach((s) => {
+    if (s.status !== "Approved" || s.leadSubmittedTo !== "Monster" || !s.timestamp) return;
+    const d = new Date(s.timestamp);
+    if (isNaN(d.getTime())) return;
+    const key = mondayOfWeek(d).getTime();
+    cached[key] = (cached[key] || 0) + (Number(s.totalPrice) || 0);
+  });
+  monsterWeekTotalsCache.set(sales, cached);
+  return cached;
 }
 
 function mondayOfWeek(date) {
@@ -1417,7 +1447,7 @@ export default function TeamCRM() {
       if (override !== null) return sum + override;
       const empSales = salesForEmployee(emp.id).filter((s) => isSaleInRange(s, weekStart, weekEnd));
       const total = empSales.reduce((s, r) => s + saleCredit(r, emp.id), 0);
-      const rate = Number(emp.commissionRate) || 0;
+      const rate = effectiveCommissionRate(emp, total);
       const refundedCredit = refundedCreditForEmployee(emp.id, weekStart, weekEnd);
       const refundOverrideVal = getRefundDeductionOverride(emp.id, weekStart);
       const refundDed = refundOverrideVal !== null ? refundOverrideVal : refundedCredit * (rate / 100);
@@ -1696,7 +1726,19 @@ export default function TeamCRM() {
   // if a new source gets added to the dropdown list later.
   function monsterRateForSale(sale) {
     if (sale.source === "Paper") return Number(settings.monsterCommissionRatePaper ?? settings.monsterCommissionRate) || 0;
-    if (sale.source === "Dialer") return Number(settings.monsterCommissionRateDialer ?? settings.monsterCommissionRate) || 0;
+    if (sale.source === "Dialer") {
+      const baseDialer = Number(settings.monsterCommissionRateDialer ?? settings.monsterCommissionRate) || 0;
+      const threshold = Number(settings.monsterDialerBonusThreshold) || 0;
+      const bonusDialer = Number(settings.monsterCommissionRateDialerBonus) || 0;
+      if (threshold > 0 && bonusDialer > 0 && sale.timestamp) {
+        const d = new Date(sale.timestamp);
+        if (!isNaN(d.getTime())) {
+          const weekTotal = monsterWeekTotalsFor(sales)[mondayOfWeek(d).getTime()] || 0;
+          if (weekTotal > threshold) return bonusDialer;
+        }
+      }
+      return baseDialer;
+    }
     return Number(settings.monsterCommissionRate) || 0;
   }
   const reportsSourceBreakdown = settings.leadSources.map((src) => {
@@ -2094,7 +2136,17 @@ export default function TeamCRM() {
         }
         return sum + saleCredit(s, emp.id);
       }, 0);
-      const commission = credited * (rate / 100) - refundedCredit * (rate / 100);
+      const creditedByWeek = {};
+      empSales.forEach((s) => {
+        const d = new Date(s.timestamp);
+        const key = isNaN(d.getTime()) ? "x" : mondayOfWeek(d).getTime();
+        creditedByWeek[key] = (creditedByWeek[key] || 0) + saleCredit(s, emp.id);
+      });
+      const grossCommission = Object.keys(creditedByWeek).reduce(
+        (sum, k) => sum + creditedByWeek[k] * (effectiveCommissionRate(emp, creditedByWeek[k]) / 100),
+        0
+      );
+      const commission = grossCommission - refundedCredit * (rate / 100);
       const companyRevenue = empSales.reduce((sum, s) => {
         const contractRate =
           s.leadSubmittedTo === "Monster"
@@ -2347,7 +2399,7 @@ export default function TeamCRM() {
     ? employeeWeekRows(employeeDetail.id, employeeDetailWeek.start, employeeDetailWeek.end)
     : [];
   const employeeDetailTotalSales = employeeDetailRows.reduce((s, r) => s + r.dayTotal, 0);
-  const employeeDetailRate = employeeDetail ? Number(employeeDetail.commissionRate) || 0 : 0;
+  const employeeDetailRate = employeeDetail ? effectiveCommissionRate(employeeDetail, employeeDetailTotalSales) : 0;
   const employeeDetailRefundedCredit = employeeDetail
     ? refundedCreditForEmployee(employeeDetail.id, employeeDetailWeek.start, employeeDetailWeek.end)
     : 0;
@@ -4648,7 +4700,7 @@ export default function TeamCRM() {
                       const empSales = salesForEmployee(emp.id);
                       const empWeekSales = empSales.filter((s) => isSaleInRange(s, payrollWeek.start, payrollWeek.end));
                       const empWeekTotal = empWeekSales.reduce((s, r) => s + saleCredit(r, emp.id), 0);
-                      const rate = Number(emp.commissionRate) || 0;
+                      const rate = effectiveCommissionRate(emp, empWeekTotal);
                       const grossCommission = empWeekTotal * (rate / 100);
                       const refundedCredit = refundedCreditForEmployee(emp.id, payrollWeek.start, payrollWeek.end);
                       const calculatedRefundDeduction = refundedCredit * (rate / 100);
@@ -4845,7 +4897,7 @@ export default function TeamCRM() {
                             if (override !== null) return sum + Math.round(override);
                             const empSales = salesForEmployee(emp.id).filter((s) => isSaleInRange(s, payrollWeek.start, payrollWeek.end));
                             const total = empSales.reduce((s, r) => s + saleCredit(r, emp.id), 0);
-                            const rate = Number(emp.commissionRate) || 0;
+                            const rate = effectiveCommissionRate(emp, total);
                             const refundedCredit = refundedCreditForEmployee(emp.id, payrollWeek.start, payrollWeek.end);
                             const refundOverrideVal = getRefundDeductionOverride(emp.id, payrollWeek.start);
                             const refundDed = refundOverrideVal !== null ? refundOverrideVal : refundedCredit * (rate / 100);
@@ -5914,6 +5966,24 @@ export default function TeamCRM() {
                 <input
                   value={settings.monsterCommissionRateDialer}
                   onChange={(e) => updateSettings({ ...settings, monsterCommissionRateDialer: Number(e.target.value) || 0 })}
+                  type="number"
+                  style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }}
+                />
+              </div>
+              <div>
+                <div style={S.fieldLabel}>Monster Dialer bonus: weekly Monster sales over ($)</div>
+                <input
+                  value={settings.monsterDialerBonusThreshold}
+                  onChange={(e) => updateSettings({ ...settings, monsterDialerBonusThreshold: Number(e.target.value) || 0 })}
+                  type="number"
+                  style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }}
+                />
+              </div>
+              <div>
+                <div style={S.fieldLabel}>Monster Dialer bonus commission %</div>
+                <input
+                  value={settings.monsterCommissionRateDialerBonus}
+                  onChange={(e) => updateSettings({ ...settings, monsterCommissionRateDialerBonus: Number(e.target.value) || 0 })}
                   type="number"
                   style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }}
                 />
@@ -7569,6 +7639,25 @@ function EmployeeForm({ initial, attendance, onCancel, onSave, onDelete, onToggl
       </Field>
       <Field label="Commission rate (%)">
         <input type="number" value={form.commissionRate} onChange={(e) => set("commissionRate", e.target.value)} style={{ ...S.input, fontFamily: T.mono }} />
+      </Field>
+      <Field label="Weekly sales bonus: sales over ($) / new commission %">
+        <div style={{ display: "flex", gap: 8 }}>
+          <input
+            type="number"
+            value={form.bonusThreshold || ""}
+            onChange={(e) => set("bonusThreshold", e.target.value)}
+            placeholder="e.g. 5000"
+            style={{ ...S.input, fontFamily: T.mono }}
+          />
+          <input
+            type="number"
+            value={form.bonusRate || ""}
+            onChange={(e) => set("bonusRate", e.target.value)}
+            placeholder="e.g. 35"
+            style={{ ...S.input, fontFamily: T.mono }}
+          />
+        </div>
+        <div style={S.hint}>Optional. In any pay week where this person's sales go over the amount, their commission rate for the whole week becomes the new rate.</div>
       </Field>
       <Field label={basePayLabel(form.name)}>
         <input type="number" value={form.basePay} onChange={(e) => set("basePay", e.target.value)} style={{ ...S.input, fontFamily: T.mono }} />
