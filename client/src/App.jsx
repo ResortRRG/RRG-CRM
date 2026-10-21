@@ -55,7 +55,11 @@ const ROLES = [
   { id: "rep", label: "Rep" },
 ];
 
+// Login accounts can also be Data Entry (not an employee role).
+const USER_ROLES = [...ROLES, { id: "dataentry", label: "Data Entry" }];
+
 const ROLE_COLORS = {
+  dataentry: { bg: "#EFE6F3", text: "#6B3F86" },
   admin: { bg: "#F3E9DA", text: "#8A5A1E" },
   manager: { bg: "#E1EAF5", text: "#2A5488" },
   rep: { bg: "#E7EFEA", text: "#2D5F4C" },
@@ -115,6 +119,7 @@ const DEFAULT_SETTINGS = {
 };
 
 const ROLE_PERMISSIONS = {
+  dataentry: ["leads"],
   rep: ["sales"],
   manager: ["dashboard", "sales", "employees"],
 };
@@ -592,7 +597,7 @@ function DonutChart({ segments, centerLabel, centerValue }) {
 function RoleBadge({ role, size }) {
   if (!role) return null;
   const c = ROLE_COLORS[role] || ROLE_COLORS.rep;
-  const label = (ROLES.find((r) => r.id === role) || {}).label || role;
+  const label = (USER_ROLES.find((r) => r.id === role) || {}).label || role;
   return (
     <span
       style={{
@@ -3707,6 +3712,11 @@ export default function TeamCRM() {
               >
                 DNC List{dncList.length > 0 ? ` (${dncList.length})` : ""}
               </button>
+              {currentUser && currentUser.role === "dataentry" && (
+                <button style={{ ...S.primaryBtn, marginLeft: "auto" }} onClick={() => setSaleModal(blankSale())}>
+                  <Plus size={14} /> New sale
+                </button>
+              )}
             </div>
             {leadsSubTab === "duplicates" && (
               <div>
@@ -3936,7 +3946,7 @@ export default function TeamCRM() {
                             <button style={S.ghostBtn} onClick={() => setSaleModal({ ...s })}>
                               Edit
                             </button>
-                            {s.refunded ? (
+                            {currentUser && currentUser.role === "dataentry" ? null : s.refunded ? (
                               <button style={S.ghostBtn} onClick={() => undoRefund(s.id)}>
                                 <Undo2 size={12} /> Undo refund
                               </button>
@@ -3955,13 +3965,15 @@ export default function TeamCRM() {
                                 </button>
                               </>
                             )}
-                            <button
-                              style={S.rowDeleteBtn}
-                              onClick={() => setConfirmDelete({ type: "sale", id: s.id, label: s.name })}
-                              aria-label="Delete lead"
-                            >
-                              <Trash2 size={14} />
-                            </button>
+                            {!(currentUser && currentUser.role === "dataentry") && (
+                              <button
+                                style={S.rowDeleteBtn}
+                                onClick={() => setConfirmDelete({ type: "sale", id: s.id, label: s.name })}
+                                aria-label="Delete lead"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
                           </div>
                         </div>
 
@@ -5920,11 +5932,13 @@ export default function TeamCRM() {
               Each person signs in with their own username and password. Admin accounts see every tab. Manager and Rep
               accounts only see Dashboard and Sales — for Rep, Sales is a simple New Sale submission screen with no
               visibility into other deals; for Manager, it's the same restricted screen alongside a full Dashboard.
+              Data Entry accounts only see All Leads: they can view every lead, add new sales and edit leads, but can't
+              refund or delete anything.
             </div>
 
             <div style={{ ...S.chartCard, marginTop: 12, marginBottom: 20 }}>
               <DonutChart
-                segments={ROLES.map((r) => ({
+                segments={USER_ROLES.map((r) => ({
                   label: r.label,
                   value: users.filter((u) => u.role === r.id).length,
                   count: users.filter((u) => u.role === r.id).length,
@@ -6402,7 +6416,7 @@ export default function TeamCRM() {
             onMinimize={() => setSaleModalMinimized(true)}
             onSave={saveSale}
             onDelete={
-              saleModal.id
+              saleModal.id && !(currentUser && currentUser.role === "dataentry")
                 ? () => setConfirmDelete({ type: "sale", id: saleModal.id, label: saleModal.name })
                 : null
             }
@@ -7508,7 +7522,7 @@ function UserForm({ initial, currentUserId, userCount, onCancel, onSave, serverE
       <Field label="Role">
         <div style={{ position: "relative" }}>
           <select value={form.role} onChange={(e) => set("role", e.target.value)} disabled={isLastAdmin} style={S.select}>
-            {ROLES.map((r) => (
+            {USER_ROLES.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.label}
               </option>
