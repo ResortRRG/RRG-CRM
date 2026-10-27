@@ -3118,7 +3118,7 @@ export default function TeamCRM() {
   }
 
   return (
-    <div style={S.app}>
+    <div style={S.app} className="crm-app">
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
         * { box-sizing: border-box; }
@@ -3133,6 +3133,32 @@ export default function TeamCRM() {
         .crm-scroll select:hover { border-color: #D3CEBD !important; }
         button { font-family: inherit; cursor: pointer; }
         input, textarea, select { font-family: inherit; }
+        @media (max-width: 760px) {
+          html { -webkit-text-size-adjust: 100%; }
+          body { overflow-x: hidden; }
+          .crm-app { flex-direction: column !important; }
+          .crm-sidebar { width: 100% !important; flex-direction: column !important; padding: 10px 10px 8px !important; justify-content: flex-start !important; padding-top: max(10px, env(safe-area-inset-top)) !important; }
+          .crm-sidebar > div:first-child > div:nth-child(2) { display: none; }
+          .crm-sidebar > div:first-child > div:first-child { padding: 0 4px 8px !important; font-size: 17px !important; }
+          .crm-navlist { flex-direction: row !important; overflow-x: auto; gap: 6px !important; padding-bottom: 6px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+          .crm-navlist::-webkit-scrollbar { display: none; }
+          .crm-navitem { white-space: nowrap; flex-shrink: 0; padding: 9px 12px !important; font-size: 14px !important; }
+          .crm-userrow { margin-top: 4px !important; padding: 4px !important; }
+          .crm-sidebar > button { display: none; }
+          .crm-sidebar > div:last-child { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+          .crm-sidebar > div:last-child > button { width: auto !important; padding: 6px 8px !important; }
+          .crm-topbar { padding: 12px 14px !important; }
+          .crm-topbar > * { min-width: 0; max-width: 100%; }
+          .crm-pad { padding-left: 14px !important; padding-right: 14px !important; }
+          .crm-stats { flex-wrap: wrap; gap: 14px !important; }
+          .crm-form2 { grid-template-columns: 1fr !important; }
+          .crm-modal-backdrop { padding: 0 !important; align-items: stretch !important; }
+          .crm-modal-card { max-width: 100% !important; width: 100% !important; max-height: 100% !important; height: 100%; border-radius: 0 !important; padding: 16px 14px calc(24px + env(safe-area-inset-bottom)) !important; }
+          input, select, textarea { font-size: 16px !important; }
+          button, select, input[type="checkbox"] { min-height: 36px; }
+          input[type="checkbox"] { min-width: 20px; }
+          input[type="search"], .crm-main input { max-width: 100%; }
+        }
         @media print {
           body * { visibility: hidden; }
           #print-area, #print-area * { visibility: visible; }
@@ -3148,11 +3174,11 @@ export default function TeamCRM() {
         }
       `}</style>
 
-      <div style={S.sidebar}>
+      <div style={S.sidebar} className="crm-sidebar">
         <div>
           <div style={S.brand}>{settings.companyName}</div>
           <div style={S.brandSub}>sales & payroll</div>
-          <div style={S.navList}>
+          <div style={S.navList} className="crm-navlist">
             {NAV_ITEMS.filter((item) => getAllowedSections(currentUser && currentUser.role).includes(item.id)).map((item) => {
               const Icon = item.icon;
               const active = section === item.id;
@@ -3161,6 +3187,7 @@ export default function TeamCRM() {
                   key={item.id}
                   onClick={() => setSection(item.id)}
                   style={{ ...S.navItem, ...(active ? S.navItemActive : {}) }}
+                  className="crm-navitem"
                 >
                   <Icon size={15} />
                   {item.label}
@@ -3170,7 +3197,7 @@ export default function TeamCRM() {
           </div>
         </div>
 
-        <div style={S.viewerBtnSidebar}>
+        <div style={S.viewerBtnSidebar} className="crm-userrow">
           <div style={S.avatarSm}>{currentUser ? initials(currentUser.name) : <User size={12} />}</div>
           <div style={{ minWidth: 0, flex: 1, textAlign: "left" }}>
             <div style={{ fontSize: 12.5, color: T.ink, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -3184,7 +3211,7 @@ export default function TeamCRM() {
         </button>
       </div>
 
-      <div style={S.main}>
+      <div style={S.main} className="crm-main">
         {newVersionAvailable && (
           <div style={S.newVersionBanner}>
             <AlertTriangle size={15} style={{ flexShrink: 0 }} />
@@ -3208,7 +3235,7 @@ export default function TeamCRM() {
             </button>
           </div>
         )}
-        <div style={S.topbar}>
+        <div style={S.topbar} className="crm-topbar">
           <div>
             <div style={S.topbarTitle}>{NAV_ITEMS.find((n) => n.id === section)?.label}</div>
           </div>
@@ -3231,7 +3258,7 @@ export default function TeamCRM() {
         </div>
 
         {(section === "dashboard" || (section === "sales" && !(currentUser && isSalesEntryRole(currentUser.role)))) && (
-          <div style={S.stats}>
+          <div style={S.stats} className="crm-pad crm-stats">
             <div style={S.statItem}>
               <div style={S.statLabel}>
                 total sales {dashboardFilterMode === "all" ? "(all time)" : `(${dashboardRangeLabel})`}
@@ -3247,7 +3274,7 @@ export default function TeamCRM() {
         )}
 
         {section === "dashboard" && (
-          <div style={S.dashboardWrap}>
+          <div style={S.dashboardWrap} className="crm-pad">
             <div style={S.weekNavRow}>
               <div style={S.dashboardSectionLabel}>Sales by source</div>
               <div style={S.weekNav}>
@@ -3472,7 +3499,7 @@ export default function TeamCRM() {
         )}
 
         {section === "sales" && currentUser && isSalesEntryRole(currentUser.role) ? (
-          <div style={S.dashboardWrap}>
+          <div style={S.dashboardWrap} className="crm-pad">
             <div style={S.entryScreenWrap}>
               {entryJustSaved ? (
                 <>
@@ -3521,7 +3548,7 @@ export default function TeamCRM() {
               })
               .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
             return (
-          <div style={S.salesWrap}>
+          <div style={S.salesWrap} className="crm-pad">
                 <div style={S.contactsToolbar}>
                   <span style={S.contactsCount}>
                     {filteredSalesTab.length} sale{filteredSalesTab.length === 1 ? "" : "s"}
@@ -3692,7 +3719,7 @@ export default function TeamCRM() {
             .filter((group) => group.length > 1)
             .map((group) => [...group].sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0)));
           return (
-          <div style={S.contactsWrap}>
+          <div style={S.contactsWrap} className="crm-pad">
             <div style={S.reportsSubTabs}>
               <button
                 onClick={() => setLeadsSubTab("leads")}
@@ -4124,7 +4151,7 @@ export default function TeamCRM() {
         })()}
 
         {section === "employees" && (
-          <div style={S.contactsWrap}>
+          <div style={S.contactsWrap} className="crm-pad">
             {(() => {
               const employeeStatsMonth = getMonthRange(employeeStatsMonthOffset);
               const employeeStatsYear = getYearRange(employeeStatsYearOffset);
@@ -4491,7 +4518,7 @@ export default function TeamCRM() {
         )}
 
         {section === "rrgboard" && (
-          <div style={S.dashboardWrap}>
+          <div style={S.dashboardWrap} className="crm-pad">
             <div style={S.weekNavRow}>
               <div style={S.dashboardSectionLabel}>RRG board</div>
               <div style={S.weekNav}>
@@ -4675,7 +4702,7 @@ export default function TeamCRM() {
         )}
 
         {section === "payroll" && (
-          <div style={S.dashboardWrap}>
+          <div style={S.dashboardWrap} className="crm-pad">
             <div style={S.weekNavRow}>
               <div>
                 <div style={S.dashboardSectionLabel}>Payroll</div>
@@ -4953,7 +4980,7 @@ export default function TeamCRM() {
         )}
 
         {section === "reports" && (
-          <div style={S.dashboardWrap}>
+          <div style={S.dashboardWrap} className="crm-pad">
             <div style={S.reportsSubTabs}>
               <button
                 onClick={() => setReportsSubTab("snapshot")}
@@ -5603,7 +5630,7 @@ export default function TeamCRM() {
         )}
 
         {section === "information" && (
-          <div style={S.dashboardWrap}>
+          <div style={S.dashboardWrap} className="crm-pad">
             <div style={S.reportsSubTabs}>
               <button
                 onClick={() => setInformationSubTab("notes")}
@@ -5926,7 +5953,7 @@ export default function TeamCRM() {
         )}
 
         {section === "admin" && (
-          <div style={S.dashboardWrap}>
+          <div style={S.dashboardWrap} className="crm-pad">
             <div style={S.dashboardSectionLabel}>Users & access</div>
             <div style={S.hint}>
               Each person signs in with their own username and password. Admin accounts see every tab. Manager and Rep
@@ -6768,10 +6795,12 @@ function Modal({ children, onClose, narrow, wide, disableBackdropClose, printabl
   return (
     <div
       style={S.modalBackdrop}
+      className="crm-modal-backdrop"
       onClick={disableBackdropClose ? undefined : onClose}
     >
       <div
         id={printable ? "print-area" : undefined}
+        className="crm-modal-card"
         style={{ ...S.modalCard, ...(narrow ? { maxWidth: 420 } : {}), ...(wide ? { maxWidth: 760 } : {}) }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -7205,7 +7234,7 @@ function SaleForm({ initial, employees, settings, dncList, sales, syncingToEpg, 
           </div>
         </div>
       )}
-      <div style={S.formGrid2}>
+      <div style={S.formGrid2} className="crm-form2">
         <Field label="Timestamp">
           <input type="datetime-local" value={form.timestamp} onChange={(e) => set("timestamp", e.target.value)} style={S.input} />
         </Field>
