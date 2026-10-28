@@ -642,6 +642,7 @@ export default function TeamCRM() {
   const [search, setSearch] = useState("");
   const [contactModal, setContactModal] = useState(null);
   const [saleModal, setSaleModal] = useState(null);
+  const [viewSale, setViewSale] = useState(null);
   const [saleModalMinimized, setSaleModalMinimized] = useState(false);
   const [saleSyncingToEpg, setSaleSyncingToEpg] = useState(false);
   const [saleSaveError, setSaleSaveError] = useState("");
@@ -3970,6 +3971,9 @@ export default function TeamCRM() {
                             {s.source && <span style={{ ...S.sourceBadge, fontSize: 14 }}>{s.source}{s.source === "Paper" && s.paperSource ? " · " + s.paperSource : ""}</span>}
                           </div>
                           <div style={S.leadCardActions}>
+                            <button style={S.ghostBtn} onClick={() => setViewSale(s.id)}>
+                              View
+                            </button>
                             <button style={S.ghostBtn} onClick={() => setSaleModal({ ...s })}>
                               Edit
                             </button>
@@ -5679,7 +5683,7 @@ export default function TeamCRM() {
                       style={S.infoNoteCard}
                       onClick={() => {
                         setInfoNoteError("");
-                        setInfoNoteModal(n);
+                        setInfoNoteModal({ ...n, viewing: true });
                       }}
                     >
                       <div style={S.infoNoteHeader}>
@@ -5753,7 +5757,7 @@ export default function TeamCRM() {
         )}
 
         {infoNoteModal && (
-          <Modal onClose={() => setInfoNoteModal(null)}>
+          <Modal xwide onClose={() => setInfoNoteModal(null)}>
             <NoteForm
               initial={infoNoteModal}
               error={infoNoteError}
@@ -6418,6 +6422,21 @@ export default function TeamCRM() {
         </Modal>
       )}
 
+      {viewSale && sales.find((x) => x.id === viewSale) && (
+          <Modal wide onClose={() => setViewSale(null)}>
+            <LeadView
+              sale={sales.find((x) => x.id === viewSale)}
+              employeeById={employeeById}
+              onClose={() => setViewSale(null)}
+              onEdit={() => {
+                const cur = sales.find((x) => x.id === viewSale);
+                setViewSale(null);
+                setSaleModal({ ...cur });
+              }}
+            />
+          </Modal>
+        )}
+
       {saleModal && !saleModalMinimized && (
         <Modal
           onClose={() => {
@@ -6791,7 +6810,7 @@ export default function TeamCRM() {
   );
 }
 
-function Modal({ children, onClose, narrow, wide, disableBackdropClose, printable, onMinimize }) {
+function Modal({ children, onClose, narrow, wide, xwide, disableBackdropClose, printable, onMinimize }) {
   return (
     <div
       style={S.modalBackdrop}
@@ -6801,7 +6820,7 @@ function Modal({ children, onClose, narrow, wide, disableBackdropClose, printabl
       <div
         id={printable ? "print-area" : undefined}
         className="crm-modal-card"
-        style={{ ...S.modalCard, ...(narrow ? { maxWidth: 420 } : {}), ...(wide ? { maxWidth: 760 } : {}) }}
+        style={{ ...S.modalCard, ...(narrow ? { maxWidth: 420 } : {}), ...(wide ? { maxWidth: 760 } : {}), ...(xwide ? { maxWidth: 1000, maxHeight: "92vh" } : {}) }}
         onClick={(e) => e.stopPropagation()}
       >
         <div style={S.modalCloseRow} className="no-print">
@@ -7854,10 +7873,90 @@ function CandidateForm({ initial, onCancel, onSave, onDelete, onConvert }) {
   );
 }
 
+function LeadView({ sale: s, employeeById, onClose, onEdit }) {
+  const opener = employeeById[s.openerId];
+  const closer = employeeById[s.closerId];
+  const verification = employeeById[s.verificationId];
+  const addr = s.address ? `${s.address}${s.city ? `, ${s.city}` : ""}${s.state ? `, ${s.state}` : ""}${s.zip ? ` ${s.zip}` : ""}` : "";
+  const rows = [
+    ["Timestamp", formatTimestamp(s.timestamp)],
+    ["Submitted by", s.submittedBy],
+    ["Status", s.status],
+    ["Submitted to", s.leadSubmittedTo],
+    ["Source", s.source ? s.source + (s.source === "Paper" && s.paperSource ? " · " + s.paperSource : "") : ""],
+    ["Spouse name", s.spouseName],
+    ["Phone", s.phone],
+    ["Email", s.email],
+    ["Address", addr],
+    ["Package price", s.packagePrice ? money(s.packagePrice) : ""],
+    ["Date flex price", s.dateFlex ? money(s.dateFlex) : ""],
+    ["Total price", s.totalPrice ? money(s.totalPrice) : ""],
+    ["Genie #", s.genieNumber],
+    ["Opener", opener ? opener.name : "Unassigned"],
+    ["Closer", closer ? closer.name : "Unassigned"],
+    ["Verification", verification ? verification.name : "Unassigned"],
+  ];
+  if (s.refunded) {
+    rows.push(["Refund", s.refundType === "partial" ? `Partial ${money(s.refundAmount)}` : "Full refund (chargeback)"]);
+  }
+  return (
+    <div>
+      <div style={{ ...S.modalTitle, marginBottom: 4 }}>{s.name}</div>
+      <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 16 }}>Viewing only. Click Edit to change anything.</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "14px 18px" }}>
+        {rows.map(([label, value]) => (
+          <div key={label} style={S.leadInfoItem}>
+            <span style={S.leadInfoLabel}>{label}</span>
+            <span style={{ fontSize: 14 }}>{value || "—"}</span>
+          </div>
+        ))}
+      </div>
+      {s.notes && (
+        <div style={{ marginTop: 18 }}>
+          <div style={S.leadInfoLabel}>Notes</div>
+          <div style={{ fontSize: 14, lineHeight: 1.6, whiteSpace: "pre-wrap", overflowWrap: "anywhere", marginTop: 4 }}>{s.notes}</div>
+        </div>
+      )}
+      <div style={S.modalFooter}>
+        <div style={{ flex: 1 }} />
+        <button onClick={onClose} style={S.ghostBtn}>
+          Close
+        </button>
+        <button onClick={onEdit} style={S.primaryBtn}>
+          Edit
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function NoteForm({ initial, error, onCancel, onSave, onDelete }) {
   const [form, setForm] = useState({ date: todayDateStr(), title: "", body: "", ...initial });
+  const [viewing, setViewing] = useState(!!(initial && initial.viewing));
   function set(key, value) {
     setForm((f) => ({ ...f, [key]: value }));
+  }
+  if (viewing) {
+    return (
+      <div>
+        <div style={{ ...S.modalTitle, fontSize: 24, marginBottom: 4 }}>{form.title}</div>
+        <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 18 }}>
+          {form.date ? new Date(form.date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }) : ""}
+        </div>
+        <div style={{ fontSize: 15, lineHeight: 1.65, color: T.ink, whiteSpace: "pre-wrap", overflowWrap: "anywhere", minHeight: 260 }}>
+          {form.body || <span style={{ color: T.textMuted }}>No note text.</span>}
+        </div>
+        <div style={S.modalFooter}>
+          <div style={{ flex: 1 }} />
+          <button onClick={onCancel} style={S.ghostBtn}>
+            Close
+          </button>
+          <button onClick={() => setViewing(false)} style={S.primaryBtn}>
+            Edit
+          </button>
+        </div>
+      </div>
+    );
   }
   return (
     <div>
@@ -7869,7 +7968,7 @@ function NoteForm({ initial, error, onCancel, onSave, onDelete }) {
         <input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} style={S.input} />
       </Field>
       <Field label="Notes">
-        <textarea value={form.body} onChange={(e) => set("body", e.target.value)} style={{ ...S.input, minHeight: 140, resize: "vertical" }} />
+        <textarea value={form.body} onChange={(e) => set("body", e.target.value)} style={{ ...S.input, minHeight: 360, fontSize: 14, lineHeight: 1.55, resize: "vertical" }} />
       </Field>
       {error && <div style={S.errorText}>{error}</div>}
       <div style={S.modalFooter}>
