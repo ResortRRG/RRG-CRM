@@ -3128,6 +3128,7 @@ export default function TeamCRM() {
         .crm-scroll::-webkit-scrollbar-track { background: #EDEAE0; border-radius: 6px; }
         .crm-scroll::-webkit-scrollbar-thumb { background: #B8B2A0; border-radius: 6px; border: 2px solid #EDEAE0; }
         .crm-scroll::-webkit-scrollbar-thumb:hover { background: #9C9686; }
+        @media (max-width: 760px) { .crm-zoom { zoom: 1 !important; } }
         .crm-row:hover { background: #F4F2EA; }
         .crm-row-del:hover { color: #A32D2D !important; background: #FCEBEB !important; }
         .crm-scroll input[type="number"]:hover, .crm-scroll input[type="number"]:focus { border-color: #D3CEBD !important; background: #FFFFFF !important; }
@@ -3973,6 +3974,16 @@ export default function TeamCRM() {
                           <div style={S.leadCardActions}>
                             <button style={S.ghostBtn} onClick={() => setViewSale(s.id)}>
                               View
+                            </button>
+                            <button
+                              style={S.ghostBtn}
+                              onClick={() => {
+                                setViewSale(s.id);
+                                setTimeout(() => window.print(), 400);
+                              }}
+                              aria-label="Print lead"
+                            >
+                              <Printer size={13} /> Print
                             </button>
                             <button style={S.ghostBtn} onClick={() => setSaleModal({ ...s })}>
                               Edit
@@ -6423,7 +6434,7 @@ export default function TeamCRM() {
       )}
 
       {viewSale && sales.find((x) => x.id === viewSale) && (
-          <Modal wide onClose={() => setViewSale(null)}>
+          <Modal wide printable onClose={() => setViewSale(null)}>
             <LeadView
               sale={sales.find((x) => x.id === viewSale)}
               employeeById={employeeById}
@@ -6564,7 +6575,8 @@ export default function TeamCRM() {
       )}
 
       {employeeDetail && !employeeDetailMinimized && (
-        <Modal onClose={() => setEmployeeDetailId(null)} onMinimize={() => setEmployeeDetailMinimized(true)} wide>
+        <Modal onClose={() => setEmployeeDetailId(null)} onMinimize={() => setEmployeeDetailMinimized(true)} xwide printable>
+          <div className="crm-zoom" style={{ zoom: 1.25 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
             <div>
               <div style={S.modalTitle}>{employeeDetail.name}</div>
@@ -6687,6 +6699,7 @@ export default function TeamCRM() {
               )}
             </div>
           )}
+          </div>
         </Modal>
       )}
 
@@ -6826,7 +6839,7 @@ function Modal({ children, onClose, narrow, wide, xwide, disableBackdropClose, p
         <div style={S.modalCloseRow} className="no-print">
           {printable && (
             <button onClick={() => window.print()} style={S.modalIconBtn} aria-label="Print">
-              <Printer size={15} />
+              <Printer size={19} />
             </button>
           )}
           {onMinimize && (
