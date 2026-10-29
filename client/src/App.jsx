@@ -1836,6 +1836,12 @@ export default function TeamCRM() {
       ? formatWeekLabel(pnlPeriodStart, pnlPeriodEnd)
       : "All time";
   const pnlIsMultiMonth = pnlMode === "all" || pnlMode === "custom";
+  const pnlEmployeeRange = pnlMode === "all" ? null : { start: pnlPeriodStart, end: pnlPeriodEnd };
+  const pnlEmployeeRows = buildEmployeeRows(
+    pnlEmployeeRange,
+    sales.filter((x) => x.status === "Approved" && (!pnlEmployeeRange || isSaleInRange(x, pnlEmployeeRange.start, pnlEmployeeRange.end))),
+    sales.filter((x) => x.refunded && (!pnlEmployeeRange || dateInRange(chargebackEffectiveDate(x), pnlEmployeeRange.start, pnlEmployeeRange.end)))
+  );
   const pnlExpenseSourceMonthDate = pnlMode === "week" ? pnlWeek.start : pnlMonth.start;
   const pnlExpenseSourceMonthKey = `${pnlExpenseSourceMonthDate.getFullYear()}-${String(pnlExpenseSourceMonthDate.getMonth() + 1).padStart(2, "0")}`;
   const pnlExpenseSourceMonthLabel = formatMonthLabel(pnlExpenseSourceMonthDate);
@@ -2143,7 +2149,8 @@ export default function TeamCRM() {
     return dncList.find((d) => normalizePhone(d.phone) === normalized) || null;
   }
 
-  const reportsEmployeeRows = activeEmployees
+  function buildEmployeeRows(reportsRange, reportsApprovedSales, reportsRefundedSales) {
+  return activeEmployees
     .map((emp) => {
       const empSales = reportsApprovedSales.filter(
         (s) => s.openerId === emp.id || s.closerId === emp.id || s.verificationId === emp.id
@@ -2231,6 +2238,8 @@ export default function TeamCRM() {
       return { employee: emp, salesCount: empSales.length, credited, rate, commission, companyRevenue, profitLoss };
     })
     .filter((r) => r.salesCount > 0 || r.rate > 0);
+  }
+  const reportsEmployeeRows = buildEmployeeRows(reportsRange, reportsApprovedSales, reportsRefundedSales);
   const reportsTotalCommission = reportsEmployeeRows.reduce((s, r) => s + r.commission, 0);
 
   function exportReportCSV() {
@@ -5321,63 +5330,6 @@ export default function TeamCRM() {
               </div>
             </div>
 
-            <div style={{ ...S.dashboardSectionLabel, marginTop: 20 }}>Employees</div>
-            {reportsEmployeeRows.length === 0 ? (
-              <div style={S.emptyState}>
-                <BarChart3 size={22} color={T.borderStrong} />
-                <div style={{ marginTop: 8, fontSize: 13, color: T.textMuted }}>
-                  No employee activity for this period yet
-                </div>
-              </div>
-            ) : (
-              <div className="crm-scroll" style={S.tableScroll}>
-                <table style={{ ...S.table, minWidth: 620 }}>
-                  <thead>
-                    <tr>
-                      <th style={S.th}>Employee</th>
-                      <th style={S.th}>Sales</th>
-                      <th style={S.th}>Credited total</th>
-                      <th style={S.th}>Commission %</th>
-                      <th style={S.th}>Commission earned</th>
-                      <th style={S.th}>Profit or Loss</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {reportsEmployeeRows.map((r) => (
-                      <tr key={r.employee.id}>
-                        <td style={{ ...S.td, fontWeight: 500, whiteSpace: "nowrap" }}>{r.employee.name}</td>
-                        <td style={S.td}>{r.salesCount}</td>
-                        <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14 }}>{money(r.credited)}</td>
-                        <td style={S.td}>
-                          {r.rate > 0 ? <span style={S.commissionRateBadge}>{r.rate}%</span> : <span style={{ color: T.borderStrong }}>—</span>}
-                        </td>
-                        <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 500 }}>{money(r.commission)}</td>
-                        <td
-                          style={{
-                            ...S.td,
-                            fontFamily: T.mono,
-                            fontSize: 14,
-                            fontWeight: 600,
-                            color: r.profitLoss >= 0 ? T.pineDark : "#A32D2D",
-                          }}
-                        >
-                          {r.profitLoss >= 0 ? "+" : "-"}
-                          {money(Math.abs(r.profitLoss))}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            <div style={{ ...S.hint, marginTop: 12 }}>
-              Commission figures here are earned-commission only for the period shown — they don't include base pay or the
-              {" "}{money(settings.minWeeklyPay)} weekly minimum guarantee, since those apply per calendar week. Visit Payroll for
-              exact take-home figures on any given week. Profit or Loss compares what RRG actually collects from Monster/PGR
-              on their sales against what they were paid — calculated week by week the same way Payroll does it (commission,
-              Draw/Base pay, the weekly minimum, absence deductions, late starts), and for "All time" it counts every week
-              since their first week, including weeks with no sales.
-            </div>
               </>
             )}
 
@@ -5603,6 +5555,63 @@ export default function TeamCRM() {
                 <div style={{ ...S.hint, marginTop: 10 }}>
                   Add or rename expense categories under Admin/Settings → Dropdown lists.
                 </div>
+            <div style={{ ...S.dashboardSectionLabel, marginTop: 26 }}>Profit or Loss by employee <span style={{ fontWeight: 400, color: T.textMuted }}>· {pnlPeriodLabel}</span></div>
+            {pnlEmployeeRows.length === 0 ? (
+              <div style={S.emptyState}>
+                <BarChart3 size={22} color={T.borderStrong} />
+                <div style={{ marginTop: 8, fontSize: 13, color: T.textMuted }}>
+                  No employee activity for this period yet
+                </div>
+              </div>
+            ) : (
+              <div className="crm-scroll" style={S.tableScroll}>
+                <table style={{ ...S.table, minWidth: 620 }}>
+                  <thead>
+                    <tr>
+                      <th style={S.th}>Employee</th>
+                      <th style={S.th}>Sales</th>
+                      <th style={S.th}>Credited total</th>
+                      <th style={S.th}>Commission %</th>
+                      <th style={S.th}>Commission earned</th>
+                      <th style={S.th}>Profit or Loss</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pnlEmployeeRows.map((r) => (
+                      <tr key={r.employee.id}>
+                        <td style={{ ...S.td, fontWeight: 500, whiteSpace: "nowrap" }}>{r.employee.name}</td>
+                        <td style={S.td}>{r.salesCount}</td>
+                        <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14 }}>{money(r.credited)}</td>
+                        <td style={S.td}>
+                          {r.rate > 0 ? <span style={S.commissionRateBadge}>{r.rate}%</span> : <span style={{ color: T.borderStrong }}>—</span>}
+                        </td>
+                        <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 500 }}>{money(r.commission)}</td>
+                        <td
+                          style={{
+                            ...S.td,
+                            fontFamily: T.mono,
+                            fontSize: 14,
+                            fontWeight: 600,
+                            color: r.profitLoss >= 0 ? T.pineDark : "#A32D2D",
+                          }}
+                        >
+                          {r.profitLoss >= 0 ? "+" : "-"}
+                          {money(Math.abs(r.profitLoss))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <div style={{ ...S.hint, marginTop: 12 }}>
+              Commission figures here are earned-commission only for the period shown — they don't include base pay or the
+              {" "}{money(settings.minWeeklyPay)} weekly minimum guarantee, since those apply per calendar week. Visit Payroll for
+              exact take-home figures on any given week. Profit or Loss compares what RRG actually collects from Monster/PGR
+              on their sales against what they were paid — calculated week by week the same way Payroll does it (commission,
+              Draw/Base pay, the weekly minimum, absence deductions, late starts), and for "All time" it counts every week
+              since their first week, including weeks with no sales.
+            </div>
               </div>
             )}
 
