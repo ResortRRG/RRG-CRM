@@ -2180,22 +2180,52 @@ export default function TeamCRM() {
             : 0;
         return sum + saleCredit(s, emp.id) * contractRate;
       }, 0);
+      // What the employee is actually paid, week by week, the same way Payroll
+      // works it out: commission (plus Draw/Base pay) vs. the weekly minimum,
+      // after absence deductions. "All time" starts from their first week.
       let estimatedPaid = commission;
-      if (reportsRange) {
+      {
         const today = new Date();
         today.setHours(23, 59, 59, 999);
-        let weekCursor = mondayOfWeek(reportsRange.start);
-        let totalGuarantee = 0;
-        let guard = 0;
-        while (weekCursor <= reportsRange.end && weekCursor <= today && guard < 260) {
-          if (employeesForWeek(weekCursor).some((e) => e.id === emp.id)) {
-            totalGuarantee += effectiveMinGuarantee(emp.id, weekCursor);
-          }
-          weekCursor = new Date(weekCursor);
-          weekCursor.setDate(weekCursor.getDate() + 7);
-          guard++;
+        let rangeStart = reportsRange ? reportsRange.start : null;
+        let rangeEnd = reportsRange ? reportsRange.end : today;
+        if (!rangeStart) {
+          let first = null;
+          if (emp.startDate) first = new Date(emp.startDate + "T00:00:00");
+          empSales.forEach((s) => {
+            const d = new Date(s.timestamp);
+            if (!isNaN(d.getTime()) && (!first || d < first)) first = d;
+          });
+          rangeStart = first;
         }
-        estimatedPaid = Math.max(commission, totalGuarantee);
+        if (rangeStart) {
+          let weekCursor = mondayOfWeek(rangeStart);
+          let paidTotal = 0;
+          let guard = 0;
+          while (weekCursor <= rangeEnd && weekCursor <= today && guard < 520) {
+            if (employeesForWeek(weekCursor).some((e) => e.id === emp.id)) {
+              const weekEnd = new Date(weekCursor);
+              weekEnd.setDate(weekEnd.getDate() + 5);
+              weekEnd.setHours(23, 59, 59, 999);
+              const override = getPayrollOverride(emp.id, weekCursor);
+              if (override !== null) {
+                paidTotal += override;
+              } else {
+                const wkCredit = creditedByWeek[weekCursor.getTime()] || 0;
+                const wkRate = effectiveCommissionRate(emp, wkCredit);
+                const wkRefund = refundedCreditForEmployee(emp.id, weekCursor, weekEnd);
+                const wkCommission = wkCredit * (wkRate / 100) - wkRefund * (wkRate / 100);
+                const hasBase = emp.basePay !== "" && emp.basePay !== undefined && emp.basePay !== null;
+                const wkBase = hasBase ? effectiveBasePay(emp.id, weekCursor, emp.basePay) : 0;
+                paidTotal += Math.max(combinedEarnings(wkCommission, wkBase, emp.name), effectiveMinGuarantee(emp.id, weekCursor));
+              }
+            }
+            weekCursor = new Date(weekCursor);
+            weekCursor.setDate(weekCursor.getDate() + 7);
+            guard++;
+          }
+          estimatedPaid = paidTotal;
+        }
       }
       const profitLoss = companyRevenue - estimatedPaid;
       return { employee: emp, salesCount: empSales.length, credited, rate, commission, companyRevenue, profitLoss };
@@ -5344,9 +5374,9 @@ export default function TeamCRM() {
               Commission figures here are earned-commission only for the period shown — they don't include base pay or the
               {" "}{money(settings.minWeeklyPay)} weekly minimum guarantee, since those apply per calendar week. Visit Payroll for
               exact take-home figures on any given week. Profit or Loss compares what RRG actually collects from Monster/PGR
-              on their sales against what they were paid — the guarantee side is calculated week by week, correctly
-              accounting for absences and employees who started partway through the period, not just a flat weeks×
-              {money(settings.minWeeklyPay)} estimate.
+              on their sales against what they were paid — calculated week by week the same way Payroll does it (commission,
+              Draw/Base pay, the weekly minimum, absence deductions, late starts), and for "All time" it counts every week
+              since their first week, including weeks with no sales.
             </div>
               </>
             )}
