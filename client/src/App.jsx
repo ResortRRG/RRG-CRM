@@ -7318,16 +7318,6 @@ function SaleForm({ initial, employees, settings, dncList, sales, syncingToEpg, 
         <Field label="Genie #" required>
           <input value={form.genieNumber} onChange={(e) => set("genieNumber", e.target.value)} style={S.input} />
         </Field>
-        <Field label="Card last 4 (credit card)">
-          <input
-            value={form.cardLast4 || ""}
-            onChange={(e) => set("cardLast4", e.target.value.replace(/\D/g, "").slice(0, 4))}
-            inputMode="numeric"
-            maxLength={4}
-            placeholder="Last 4 digits only"
-            style={{ ...S.input, fontFamily: T.mono }}
-          />
-        </Field>
         <Field label="Name" required>
           <input value={form.name} onChange={(e) => set("name", e.target.value)} style={S.input} autoFocus />
         </Field>
@@ -7379,6 +7369,16 @@ function SaleForm({ initial, employees, settings, dncList, sales, syncingToEpg, 
         </Field>
         <Field label="Zip code" required>
           <input value={form.zip} onChange={(e) => set("zip", e.target.value)} style={S.input} />
+        </Field>
+        <Field label="Card last 4 (credit card)">
+          <input
+            value={form.cardLast4 || ""}
+            onChange={(e) => set("cardLast4", e.target.value.replace(/\D/g, "").slice(0, 4))}
+            inputMode="numeric"
+            maxLength={4}
+            placeholder="Last 4 digits only"
+            style={{ ...S.input, fontFamily: T.mono }}
+          />
         </Field>
         <Field label="Package price" required>
           <input type="number" value={form.packagePrice} onChange={(e) => set("packagePrice", e.target.value)} style={{ ...S.input, fontFamily: T.mono }} />
