@@ -244,6 +244,7 @@ function blankSale() {
     password: "",
     totalPrice: "",
     genieNumber: "",
+    cardLast4: "",
     openerId: "",
     closerId: "",
     verificationId: "",
@@ -3852,7 +3853,8 @@ export default function TeamCRM() {
                     (s.email || "").toLowerCase().includes(q2) ||
                     (s.phone || "").toLowerCase().includes(q2) ||
                     (s.city || "").toLowerCase().includes(q2) ||
-                    (s.genieNumber || "").toLowerCase().includes(q2)
+                    (s.genieNumber || "").toLowerCase().includes(q2) ||
+                    (s.cardLast4 || "").includes(q2)
                   );
                 })
                 .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
@@ -4102,6 +4104,10 @@ export default function TeamCRM() {
                           <div style={S.leadInfoItem}>
                             <span style={S.leadInfoLabel}>Genie #</span>
                             <span>{s.genieNumber || "—"}</span>
+                          </div>
+                          <div style={S.leadInfoItem}>
+                            <span style={S.leadInfoLabel}>Card last 4</span>
+                            <span style={{ fontFamily: T.mono, fontSize: 14 }}>{s.cardLast4 || "—"}</span>
                           </div>
                           <div style={S.leadInfoItem}>
                             <span style={S.leadInfoLabel}>Password</span>
@@ -7312,6 +7318,16 @@ function SaleForm({ initial, employees, settings, dncList, sales, syncingToEpg, 
         <Field label="Genie #" required>
           <input value={form.genieNumber} onChange={(e) => set("genieNumber", e.target.value)} style={S.input} />
         </Field>
+        <Field label="Card last 4 (credit card)">
+          <input
+            value={form.cardLast4 || ""}
+            onChange={(e) => set("cardLast4", e.target.value.replace(/\D/g, "").slice(0, 4))}
+            inputMode="numeric"
+            maxLength={4}
+            placeholder="Last 4 digits only"
+            style={{ ...S.input, fontFamily: T.mono }}
+          />
+        </Field>
         <Field label="Name" required>
           <input value={form.name} onChange={(e) => set("name", e.target.value)} style={S.input} autoFocus />
         </Field>
@@ -7944,6 +7960,7 @@ function LeadView({ sale: s, employeeById, onClose, onEdit }) {
     ["Date flex price", s.dateFlex ? money(s.dateFlex) : ""],
     ["Total price", s.totalPrice ? money(s.totalPrice) : ""],
     ["Genie #", s.genieNumber],
+    ["Card last 4", s.cardLast4],
     ["Opener", opener ? opener.name : "Unassigned"],
     ["Closer", closer ? closer.name : "Unassigned"],
     ["Verification", verification ? verification.name : "Unassigned"],
