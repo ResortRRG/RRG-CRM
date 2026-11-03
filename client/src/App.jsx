@@ -2236,7 +2236,7 @@ export default function TeamCRM() {
         }
       }
       const profitLoss = companyRevenue - estimatedPaid;
-      return { employee: emp, salesCount: empSales.length, credited, rate, commission, companyRevenue, profitLoss };
+      return { employee: emp, salesCount: empSales.length, credited, rate, commission, companyRevenue, profitLoss, totalPaid: estimatedPaid };
     })
     .filter((r) => r.salesCount > 0 || r.rate > 0);
   }
@@ -5571,7 +5571,7 @@ export default function TeamCRM() {
               </div>
             ) : (
               <div className="crm-scroll" style={S.tableScroll}>
-                <table style={{ ...S.table, minWidth: 620 }}>
+                <table style={{ ...S.table, minWidth: 760 }}>
                   <thead>
                     <tr>
                       <th style={S.th}>Employee</th>
@@ -5579,6 +5579,7 @@ export default function TeamCRM() {
                       <th style={S.th}>Credited total</th>
                       <th style={S.th}>Commission %</th>
                       <th style={S.th}>Commission earned</th>
+                      <th style={S.th}>Total pay (draw / base / guarantee)</th>
                       <th style={S.th}>Profit or Loss</th>
                     </tr>
                   </thead>
@@ -5592,6 +5593,7 @@ export default function TeamCRM() {
                           {r.rate > 0 ? <span style={S.commissionRateBadge}>{r.rate}%</span> : <span style={{ color: T.borderStrong }}>—</span>}
                         </td>
                         <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 500 }}>{money(r.commission)}</td>
+                        <td style={{ ...S.td, fontFamily: T.mono, fontSize: 14, fontWeight: 600 }}>{money(r.totalPaid)}</td>
                         <td
                           style={{
                             ...S.td,
