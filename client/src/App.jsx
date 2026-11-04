@@ -116,6 +116,11 @@ const DEFAULT_SETTINGS = {
   monsterDialerBonusThreshold: 20000,
   monsterCommissionRateDialerBonus: 65,
   pgrCommissionRate: 75,
+  dialerWeeklyCost: 482.53,
+  epgReserveWeekly: 150,
+  epgReserveTarget: 5000,
+  epgReserveBalance: 1400,
+  epgReserveAsOf: "2026-11-04",
 };
 
 const ROLE_PERMISSIONS = {
@@ -1880,11 +1885,86 @@ export default function TeamCRM() {
     .reduce((sum, s) => sum + (Number(s.refundAmount) || 0), 0);
   const pnlTotalRefunds = pnlMonsterRefunds + pnlPgrRefunds + pnlOtherRefunds;
   const pnlRevenue = pnlMonsterRevenue + pnlPgrRevenue + pnlOtherRevenue - pnlTotalRefunds;
+  // ---- Dialer weekly cost and EPG reserve (both come out of every pay week) ----
+  const todayEnd = new Date();
+  todayEnd.setHours(23, 59, 59, 999);
+  const firstSaleDate = sales.reduce((min, x) => {
+    const d = new Date(x.timestamp);
+    return !isNaN(d.getTime()) && (!min || d < min) ? d : min;
+  }, null);
+  // Pay-week Mondays that fall inside a range and have already started.
+  function weekMondaysInRange(start, end) {
+    const out = [];
+    let cur = mondayOfWeek(start);
+    if (cur < start) cur.setDate(cur.getDate() + 7);
+    let guard = 0;
+    while (cur <= end && cur <= todayEnd && guard < 600) {
+      out.push(new Date(cur));
+      cur = new Date(cur);
+      cur.setDate(cur.getDate() + 7);
+      guard++;
+    }
+    return out;
+  }
+  const dialerWeeklyCostAmt = Number(settings.dialerWeeklyCost) || 0;
+  function dialerCostForRange(start, end) {
+    if (!dialerWeeklyCostAmt) return { amount: 0, weeks: 0 };
+    const from = start && start.getFullYear() > 2001 ? start : firstSaleDate || start;
+    const n = weekMondaysInRange(from, end).length;
+    return { amount: n * dialerWeeklyCostAmt, weeks: n };
+  }
+  const epgWeekly = Number(settings.epgReserveWeekly) || 0;
+  const epgTarget = Number(settings.epgReserveTarget) || 0;
+  const epgStartBalance = Number(settings.epgReserveBalance) || 0;
+  const epgAsOf = settings.epgReserveAsOf ? new Date(settings.epgReserveAsOf + "T23:59:59") : null;
+  // Walk forward week by week from the "as of" date: each new pay week takes the
+  // weekly amount until the balance reaches the target.
+  const epgSchedule = (() => {
+    const deductions = {};
+    let balance = epgStartBalance;
+    if (!epgAsOf || !epgWeekly || !epgTarget) return { deductions, balanceNow: balance, weeksLeft: 0, fullOn: null };
+    let cur = mondayOfWeek(epgAsOf);
+    cur.setDate(cur.getDate() + 7);
+    let guard = 0;
+    while (balance < epgTarget && cur <= todayEnd && guard < 600) {
+      const take = Math.min(epgWeekly, epgTarget - balance);
+      deductions[cur.getTime()] = take;
+      balance += take;
+      cur = new Date(cur);
+      cur.setDate(cur.getDate() + 7);
+      guard++;
+    }
+    const balanceNow = balance;
+    let weeksLeft = 0;
+    let fullOn = null;
+    if (balance < epgTarget) {
+      weeksLeft = Math.ceil((epgTarget - balance) / epgWeekly);
+      fullOn = new Date(cur);
+      fullOn.setDate(fullOn.getDate() + (weeksLeft - 1) * 7);
+    }
+    return { deductions, balanceNow, weeksLeft, fullOn };
+  })();
+  function epgWithheldForRange(start, end) {
+    return weekMondaysInRange(start, end).reduce((sum, m) => sum + (epgSchedule.deductions[m.getTime()] || 0), 0);
+  }
+  const pnlDialerCost = dialerCostForRange(pnlPeriodStart, pnlPeriodEnd);
+  const pnlEpgWithheld = epgWithheldForRange(pnlPeriodStart, pnlPeriodEnd);
+  const reportsDialerCost = reportsRange ? dialerCostForRange(reportsRange.start, reportsRange.end) : dialerCostForRange(new Date(2000, 0, 1), todayEnd);
+  const reportsEpgWithheld = reportsRange ? epgWithheldForRange(reportsRange.start, reportsRange.end) : epgWithheldForRange(new Date(2000, 0, 1), todayEnd);
   const pnlExpensesForMonth = expenses[pnlMonthKey] || {};
   const pnlAutoPayrollTotal = payrollTotalForRange(pnlPeriodStart, pnlPeriodEnd);
   const pnlExpenseRows = settings.expenseCategories.map((cat) => {
     if (cat === "Payroll") {
       return { category: cat, amount: pnlAutoPayrollTotal, auto: true, transactions: [] };
+    }
+    if (cat === "Dialer" && dialerWeeklyCostAmt > 0) {
+      return {
+        category: cat,
+        amount: pnlDialerCost.amount,
+        auto: true,
+        note: `${money(dialerWeeklyCostAmt)} a week × ${pnlDialerCost.weeks} week${pnlDialerCost.weeks === 1 ? "" : "s"}`,
+        transactions: [],
+      };
     }
     if (pnlIsMultiMonth) {
       const catTransactions = expenseTransactions
@@ -1910,6 +1990,15 @@ export default function TeamCRM() {
     const amount = pnlMode === "week" ? monthlyAmount / pnlWeeksInSourceMonth : monthlyAmount;
     return { category: cat, amount, auto: false, transactions: catTransactions };
   });
+  if (epgWeekly > 0 && epgTarget > 0) {
+    pnlExpenseRows.push({
+      category: "EPG reserve (withheld)",
+      amount: pnlEpgWithheld,
+      auto: true,
+      note: `${money(epgWeekly)} a week held by EPG until it reaches ${money(epgTarget)} · balance now ${money(epgSchedule.balanceNow)}`,
+      transactions: [],
+    });
+  }
   const pnlTotalExpenses = pnlExpenseRows.reduce((sum, r) => sum + r.amount, 0);
   const pnlNetProfit = pnlRevenue - pnlTotalExpenses;
   const pnlProfitMargin = pnlRevenue > 0 ? (pnlNetProfit / pnlRevenue) * 100 : 0;
@@ -5335,10 +5424,54 @@ export default function TeamCRM() {
                     of {money(reportsMonsterPaperTotal + reportsMonsterDialerTotal + reportsPgrTotal)}
                   </span>
                 </div>
-                <div style={{ ...S.sourceValue, color: T.pineDark }}>{money(reportsAllSourceCommission)}</div>
-                <div style={{ fontSize: 11.5, color: T.textMuted, marginTop: 2 }}>
-                  Paper + Dialer + PGR{reportsChargebackCommission > 0 ? ` − chargebacks (${money(reportsChargebackCommission)})` : ""}
+                <div style={{ ...S.sourceValue, color: T.pineDark }}>
+                  {money(reportsAllSourceCommission - reportsDialerCost.amount - reportsEpgWithheld)}
                 </div>
+                <div style={{ fontSize: 11.5, color: T.textMuted, marginTop: 2 }}>
+                  Paper + Dialer + PGR = {money(reportsMonsterPaperCommission + reportsMonsterDialerCommission + reportsPgrCommission)}
+                  {reportsChargebackCommission > 0 ? ` − chargebacks (${money(reportsChargebackCommission)})` : ""}
+                  {reportsDialerCost.amount > 0 ? ` − Dialer cost (${money(reportsDialerCost.amount)})` : ""}
+                  {reportsEpgWithheld > 0 ? ` − EPG reserve (${money(reportsEpgWithheld)})` : ""}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ ...S.dashboardSectionLabel, marginTop: 20 }}>Dialer cost &amp; EPG reserve</div>
+            <div style={{ ...S.sourceGrid, marginTop: 10 }}>
+              <div style={S.sourceCard}>
+                <div style={S.reportsCardLabel}>Dialer cost</div>
+                <div style={{ ...S.sourceValue, color: "#A32D2D" }}>{money(reportsDialerCost.amount)}</div>
+                <div style={{ fontSize: 11.5, color: T.textMuted, marginTop: 2 }}>
+                  {money(dialerWeeklyCostAmt)} a week × {reportsDialerCost.weeks} week{reportsDialerCost.weeks === 1 ? "" : "s"}
+                </div>
+              </div>
+              <div style={S.sourceCard}>
+                <div style={S.reportsCardLabel}>EPG reserve held</div>
+                <div style={S.sourceValue}>{money(epgSchedule.balanceNow)}</div>
+                <div style={{ height: 8, background: "#EDEAE0", borderRadius: 4, marginTop: 8, overflow: "hidden" }}>
+                  <div
+                    style={{
+                      width: `${epgTarget > 0 ? Math.min(100, (epgSchedule.balanceNow / epgTarget) * 100) : 0}%`,
+                      height: "100%",
+                      background: T.pineDark,
+                    }}
+                  />
+                </div>
+                <div style={{ fontSize: 11.5, color: T.textMuted, marginTop: 6 }}>
+                  of {money(epgTarget)} · {money(epgWeekly)} a week
+                  {epgSchedule.weeksLeft > 0
+                    ? ` · ${epgSchedule.weeksLeft} more week${epgSchedule.weeksLeft === 1 ? "" : "s"} to go${
+                        epgSchedule.fullOn ? ` (full around ${epgSchedule.fullOn.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })})` : ""
+                      }`
+                    : epgTarget > 0 && epgSchedule.balanceNow >= epgTarget
+                    ? " · reserve is full, withholding stops"
+                    : ""}
+                </div>
+              </div>
+              <div style={S.sourceCard}>
+                <div style={S.reportsCardLabel}>EPG reserve withheld this period</div>
+                <div style={{ ...S.sourceValue, color: "#A32D2D" }}>{money(reportsEpgWithheld)}</div>
+                <div style={{ fontSize: 11.5, color: T.textMuted, marginTop: 2 }}>Counted as an expense on the Profit &amp; Loss tab</div>
               </div>
             </div>
 
@@ -5510,6 +5643,7 @@ export default function TeamCRM() {
                             <td style={{ ...S.td, fontWeight: 500 }}>
                               {row.category}
                               {row.auto && <span style={S.pnlAutoBadge}>Auto</span>}
+                              {row.note && <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 400, marginTop: 2 }}>{row.note}</div>}
                             </td>
                             <td style={S.td}>
                               <span style={{ fontFamily: T.mono, fontSize: 13, color: T.ink }}>{money(row.amount)}</span>
@@ -6133,6 +6267,51 @@ export default function TeamCRM() {
                   onChange={(e) => updateSettings({ ...settings, monsterCommissionRateDialerBonus: Number(e.target.value) || 0 })}
                   type="number"
                   style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }}
+                />
+              </div>
+              <div>
+                <div style={S.fieldLabel}>Dialer cost per week ($)</div>
+                <input
+                  value={settings.dialerWeeklyCost}
+                  onChange={(e) => updateSettings({ ...settings, dialerWeeklyCost: Number(e.target.value) || 0 })}
+                  type="number"
+                  style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }}
+                />
+              </div>
+              <div>
+                <div style={S.fieldLabel}>EPG reserve taken per week ($)</div>
+                <input
+                  value={settings.epgReserveWeekly}
+                  onChange={(e) => updateSettings({ ...settings, epgReserveWeekly: Number(e.target.value) || 0 })}
+                  type="number"
+                  style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }}
+                />
+              </div>
+              <div>
+                <div style={S.fieldLabel}>EPG reserve target ($)</div>
+                <input
+                  value={settings.epgReserveTarget}
+                  onChange={(e) => updateSettings({ ...settings, epgReserveTarget: Number(e.target.value) || 0 })}
+                  type="number"
+                  style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }}
+                />
+              </div>
+              <div>
+                <div style={S.fieldLabel}>EPG reserve balance as of the date below ($)</div>
+                <input
+                  value={settings.epgReserveBalance}
+                  onChange={(e) => updateSettings({ ...settings, epgReserveBalance: Number(e.target.value) || 0 })}
+                  type="number"
+                  style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }}
+                />
+              </div>
+              <div>
+                <div style={S.fieldLabel}>EPG reserve balance as-of date</div>
+                <input
+                  value={settings.epgReserveAsOf || ""}
+                  onChange={(e) => updateSettings({ ...settings, epgReserveAsOf: e.target.value })}
+                  type="date"
+                  style={{ ...S.input, fontSize: 14 }}
                 />
               </div>
               <div>
