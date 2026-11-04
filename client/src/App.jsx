@@ -5419,7 +5419,7 @@ export default function TeamCRM() {
               </div>
               <div style={{ ...S.sourceCard, borderColor: T.pineDark }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ ...S.leadBadge, background: T.pineDark, color: "#fff" }}>Total commission</span>
+                  <span style={{ ...S.leadBadge, background: T.pineDark, color: "#fff" }}>Total commission · expected payout</span>
                   <span style={S.sourceCount}>
                     of {money(reportsMonsterPaperTotal + reportsMonsterDialerTotal + reportsPgrTotal)}
                   </span>
