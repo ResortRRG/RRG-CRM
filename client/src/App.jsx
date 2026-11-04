@@ -7252,10 +7252,12 @@ function SaleForm({ initial, employees, settings, dncList, sales, syncingToEpg, 
   }
 
   const missingFields = SALE_REQUIRED_FIELDS.filter((f) => !String(form[f.key] || "").trim());
+  const genieTrimmed = String(form.genieNumber || "").trim();
+  const genieBadForMonster = form.leadSubmittedTo === "Monster" && genieTrimmed !== "" && !/^\d{8}$/.test(genieTrimmed);
   const [showValidation, setShowValidation] = useState(false);
 
   async function handleSave() {
-    if (missingFields.length > 0) {
+    if (missingFields.length > 0 || genieBadForMonster) {
       setShowValidation(true);
       return;
     }
@@ -7324,7 +7326,13 @@ function SaleForm({ initial, employees, settings, dncList, sales, syncingToEpg, 
           <input type="datetime-local" value={form.timestamp} onChange={(e) => set("timestamp", e.target.value)} style={S.input} />
         </Field>
         <Field label="Genie #" required>
-          <input value={form.genieNumber} onChange={(e) => set("genieNumber", e.target.value)} style={S.input} />
+          <input
+            value={form.genieNumber}
+            onChange={(e) => set("genieNumber", e.target.value)}
+            inputMode={form.leadSubmittedTo === "Monster" ? "numeric" : undefined}
+            style={{ ...S.input, ...(genieBadForMonster ? { borderColor: "#A32D2D" } : {}) }}
+          />
+          {genieBadForMonster && <div style={{ ...S.errorText, marginTop: 4, marginBottom: 0 }}>Monster Genie # must be 8 digits</div>}
         </Field>
         <Field label="Name" required>
           <input value={form.name} onChange={(e) => set("name", e.target.value)} style={S.input} autoFocus />
@@ -7498,6 +7506,9 @@ function SaleForm({ initial, employees, settings, dncList, sales, syncingToEpg, 
         <div style={S.errorText}>
           Missing: {missingFields.map((f) => f.label).join(", ")}
         </div>
+      )}
+      {showValidation && genieBadForMonster && (
+        <div style={S.errorText}>Genie # must be exactly 8 digits for Monster sales (it has {genieTrimmed.length}{/^\d+$/.test(genieTrimmed) ? "" : " and includes non-digits"}).</div>
       )}
       {saveError && (
         <div style={S.dncWarning}>
