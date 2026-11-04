@@ -214,7 +214,7 @@ function uid() {
 
 function money(n) {
   const v = Number(n) || 0;
-  return v.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+  return v.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function initials(name) {
@@ -3260,7 +3260,7 @@ export default function TeamCRM() {
         @media (max-width: 760px) { .crm-zoom { zoom: 1 !important; } }
         .crm-row:hover { background: #F4F2EA; }
         .crm-row-del:hover { color: #A32D2D !important; background: #FCEBEB !important; }
-        .crm-scroll input[type="number"]:hover, .crm-scroll input[type="number"]:focus { border-color: #D3CEBD !important; background: #FFFFFF !important; }
+        .crm-scroll input[type="number" step="any"]:hover, .crm-scroll input[type="number" step="any"]:focus { border-color: #D3CEBD !important; background: #FFFFFF !important; }
         .crm-scroll select:hover { border-color: #D3CEBD !important; }
         button { font-family: inherit; cursor: pointer; }
         input, textarea, select { font-family: inherit; }
@@ -4808,7 +4808,7 @@ export default function TeamCRM() {
                               </div>
                               <div style={{ marginTop: 3 }}>
                                 <input
-                                  type="number"
+                                  type="number" step="any"
                                   value={getSpiff(row.employee.id, rrgDayDates[i])}
                                   onChange={(e) => setSpiffValue(row.employee.id, rrgDayDates[i], e.target.value)}
                                   placeholder="+ spiff"
@@ -4933,7 +4933,7 @@ export default function TeamCRM() {
                       const empIsProrated =
                         !!emp.startDate && new Date(emp.startDate + "T00:00:00") > payrollWeek.start;
                       const override = getPayrollOverride(emp.id, payrollWeek.start);
-                      const totalPay = Math.round(override !== null ? override : computedTotalPay);
+                      const totalPay = Math.round((override !== null ? override : computedTotalPay) * 100) / 100;
                       const isOverridden = override !== null;
                       return (
                         <tr key={emp.id} className="crm-row" onClick={() => setEmployeeModal({ ...emp })}>
@@ -4978,7 +4978,7 @@ export default function TeamCRM() {
                             <div style={S.totalPayCell}>
                               <span style={{ ...S.totalPayCurrency, color: refundDeduction > 0 ? "#A32D2D" : T.borderStrong }}>-$</span>
                               <input
-                                type="number"
+                                type="number" step="any"
                                 value={refundDeduction || ""}
                                 placeholder="0"
                                 onChange={(e) => setRefundDeductionOverrideValue(emp.id, payrollWeek.start, e.target.value)}
@@ -5023,7 +5023,7 @@ export default function TeamCRM() {
                             <div style={S.totalPayCell}>
                               <span style={S.totalPayCurrency}>$</span>
                               <input
-                                type="number"
+                                type="number" step="any"
                                 value={totalPay}
                                 onChange={(e) => setPayrollOverrideValue(emp.id, payrollWeek.start, e.target.value)}
                                 style={{
@@ -5106,7 +5106,7 @@ export default function TeamCRM() {
                         {money(
                           payrollEmployeesForWeek.reduce((sum, emp) => {
                             const override = getPayrollOverride(emp.id, payrollWeek.start);
-                            if (override !== null) return sum + Math.round(override);
+                            if (override !== null) return sum + Math.round(override * 100) / 100;
                             const empSales = salesForEmployee(emp.id).filter((s) => isSaleInRange(s, payrollWeek.start, payrollWeek.end));
                             const total = empSales.reduce((s, r) => s + saleCredit(r, emp.id), 0);
                             const rate = effectiveCommissionRate(emp, total);
@@ -5121,7 +5121,7 @@ export default function TeamCRM() {
                               combinedEarnings(commission, basePay, emp.name),
                               effectiveMinGuarantee(emp.id, payrollWeek.start)
                             );
-                            return sum + Math.round(guaranteedBase + spiffTotal);
+                            return sum + Math.round((guaranteedBase + spiffTotal) * 100) / 100;
                           }, 0)
                         )}
                       </td>
@@ -6228,7 +6228,7 @@ export default function TeamCRM() {
                 <input
                   value={settings.minWeeklyPay}
                   onChange={(e) => updateSettings({ ...settings, minWeeklyPay: Number(e.target.value) || 0 })}
-                  type="number"
+                  type="number" step="any"
                   style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }}
                 />
               </div>
@@ -6238,7 +6238,7 @@ export default function TeamCRM() {
                 <input
                   value={settings.monsterCommissionRatePaper}
                   onChange={(e) => updateSettings({ ...settings, monsterCommissionRatePaper: Number(e.target.value) || 0 })}
-                  type="number"
+                  type="number" step="any"
                   style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }}
                 />
               </div>
@@ -6247,7 +6247,7 @@ export default function TeamCRM() {
                 <input
                   value={settings.monsterCommissionRateDialer}
                   onChange={(e) => updateSettings({ ...settings, monsterCommissionRateDialer: Number(e.target.value) || 0 })}
-                  type="number"
+                  type="number" step="any"
                   style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }}
                 />
               </div>
@@ -6256,7 +6256,7 @@ export default function TeamCRM() {
                 <input
                   value={settings.monsterDialerBonusThreshold}
                   onChange={(e) => updateSettings({ ...settings, monsterDialerBonusThreshold: Number(e.target.value) || 0 })}
-                  type="number"
+                  type="number" step="any"
                   style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }}
                 />
               </div>
@@ -6265,7 +6265,7 @@ export default function TeamCRM() {
                 <input
                   value={settings.monsterCommissionRateDialerBonus}
                   onChange={(e) => updateSettings({ ...settings, monsterCommissionRateDialerBonus: Number(e.target.value) || 0 })}
-                  type="number"
+                  type="number" step="any"
                   style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }}
                 />
               </div>
@@ -6274,7 +6274,7 @@ export default function TeamCRM() {
                 <input
                   value={settings.dialerWeeklyCost}
                   onChange={(e) => updateSettings({ ...settings, dialerWeeklyCost: Number(e.target.value) || 0 })}
-                  type="number"
+                  type="number" step="any"
                   style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }}
                 />
               </div>
@@ -6283,7 +6283,7 @@ export default function TeamCRM() {
                 <input
                   value={settings.epgReserveWeekly}
                   onChange={(e) => updateSettings({ ...settings, epgReserveWeekly: Number(e.target.value) || 0 })}
-                  type="number"
+                  type="number" step="any"
                   style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }}
                 />
               </div>
@@ -6292,7 +6292,7 @@ export default function TeamCRM() {
                 <input
                   value={settings.epgReserveTarget}
                   onChange={(e) => updateSettings({ ...settings, epgReserveTarget: Number(e.target.value) || 0 })}
-                  type="number"
+                  type="number" step="any"
                   style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }}
                 />
               </div>
@@ -6301,7 +6301,7 @@ export default function TeamCRM() {
                 <input
                   value={settings.epgReserveBalance}
                   onChange={(e) => updateSettings({ ...settings, epgReserveBalance: Number(e.target.value) || 0 })}
-                  type="number"
+                  type="number" step="any"
                   style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }}
                 />
               </div>
@@ -6319,7 +6319,7 @@ export default function TeamCRM() {
                 <input
                   value={settings.pgrCommissionRate}
                   onChange={(e) => updateSettings({ ...settings, pgrCommissionRate: Number(e.target.value) || 0 })}
-                  type="number"
+                  type="number" step="any"
                   style={{ ...S.input, fontFamily: T.mono, fontSize: 14 }}
                 />
               </div>
@@ -6999,7 +6999,7 @@ export default function TeamCRM() {
                 </div>
                 {refundType === "partial" && (
                   <input
-                    type="number"
+                    type="number" step="any"
                     value={refundAmounts[opt.id]}
                     onChange={(e) => setRefundAmounts((r) => ({ ...r, [opt.id]: e.target.value }))}
                     placeholder="0"
@@ -7576,13 +7576,13 @@ function SaleForm({ initial, employees, settings, dncList, sales, syncingToEpg, 
           />
         </Field>
         <Field label="Package price" required>
-          <input type="number" value={form.packagePrice} onChange={(e) => set("packagePrice", e.target.value)} style={{ ...S.input, fontFamily: T.mono }} />
+          <input type="number" step="any" value={form.packagePrice} onChange={(e) => set("packagePrice", e.target.value)} style={{ ...S.input, fontFamily: T.mono }} />
         </Field>
         <Field label="Date flex price" required>
-          <input type="number" value={form.dateFlex} onChange={(e) => set("dateFlex", e.target.value)} style={{ ...S.input, fontFamily: T.mono }} />
+          <input type="number" step="any" value={form.dateFlex} onChange={(e) => set("dateFlex", e.target.value)} style={{ ...S.input, fontFamily: T.mono }} />
         </Field>
         <Field label="Total price">
-          <input type="number" value={form.totalPrice} readOnly style={{ ...S.input, fontFamily: T.mono, background: T.paper }} />
+          <input type="number" step="any" value={form.totalPrice} readOnly style={{ ...S.input, fontFamily: T.mono, background: T.paper }} />
         </Field>
         <Field label="Source" required>
           <div style={{ position: "relative" }}>
@@ -8064,19 +8064,19 @@ function EmployeeForm({ initial, attendance, onCancel, onSave, onDelete, onToggl
         <input value={form.email} onChange={(e) => set("email", e.target.value)} style={S.input} />
       </Field>
       <Field label="Commission rate (%)">
-        <input type="number" value={form.commissionRate} onChange={(e) => set("commissionRate", e.target.value)} style={{ ...S.input, fontFamily: T.mono }} />
+        <input type="number" step="any" value={form.commissionRate} onChange={(e) => set("commissionRate", e.target.value)} style={{ ...S.input, fontFamily: T.mono }} />
       </Field>
       <Field label="Weekly sales bonus: sales over ($) / new commission %">
         <div style={{ display: "flex", gap: 8 }}>
           <input
-            type="number"
+            type="number" step="any"
             value={form.bonusThreshold || ""}
             onChange={(e) => set("bonusThreshold", e.target.value)}
             placeholder="e.g. 5000"
             style={{ ...S.input, fontFamily: T.mono }}
           />
           <input
-            type="number"
+            type="number" step="any"
             value={form.bonusRate || ""}
             onChange={(e) => set("bonusRate", e.target.value)}
             placeholder="e.g. 35"
@@ -8086,7 +8086,7 @@ function EmployeeForm({ initial, attendance, onCancel, onSave, onDelete, onToggl
         <div style={S.hint}>Optional. In any pay week where this person's sales go over the amount, their commission rate for the whole week becomes the new rate.</div>
       </Field>
       <Field label={basePayLabel(form.name)}>
-        <input type="number" value={form.basePay} onChange={(e) => set("basePay", e.target.value)} style={{ ...S.input, fontFamily: T.mono }} />
+        <input type="number" step="any" value={form.basePay} onChange={(e) => set("basePay", e.target.value)} style={{ ...S.input, fontFamily: T.mono }} />
       </Field>
       <Field label="Start date">
         <input type="date" value={form.startDate || ""} onChange={(e) => set("startDate", e.target.value)} style={S.input} />
@@ -8388,7 +8388,7 @@ function ExpenseTransactionForm({ initial, categories, error, onCancel, onSave, 
         </div>
       </Field>
       <Field label="Amount" required>
-        <input type="number" value={form.amount} onChange={(e) => set("amount", e.target.value)} style={{ ...S.input, fontFamily: T.mono }} autoFocus />
+        <input type="number" step="any" value={form.amount} onChange={(e) => set("amount", e.target.value)} style={{ ...S.input, fontFamily: T.mono }} autoFocus />
       </Field>
       <Field label="Notes">
         <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} style={{ ...S.input, minHeight: 60 }} />
