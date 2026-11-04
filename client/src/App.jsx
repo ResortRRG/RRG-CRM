@@ -4555,6 +4555,12 @@ export default function TeamCRM() {
                         {empSales.length} sale{empSales.length === 1 ? "" : "s"} {employeeStatsLabel} · {money(empAllTimeTotal)}
                       </div>
                       {renderAttendanceCounts(emp.id)}
+                      {emp.deactivatedDate && (
+                        <div style={S.contactMetaRow}>
+                          <CalendarDays size={11} color={T.textMuted} /> Terminated{" "}
+                          {new Date(emp.deactivatedDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        </div>
+                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -4565,7 +4571,7 @@ export default function TeamCRM() {
                       >
                         <CalendarDays size={12} /> Weekly template
                       </button>
-                      <div style={S.exEmployeeNote}>Deactivated — open to reactivate, or use Weekly template for past pay/deals</div>
+                      <div style={S.exEmployeeNote}>Inactive — open to reactivate, or use Weekly template for past pay/deals</div>
                     </div>
                   );
                 })}
@@ -7780,8 +7786,68 @@ function EmployeeForm({ initial, attendance, onCancel, onSave, onDelete, onToggl
     notes: "",
     ...initial,
   });
+  const [viewing, setViewing] = useState(!!(initial && initial.id));
   function set(key, value) {
     setForm((f) => ({ ...f, [key]: value }));
+  }
+  function fmtDate(d) {
+    return d ? new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
+  }
+  function saveWithTermination() {
+    const next = { ...form };
+    const term = next.deactivatedDate || "";
+    if (term && term <= todayDateStr()) {
+      next.active = false;
+    } else if (!term && next.active === false) {
+      // termination date cleared on an inactive employee: reactivate
+      next.active = true;
+      next.deactivatedDate = null;
+    }
+    if (!term) next.deactivatedDate = null;
+    onSave(next);
+  }
+  if (viewing) {
+    const rows = [
+      ["Role", (ROLES.find((r) => r.id === form.role) || {}).label || form.role],
+      ["Status", form.active === false ? "Inactive" : "Active"],
+      ["Phone", form.phone],
+      ["Email", form.email],
+      ["Commission rate", form.commissionRate !== "" && form.commissionRate !== undefined ? form.commissionRate + "%" : ""],
+      ["Weekly sales bonus", form.bonusThreshold && form.bonusRate ? `Over $${form.bonusThreshold} → ${form.bonusRate}%` : ""],
+      [basePayLabel(form.name), form.basePay !== "" && form.basePay !== undefined && form.basePay !== null ? "$" + form.basePay : ""],
+      ["Start date", fmtDate(form.startDate)],
+      ["Termination date", fmtDate(form.deactivatedDate)],
+    ];
+    return (
+      <div>
+        <div style={{ ...S.modalTitle, marginBottom: 4 }}>{form.name}</div>
+        <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 16 }}>Viewing only. Click Edit to change anything.</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "14px 18px" }}>
+          {rows.map(([label, value]) => (
+            <div key={label} style={S.leadInfoItem}>
+              <span style={S.leadInfoLabel}>{label}</span>
+              <span style={{ fontSize: 14 }}>{value || "—"}</span>
+            </div>
+          ))}
+        </div>
+        {form.notes && (
+          <div style={{ marginTop: 16 }}>
+            <div style={S.leadInfoLabel}>Notes</div>
+            <div style={{ fontSize: 14, lineHeight: 1.6, whiteSpace: "pre-wrap", overflowWrap: "anywhere", marginTop: 4 }}>{form.notes}</div>
+          </div>
+        )}
+        {form.id && <EmployeeFilesSection employeeId={form.id} />}
+        <div style={S.modalFooter}>
+          <div style={{ flex: 1 }} />
+          <button onClick={onCancel} style={S.ghostBtn}>
+            Close
+          </button>
+          <button onClick={() => setViewing(false)} style={S.primaryBtn}>
+            Edit
+          </button>
+        </div>
+      </div>
+    );
   }
   return (
     <div>
@@ -7835,6 +7901,12 @@ function EmployeeForm({ initial, attendance, onCancel, onSave, onDelete, onToggl
       <Field label="Start date">
         <input type="date" value={form.startDate || ""} onChange={(e) => set("startDate", e.target.value)} style={S.input} />
       </Field>
+      <Field label="Termination date">
+        <input type="date" value={form.deactivatedDate || ""} onChange={(e) => set("deactivatedDate", e.target.value)} style={S.input} />
+        <div style={S.hint}>
+          Optional. Once this date has arrived the employee moves to Inactive, and they stop showing on RRG Board and Payroll for weeks that start on or after it. Clear it to bring them back.
+        </div>
+      </Field>
       <Field label="Notes">
         <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} style={{ ...S.input, minHeight: 60 }} />
       </Field>
@@ -7854,7 +7926,7 @@ function EmployeeForm({ initial, attendance, onCancel, onSave, onDelete, onToggl
         <button onClick={onCancel} style={S.ghostBtn}>
           Cancel
         </button>
-        <button onClick={() => onSave(form)} disabled={!form.name.trim()} style={S.primaryBtn}>
+        <button onClick={saveWithTermination} disabled={!form.name.trim()} style={S.primaryBtn}>
           Save
         </button>
       </div>
