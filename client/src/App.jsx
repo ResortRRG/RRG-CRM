@@ -121,6 +121,8 @@ const DEFAULT_SETTINGS = {
   epgReserveTarget: 5000,
   epgReserveBalance: 1400,
   epgReserveAsOf: "2026-11-04",
+  dialerCostStartDate: "2026-09-01",
+  epgReserveStartDate: "2026-09-01",
 };
 
 const ROLE_PERMISSIONS = {
@@ -1907,10 +1909,11 @@ export default function TeamCRM() {
     return out;
   }
   const dialerWeeklyCostAmt = Number(settings.dialerWeeklyCost) || 0;
+  // The weekly Dialer cost applies to every pay week starting from this date.
+  const dialerStartMonday = settings.dialerCostStartDate ? mondayOfWeek(new Date(settings.dialerCostStartDate + "T00:00:00")) : null;
   function dialerCostForRange(start, end) {
     if (!dialerWeeklyCostAmt) return { amount: 0, weeks: 0 };
-    const from = start && start.getFullYear() > 2001 ? start : firstSaleDate || start;
-    const n = weekMondaysInRange(from, end).length;
+    const n = weekMondaysInRange(start, end).filter((m) => !dialerStartMonday || m >= dialerStartMonday).length;
     return { amount: n * dialerWeeklyCostAmt, weeks: n };
   }
   const epgWeekly = Number(settings.epgReserveWeekly) || 0;
@@ -1925,6 +1928,20 @@ export default function TeamCRM() {
     if (!epgAsOf || !epgWeekly || !epgTarget) return { deductions, balanceNow: balance, weeksLeft: 0, fullOn: null };
     // The balance entered is what's held up to the end of last week, so the week
     // containing the as-of date is the first one that gets the weekly amount.
+    // Earlier weeks (from the reserve start date up to the as-of week) were withheld
+    // too — those are already inside the balance, so they're only recorded for the
+    // Profit & Loss history, not added to the balance again.
+    if (settings.epgReserveStartDate) {
+      let h = mondayOfWeek(new Date(settings.epgReserveStartDate + "T00:00:00"));
+      const asOfMonday = mondayOfWeek(epgAsOf);
+      let hg = 0;
+      while (h < asOfMonday && hg < 600) {
+        deductions[h.getTime()] = epgWeekly;
+        h = new Date(h);
+        h.setDate(h.getDate() + 7);
+        hg++;
+      }
+    }
     let cur = mondayOfWeek(epgAsOf);
     let guard = 0;
     while (balance < epgTarget && cur <= todayEnd && guard < 600) {
@@ -6314,6 +6331,24 @@ export default function TeamCRM() {
                 <input
                   value={settings.epgReserveAsOf || ""}
                   onChange={(e) => updateSettings({ ...settings, epgReserveAsOf: e.target.value })}
+                  type="date"
+                  style={{ ...S.input, fontSize: 14 }}
+                />
+              </div>
+              <div>
+                <div style={S.fieldLabel}>Dialer cost starts (pay weeks from this date)</div>
+                <input
+                  value={settings.dialerCostStartDate || ""}
+                  onChange={(e) => updateSettings({ ...settings, dialerCostStartDate: e.target.value })}
+                  type="date"
+                  style={{ ...S.input, fontSize: 14 }}
+                />
+              </div>
+              <div>
+                <div style={S.fieldLabel}>EPG reserve started withholding</div>
+                <input
+                  value={settings.epgReserveStartDate || ""}
+                  onChange={(e) => updateSettings({ ...settings, epgReserveStartDate: e.target.value })}
                   type="date"
                   style={{ ...S.input, fontSize: 14 }}
                 />
