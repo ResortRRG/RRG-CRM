@@ -1923,8 +1923,9 @@ export default function TeamCRM() {
     const deductions = {};
     let balance = epgStartBalance;
     if (!epgAsOf || !epgWeekly || !epgTarget) return { deductions, balanceNow: balance, weeksLeft: 0, fullOn: null };
+    // The balance entered is what's held up to the end of last week, so the week
+    // containing the as-of date is the first one that gets the weekly amount.
     let cur = mondayOfWeek(epgAsOf);
-    cur.setDate(cur.getDate() + 7);
     let guard = 0;
     while (balance < epgTarget && cur <= todayEnd && guard < 600) {
       const take = Math.min(epgWeekly, epgTarget - balance);
@@ -1934,7 +1935,10 @@ export default function TeamCRM() {
       cur.setDate(cur.getDate() + 7);
       guard++;
     }
-    const balanceNow = balance;
+    // "Held" balance only counts weeks that have already ended; the week in
+    // progress is withheld (shows as an expense) but not yet in the held total.
+    const thisMonday = mondayOfWeek(new Date()).getTime();
+    const balanceNow = balance - (deductions[thisMonday] || 0);
     let weeksLeft = 0;
     let fullOn = null;
     if (balance < epgTarget) {
