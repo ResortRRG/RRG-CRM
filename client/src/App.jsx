@@ -3290,8 +3290,8 @@ export default function TeamCRM() {
           body { overflow-x: hidden; }
           .crm-app { flex-direction: column !important; }
           .crm-sidebar { width: 100% !important; flex-direction: column !important; padding: 10px 10px 8px !important; justify-content: flex-start !important; padding-top: max(10px, env(safe-area-inset-top)) !important; }
-          .crm-sidebar > div:first-child > div:nth-child(2) { display: none; }
-          .crm-sidebar > div:first-child > div:first-child { padding: 0 4px 8px !important; font-size: 17px !important; }
+          .crm-logo { margin: 0 4px 8px 4px !important; padding: 4px 8px !important; }
+          .crm-logo img { max-height: 52px; width: auto !important; }
           .crm-navlist { flex-direction: row !important; overflow-x: auto; gap: 6px !important; padding-bottom: 6px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
           .crm-navlist::-webkit-scrollbar { display: none; }
           .crm-navitem { white-space: nowrap; flex-shrink: 0; padding: 9px 12px !important; font-size: 14px !important; }
@@ -3328,8 +3328,9 @@ export default function TeamCRM() {
 
       <div style={S.sidebar} className="crm-sidebar">
         <div>
-          <div style={S.brand}>{settings.companyName}</div>
-          <div style={S.brandSub}>sales & payroll</div>
+          <div style={{ background: "#fff", borderRadius: 10, padding: "8px 10px", margin: "0 4px 16px 4px", display: "flex", justifyContent: "center" }} className="crm-logo">
+            <img src="/rrv-logo.jpg" alt={settings.companyName} style={{ width: "100%", maxWidth: 190, height: "auto", display: "block" }} />
+          </div>
           <div style={S.navList} className="crm-navlist">
             {NAV_ITEMS.filter((item) => getAllowedSections(currentUser && currentUser.role).includes(item.id)).map((item) => {
               const Icon = item.icon;
