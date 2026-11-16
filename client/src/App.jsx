@@ -252,6 +252,7 @@ function blankSale() {
     totalPrice: "",
     genieNumber: "",
     cardLast4: "",
+    postDate: "",
     openerId: "",
     closerId: "",
     verificationId: "",
@@ -651,6 +652,7 @@ export default function TeamCRM() {
   const [contactModal, setContactModal] = useState(null);
   const [saleModal, setSaleModal] = useState(null);
   const [viewSale, setViewSale] = useState(null);
+  const postDueSales = sales.filter((x) => x.status === "Pending" && x.postDate && x.postDate <= todayDateStr());
   const [saleModalMinimized, setSaleModalMinimized] = useState(false);
   const [saleSyncingToEpg, setSaleSyncingToEpg] = useState(false);
   const [saleSaveError, setSaleSaveError] = useState("");
@@ -3377,6 +3379,23 @@ export default function TeamCRM() {
             </button>
           </div>
         )}
+        {postDueSales.length > 0 && (
+          <div style={S.postDateBanner}>
+            <AlertTriangle size={15} style={{ flexShrink: 0 }} />
+            <span style={{ flex: 1 }}>
+              <strong>Post date reached — try to run the deal:</strong>{" "}
+              {postDueSales.map((x, i) => (
+                <span key={x.id}>
+                  {i > 0 ? ", " : ""}
+                  <button onClick={() => setViewSale(x.id)} style={S.postDateLink}>
+                    {x.name}
+                    {x.postDate < todayDateStr() ? " (overdue)" : ""}
+                  </button>
+                </span>
+              ))}
+            </span>
+          </div>
+        )}
         {blacklistFailure && (
           <div style={S.blacklistFailureBanner}>
             <AlertTriangle size={15} style={{ flexShrink: 0 }} />
@@ -4220,6 +4239,21 @@ export default function TeamCRM() {
                             <span style={S.leadInfoLabel}>Card last 4</span>
                             <span style={{ fontFamily: T.mono, fontSize: 14 }}>{s.cardLast4 || "—"}</span>
                           </div>
+                          {s.status === "Pending" && s.postDate && (
+                            <div style={S.leadInfoItem}>
+                              <span style={S.leadInfoLabel}>Post date</span>
+                              <span
+                                style={{
+                                  fontSize: 14,
+                                  fontWeight: s.postDate <= todayDateStr() ? 700 : 400,
+                                  color: s.postDate <= todayDateStr() ? "#A32D2D" : T.ink,
+                                }}
+                              >
+                                {new Date(s.postDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                                {s.postDate < todayDateStr() ? " · overdue" : s.postDate === todayDateStr() ? " · TODAY" : ""}
+                              </span>
+                            </div>
+                          )}
                           <div style={S.leadInfoItem}>
                             <span style={S.leadInfoLabel}>Password</span>
                             <span style={{ fontFamily: T.mono, fontSize: 14 }}>{s.password ? "••••••••" : "—"}</span>
@@ -7684,6 +7718,12 @@ function SaleForm({ initial, employees, settings, dncList, sales, syncingToEpg, 
             <ChevronDown size={13} color={T.textMuted} style={S.selectChevron} />
           </div>
         </Field>
+        {form.status === "Pending" && (
+          <Field label="Post date">
+            <input type="date" value={form.postDate || ""} onChange={(e) => set("postDate", e.target.value)} style={S.input} />
+            <div style={S.hint}>Optional. On this day the CRM shows an alert at the top so you can try to run the deal.</div>
+          </Field>
+        )}
         <Field label="Opener" required>
           <div style={{ position: "relative" }}>
             <select value={form.openerId} onChange={(e) => set("openerId", e.target.value)} style={S.select}>
@@ -8265,6 +8305,7 @@ function LeadView({ sale: s, employeeById, onClose, onEdit }) {
     ["Total price", s.totalPrice ? money(s.totalPrice) : ""],
     ["Genie #", s.genieNumber],
     ["Card last 4", s.cardLast4],
+    ...(s.status === "Pending" && s.postDate ? [["Post date", new Date(s.postDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })]] : []),
     ["Opener", opener ? opener.name : "Unassigned"],
     ["Closer", closer ? closer.name : "Unassigned"],
     ["Verification", verification ? verification.name : "Unassigned"],
@@ -8945,6 +8986,27 @@ const S = {
     fontWeight: 500,
   },
   blacklistFailureDismiss: { border: "none", background: "transparent", padding: 4, borderRadius: 6, color: "#8A5A1E", display: "flex", flexShrink: 0 },
+  postDateBanner: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    background: "#FCEBEB",
+    color: "#A32D2D",
+    borderBottom: "1px solid #F0C4C4",
+    padding: "10px 24px",
+    fontSize: 13,
+  },
+  postDateLink: {
+    background: "none",
+    border: "none",
+    padding: 0,
+    color: "#A32D2D",
+    fontWeight: 700,
+    textDecoration: "underline",
+    cursor: "pointer",
+    fontSize: 13,
+    fontFamily: "inherit",
+  },
   newVersionBanner: {
     display: "flex",
     alignItems: "center",
