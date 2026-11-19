@@ -1466,7 +1466,7 @@ export default function TeamCRM() {
       const rate = effectiveCommissionRate(emp, total);
       const refundedCredit = refundedCreditForEmployee(emp.id, weekStart, weekEnd);
       const refundOverrideVal = getRefundDeductionOverride(emp.id, weekStart);
-      const refundDed = refundOverrideVal !== null ? refundOverrideVal : refundedCredit * (rate / 100);
+      const refundDed = refundOverrideVal !== null ? refundOverrideVal : refundDeductionForWeek(emp, weekStart);
       const commission = total * (rate / 100) - refundDed;
       const hasBasePay = emp.basePay !== "" && emp.basePay !== undefined && emp.basePay !== null;
       const basePay = hasBasePay ? effectiveBasePay(emp.id, weekStart, emp.basePay) : 0;
@@ -2290,7 +2290,7 @@ export default function TeamCRM() {
         (sum, k) => sum + creditedByWeek[k] * (effectiveCommissionRate(emp, creditedByWeek[k]) / 100),
         0
       );
-      const commission = grossCommission - refundedCredit * (rate / 100);
+      const commission = grossCommission - chargebackDeductionForSales(emp, reportsRefundedSales);
       const companyRevenue = empSales.reduce((sum, s) => {
         const contractRate =
           s.leadSubmittedTo === "Monster"
@@ -2333,8 +2333,7 @@ export default function TeamCRM() {
               } else {
                 const wkCredit = creditedByWeek[weekCursor.getTime()] || 0;
                 const wkRate = effectiveCommissionRate(emp, wkCredit);
-                const wkRefund = refundedCreditForEmployee(emp.id, weekCursor, weekEnd);
-                const wkCommission = wkCredit * (wkRate / 100) - wkRefund * (wkRate / 100);
+                const wkCommission = wkCredit * (wkRate / 100) - refundDeductionForWeek(emp, weekCursor);
                 const hasBase = emp.basePay !== "" && emp.basePay !== undefined && emp.basePay !== null;
                 const wkBase = hasBase ? effectiveBasePay(emp.id, weekCursor, emp.basePay) : 0;
                 paidTotal += Math.max(combinedEarnings(wkCommission, wkBase, emp.name), effectiveMinGuarantee(emp.id, weekCursor));
@@ -2530,6 +2529,37 @@ export default function TeamCRM() {
     return monday;
   }
 
+  // A chargeback is taken back at the rate the rep was actually paid for that sale:
+  // the rate for the pay week the sale was written (e.g. 35% if she was over her
+  // weekly bonus threshold that week), not the rate of the week it's deducted in.
+  function chargebackRateForSale(emp, sale) {
+    const written = sale && sale.timestamp ? new Date(sale.timestamp) : null;
+    if (!written || isNaN(written.getTime())) return Number(emp.commissionRate) || 0;
+    const wkStart = mondayOfWeek(written);
+    const wkEnd = new Date(wkStart);
+    wkEnd.setDate(wkEnd.getDate() + 5);
+    wkEnd.setHours(23, 59, 59, 999);
+    const total = salesForEmployee(emp.id)
+      .filter((x) => isSaleInRange(x, wkStart, wkEnd))
+      .reduce((sum, x) => sum + saleCredit(x, emp.id), 0);
+    return effectiveCommissionRate(emp, total);
+  }
+  function chargebackDeductionForSales(emp, saleList) {
+    return saleList.reduce((sum, sale) => {
+      let credit = 0;
+      ["front", "close", "verification"].forEach((roleId) => {
+        if (employeeIdForRole(sale, roleId) === emp.id) credit += refundImpactForRole(sale, roleId);
+      });
+      return sum + credit * (chargebackRateForSale(emp, sale) / 100);
+    }, 0);
+  }
+  function refundDeductionForWeek(emp, weekStart) {
+    return pendingRefundEntriesForEmployee(emp.id, weekStart).reduce(
+      (sum, e) => sum + e.credit * (chargebackRateForSale(emp, e.sale) / 100),
+      0
+    );
+  }
+
   function refundedCreditForEmployee(employeeId, weekStart, weekEnd) {
     return sales.reduce((sum, s) => {
       if (!s.refunded) return sum;
@@ -2585,7 +2615,7 @@ export default function TeamCRM() {
   const employeeDetailRefundDeduction =
     employeeDetailRefundOverride !== null
       ? employeeDetailRefundOverride
-      : employeeDetailRefundedCredit * (employeeDetailRate / 100);
+      : employeeDetail ? refundDeductionForWeek(employeeDetail, employeeDetailWeek.start) : 0;
   const employeeDetailRefundEntries = employeeDetail
     ? pendingRefundEntriesForEmployee(employeeDetail.id, employeeDetailWeek.start)
     : [];
@@ -2636,7 +2666,7 @@ export default function TeamCRM() {
         return `
           <tr>
             <td style="padding:6px 10px;border-bottom:1px solid #E6E2D6;color:#A32D2D;">Refund — <span style="color:${nameColor};font-weight:600;">${r.sale.name}</span></td>
-            <td style="padding:6px 10px;border-bottom:1px solid #E6E2D6;color:#A32D2D;text-align:right;" colspan="2">-${money(r.credit * (employeeDetailRate / 100))}</td>
+            <td style="padding:6px 10px;border-bottom:1px solid #E6E2D6;color:#A32D2D;text-align:right;" colspan="2">-${money(r.credit * (chargebackRateForSale(employeeDetail, r.sale) / 100))}</td>
           </tr>`;
       })
       .join("");
@@ -4610,7 +4640,7 @@ export default function TeamCRM() {
                             {empPendingRefunds.map(({ sale, credit }) => (
                               <div key={sale.id} style={S.pendingRefundNote}>
                                 <RotateCcw size={11} />
-                                {sale.name}: -{money(credit * (empRate / 100))}
+                                {sale.name}: -{money(credit * (chargebackRateForSale(emp, sale) / 100))}
                               </div>
                             ))}
                           </div>
@@ -4971,7 +5001,7 @@ export default function TeamCRM() {
                       const rate = effectiveCommissionRate(emp, empWeekTotal);
                       const grossCommission = empWeekTotal * (rate / 100);
                       const refundedCredit = refundedCreditForEmployee(emp.id, payrollWeek.start, payrollWeek.end);
-                      const calculatedRefundDeduction = refundedCredit * (rate / 100);
+                      const calculatedRefundDeduction = refundDeductionForWeek(emp, payrollWeek.start);
                       const refundDeductionOverrideVal = getRefundDeductionOverride(emp.id, payrollWeek.start);
                       const refundDeductionIsOverridden = refundDeductionOverrideVal !== null;
                       const refundDeduction = refundDeductionIsOverridden ? refundDeductionOverrideVal : calculatedRefundDeduction;
@@ -5168,7 +5198,7 @@ export default function TeamCRM() {
                             const rate = effectiveCommissionRate(emp, total);
                             const refundedCredit = refundedCreditForEmployee(emp.id, payrollWeek.start, payrollWeek.end);
                             const refundOverrideVal = getRefundDeductionOverride(emp.id, payrollWeek.start);
-                            const refundDed = refundOverrideVal !== null ? refundOverrideVal : refundedCredit * (rate / 100);
+                            const refundDed = refundOverrideVal !== null ? refundOverrideVal : refundDeductionForWeek(emp, payrollWeek.start);
                             const commission = total * (rate / 100) - refundDed;
                             const hasBasePay = emp.basePay !== "" && emp.basePay !== undefined && emp.basePay !== null;
                             const basePay = hasBasePay ? effectiveBasePay(emp.id, payrollWeek.start, emp.basePay) : 0;
@@ -6962,7 +6992,7 @@ export default function TeamCRM() {
                   <span>
                     Refund — <span style={{ color: nameColor, fontWeight: 600 }}>{r.sale.name}</span>
                   </span>
-                  <span style={{ fontFamily: T.mono }}>-{money(r.credit * (employeeDetailRate / 100))}</span>
+                  <span style={{ fontFamily: T.mono }}>-{money(r.credit * (chargebackRateForSale(employeeDetail, r.sale) / 100))}</span>
                 </div>
               );
             })}
