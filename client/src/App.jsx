@@ -1618,10 +1618,19 @@ export default function TeamCRM() {
       }
       if (e.active !== false) return true;
       if (e.deactivatedDate) {
+        // Still on payroll for the whole week that contains their termination date.
         const deactivated = new Date(e.deactivatedDate + "T00:00:00");
-        return weekStart < deactivated;
+        return weekStart <= deactivated;
       }
-      return false;
+      // Inactive with no termination date on file: keep them on payroll through the
+      // last week they had any sales, so their final pay isn't lost.
+      let lastActivity = null;
+      sales.forEach((x) => {
+        if (x.openerId !== e.id && x.closerId !== e.id && x.verificationId !== e.id) return;
+        const d = new Date(x.timestamp);
+        if (!isNaN(d.getTime()) && (!lastActivity || d > lastActivity)) lastActivity = d;
+      });
+      return !!lastActivity && weekStart <= lastActivity;
     });
   }
   const exEmployees = employees.filter((e) => e.active === false);
