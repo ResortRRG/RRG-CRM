@@ -2973,6 +2973,7 @@ export default function TeamCRM() {
       candidateSale.epgPushStatus = "success";
       candidateSale.epgPushedAt = new Date().toISOString();
       candidateSale.epgPushError = null;
+      candidateSale.epgPushSkipped = true;
     }
 
     // Create/update this ONE sale as its own database row — this can't
@@ -3031,7 +3032,7 @@ export default function TeamCRM() {
       });
       const data = await res.json().catch(() => ({}));
       patch = res.ok
-        ? { epgPushStatus: "success", epgPushedAt: new Date().toISOString(), epgPushError: null }
+        ? { epgPushStatus: "success", epgPushedAt: new Date().toISOString(), epgPushError: null, epgPushSkipped: false }
         : { epgPushStatus: "failed", epgPushError: data.error || `EPG rejected the request (status ${res.status}).` };
     } catch (err) {
       console.error("EPG push failed:", err);
@@ -3832,9 +3833,22 @@ export default function TeamCRM() {
                                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                                   {s.name}
                                   {s.epgPushStatus === "success" && (
-                                    <span style={S.epgBadgeSuccess} title={`Sent to EPG${s.epgPushedAt ? " " + new Date(s.epgPushedAt).toLocaleString("en-US") : ""}`}>
+                                    <span style={S.epgBadgeSuccess} title={`${s.epgPushSkipped ? "Marked as sent WITHOUT sending (Skip EPG push was ticked)" : "Sent to EPG"}${s.epgPushedAt ? " " + new Date(s.epgPushedAt).toLocaleString("en-US") : ""}`}>
                                       EPG ✓
                                     </span>
+                                  )}
+                                  {s.epgPushStatus === "success" && s.leadSubmittedTo === "Monster" && s.status === "Approved" && (
+                                    <button
+                                      type="button"
+                                      style={{ ...S.epgBadgeFailed, cursor: "pointer", border: "1px solid currentColor", background: "transparent" }}
+                                      title="Send this sale to EPG again (may create a duplicate if EPG already has it)"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (window.confirm(`Send ${s.name} to EPG again? Only do this if it is NOT already in EPG, otherwise it will be duplicated.`)) retryEpgPush(s);
+                                      }}
+                                    >
+                                      Resend
+                                    </button>
                                   )}
                                   {s.epgPushStatus === "failed" && (
                                     <span style={S.epgBadgeFailed} title={s.epgPushError || "Failed to send to EPG"}>
