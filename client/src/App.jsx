@@ -8126,6 +8126,7 @@ function EmployeeForm({ initial, attendance, onCancel, onSave, onDelete, onToggl
     commissionRate: "",
     basePay: "",
     startDate: "",
+    dateOfBirth: "",
     active: true,
     notes: "",
     ...initial,
@@ -8159,6 +8160,7 @@ function EmployeeForm({ initial, attendance, onCancel, onSave, onDelete, onToggl
       ["Commission rate", form.commissionRate !== "" && form.commissionRate !== undefined ? form.commissionRate + "%" : ""],
       ["Weekly sales bonus", form.bonusThreshold && form.bonusRate ? `Over $${form.bonusThreshold} → ${form.bonusRate}%` : ""],
       [basePayLabel(form.name), form.basePay !== "" && form.basePay !== undefined && form.basePay !== null ? "$" + form.basePay : ""],
+      ["Date of birth", fmtDate(form.dateOfBirth)],
       ["Start date", fmtDate(form.startDate)],
       ["Termination date", fmtDate(form.deactivatedDate)],
     ];
@@ -8241,6 +8243,9 @@ function EmployeeForm({ initial, attendance, onCancel, onSave, onDelete, onToggl
       </Field>
       <Field label={basePayLabel(form.name)}>
         <input type="number" step="any" value={form.basePay} onChange={(e) => set("basePay", e.target.value)} style={{ ...S.input, fontFamily: T.mono }} />
+      </Field>
+      <Field label="Date of birth">
+        <input type="date" value={form.dateOfBirth || ""} onChange={(e) => set("dateOfBirth", e.target.value)} style={S.input} />
       </Field>
       <Field label="Start date">
         <input type="date" value={form.startDate || ""} onChange={(e) => set("startDate", e.target.value)} style={S.input} />
