@@ -4201,6 +4201,11 @@ export default function TeamCRM() {
                             <button style={S.ghostBtn} onClick={() => setViewSale(s.id)}>
                               View
                             </button>
+                            {s.leadSubmittedTo === "Monster" && s.status === "Approved" && s.epgPushStatus !== "success" && (
+                              <button style={S.ghostBtn} onClick={() => retryEpgPush(s)}>
+                                Send to EPG
+                              </button>
+                            )}
                             <button
                               style={S.ghostBtn}
                               onClick={() => {
