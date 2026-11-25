@@ -3043,6 +3043,12 @@ export default function TeamCRM() {
     } catch (err) {
       console.error("Saving EPG push status failed:", err);
     }
+    return patch;
+  }
+  async function retryEpgPush(sale) {
+    const patch = await pushSaleToEpg(sale);
+    if (patch && patch.epgPushStatus === "success") window.alert(`${sale.name} was sent to EPG.`);
+    else window.alert(`Could not send ${sale.name} to EPG: ${(patch && patch.epgPushError) || "unknown error"}`);
   }
   async function deleteSale(id) {
     await deleteSaleOnServer(id);
@@ -3834,6 +3840,16 @@ export default function TeamCRM() {
                                     <span style={S.epgBadgeFailed} title={s.epgPushError || "Failed to send to EPG"}>
                                       EPG ✗
                                     </span>
+                                  )}
+                                  {s.leadSubmittedTo === "Monster" && s.status === "Approved" && s.epgPushStatus !== "success" && (
+                                    <button
+                                      type="button"
+                                      style={{ ...S.epgBadgeFailed, cursor: "pointer", border: "1px solid currentColor", background: "transparent" }}
+                                      title="Send this sale to EPG now"
+                                      onClick={(e) => { e.stopPropagation(); retryEpgPush(s); }}
+                                    >
+                                      Send to EPG
+                                    </button>
                                   )}
                                 </div>
                               </td>
